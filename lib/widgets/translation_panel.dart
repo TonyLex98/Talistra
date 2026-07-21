@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
+import 'package:provider/provider.dart';
 
 import '../models/app_language.dart';
+import '../services/model_download_service.dart';
 import '../services/translation_service.dart';
 import '../utils/sentence_finder.dart';
 
@@ -31,18 +33,46 @@ class TranslationPanel extends StatefulWidget {
   State<TranslationPanel> createState() => _TranslationPanelState();
 }
 
-enum _Status { loading, needsDownload, downloading, ready, error }
+enum _Status { loading, needsDownload, ready, error }
 
 class _TranslationPanelState extends State<TranslationPanel> {
   _Status _status = _Status.loading;
   String? _wordTranslation;
   String? _sentenceTranslation;
   List<TranslateLanguage> _missing = const [];
+  ModelDownloadService? _downloadService;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final service = context.read<ModelDownloadService>();
+    if (_downloadService != service) {
+      _downloadService?.removeListener(_onDownloadServiceChanged);
+      _downloadService = service..addListener(_onDownloadServiceChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    _downloadService?.removeListener(_onDownloadServiceChanged);
+    super.dispose();
+  }
+
+  // If a download that this panel is waiting on finishes (whether started
+  // from here, Settings, or the home screen suggestion), retry the
+  // translation automatically instead of leaving the user stuck.
+  void _onDownloadServiceChanged() {
+    if (_status == _Status.needsDownload &&
+        _downloadService?.isDownloading == false &&
+        mounted) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -81,16 +111,11 @@ class _TranslationPanelState extends State<TranslationPanel> {
   }
 
   Future<void> _downloadMissing() async {
-    setState(() => _status = _Status.downloading);
-    try {
-      for (final lang in _missing) {
-        await widget.translationService.downloadModel(lang);
-      }
-      await _load();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _status = _Status.error);
+    final downloadService = context.read<ModelDownloadService>();
+    for (final lang in _missing) {
+      await downloadService.download(lang);
     }
+    if (mounted) await _load();
   }
 
   @override
@@ -169,40 +194,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
           ),
         );
       case _Status.needsDownload:
-        final names = _missing.map((l) => AppLanguage.byLanguage(l).displayName).join(', ');
-        return Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Нужна языковая модель: $names.\nОна скачивается один раз и работает офлайн.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 10),
-              FilledButton.tonalIcon(
-                onPressed: _downloadMissing,
-                icon: const Icon(Icons.download, size: 18),
-                label: const Text('Скачать'),
-              ),
-            ],
-          ),
-        );
-      case _Status.downloading:
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
-          child: Row(
-            children: [
-              SizedBox(
-                height: 16,
-                width: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 10),
-              Text('Загрузка модели...'),
-            ],
-          ),
-        );
+        return _buildNeedsDownload(context, scheme);
       case _Status.error:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -218,6 +210,44 @@ class _TranslationPanelState extends State<TranslationPanel> {
       case _Status.ready:
         return _buildReady(context, scheme);
     }
+  }
+
+  Widget _buildNeedsDownload(BuildContext context, ColorScheme scheme) {
+    final names = _missing.map((l) => AppLanguage.byLanguage(l).displayName).join(', ');
+    final downloadService = context.watch<ModelDownloadService>();
+    final relevantDownload = _missing.contains(downloadService.activeLanguage);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Нужна языковая модель: $names.\nОна скачивается один раз и работает офлайн.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          if (relevantDownload)
+            Row(
+              children: [
+                const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Text('Загрузка... ${downloadService.elapsedSeconds} с'),
+              ],
+            )
+          else
+            FilledButton.tonalIcon(
+              onPressed: downloadService.isDownloading ? null : _downloadMissing,
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Скачать'),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildReady(BuildContext context, ColorScheme scheme) {

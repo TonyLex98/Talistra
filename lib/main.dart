@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/library_service.dart';
+import 'services/model_download_service.dart';
 import 'services/settings_service.dart';
 import 'services/translation_service.dart';
 import 'theme/app_theme.dart';
@@ -38,6 +39,11 @@ class TransReadeApp extends StatelessWidget {
         Provider<TranslationService>(
           create: (_) => TranslationService(),
           dispose: (_, service) => service.dispose(),
+        ),
+        ChangeNotifierProxyProvider<TranslationService, ModelDownloadService>(
+          create: (context) => ModelDownloadService(context.read<TranslationService>()),
+          update: (context, translationService, previous) =>
+              previous ?? ModelDownloadService(translationService),
         ),
       ],
       child: Consumer<SettingsService>(

@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:provider/provider.dart';
 
 import '../models/app_language.dart';
+import '../services/model_download_service.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../widgets/language_picker_sheet.dart';
@@ -141,10 +140,7 @@ class _ModelStatusTile extends StatefulWidget {
 
 class _ModelStatusTileState extends State<_ModelStatusTile> {
   bool? _downloaded;
-  bool _busy = false;
-  bool _downloading = false;
-  int _elapsedSeconds = 0;
-  Timer? _ticker;
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -158,65 +154,57 @@ class _ModelStatusTileState extends State<_ModelStatusTile> {
     if (oldWidget.language != widget.language) _refresh();
   }
 
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
-
   Future<void> _refresh() async {
     final downloaded = await widget.translation.isModelDownloaded(widget.language);
     if (mounted) setState(() => _downloaded = downloaded);
   }
 
-  Future<void> _toggle() async {
-    final wasDownloaded = _downloaded == true;
-    setState(() {
-      _busy = true;
-      _downloading = !wasDownloaded;
-      _elapsedSeconds = 0;
-    });
-    if (_downloading) {
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _elapsedSeconds++);
-      });
-    }
+  Future<void> _delete() async {
+    setState(() => _deleting = true);
     try {
-      if (wasDownloaded) {
-        await widget.translation.deleteModel(widget.language);
-      } else {
-        await widget.translation.downloadModel(widget.language);
-      }
+      await widget.translation.deleteModel(widget.language);
       await _refresh();
     } finally {
-      _ticker?.cancel();
-      if (mounted) setState(() => _busy = _downloading = false);
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final downloadService = context.watch<ModelDownloadService>();
+    final isDownloadingThis = downloadService.isDownloadingLanguage(widget.language);
+
+    String subtitle;
+    if (isDownloadingThis) {
+      subtitle = 'Загрузка... ${downloadService.elapsedSeconds} с';
+    } else if (_downloaded == null) {
+      subtitle = 'Проверка...';
+    } else {
+      subtitle = _downloaded! ? 'Скачана, доступна офлайн' : 'Не скачана';
+    }
+
+    Widget trailing;
+    if (isDownloadingThis || _deleting) {
+      trailing = const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else {
+      trailing = TextButton(
+        onPressed: _downloaded == null || downloadService.isDownloading
+            ? null
+            : (_downloaded == true ? _delete : () => downloadService.download(widget.language).then((_) => _refresh())),
+        child: Text(_downloaded == true ? 'Удалить' : 'Скачать'),
+      );
+    }
+
     return ListTile(
       dense: true,
       leading: const SizedBox(width: 22),
       title: Text('Модель: ${widget.appLanguage.displayName}'),
-      subtitle: Text(
-        _downloading
-            ? 'Загрузка... $_elapsedSeconds с'
-            : _downloaded == null
-            ? 'Проверка...'
-            : (_downloaded! ? 'Скачана, доступна офлайн' : 'Не скачана'),
-      ),
-      trailing: _busy
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : TextButton(
-              onPressed: _downloaded == null ? null : _toggle,
-              child: Text(_downloaded == true ? 'Удалить' : 'Скачать'),
-            ),
+      subtitle: Text(subtitle),
+      trailing: trailing,
     );
   }
 }
@@ -251,7 +239,7 @@ class _AboutSection extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 20),
       child: Text(
         'TransRead — читалка PDF со встроенным переводом слов на устройстве. '
-        'Выделите слово или фразу долгим нажатием, чтобы увидеть перевод.',
+        'Нажмите на слово при чтении, чтобы увидеть перевод.',
       ),
     );
   }

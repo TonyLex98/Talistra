@@ -1,27 +1,23 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
+import 'package:provider/provider.dart';
 
 import '../models/app_language.dart';
-import '../services/translation_service.dart';
+import '../services/model_download_service.dart';
 
 /// A dismissible suggestion (not an automatic download) offering to fetch
-/// the on-device translation models the reader currently needs, with a
-/// live elapsed-time indicator while downloading. ML Kit's Android SDK
-/// doesn't expose byte-level download progress, so this is the most
-/// honest signal available — real elapsed seconds, not a fabricated
-/// percentage.
+/// the on-device translation models the reader currently needs. Progress
+/// comes from the shared [ModelDownloadService], so this shows the exact
+/// same state as the Settings screen or the reader's translation panel if
+/// a download is already running from there.
 class ModelSuggestionCard extends StatefulWidget {
   const ModelSuggestionCard({
     super.key,
     required this.languages,
-    required this.translationService,
     required this.onDone,
   });
 
   final List<TranslateLanguage> languages;
-  final TranslationService translationService;
   final VoidCallback onDone;
 
   @override
@@ -30,39 +26,15 @@ class ModelSuggestionCard extends StatefulWidget {
 
 class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
   bool _dismissed = false;
-  bool _downloading = false;
-  TranslateLanguage? _currentlyDownloading;
-  int _elapsedSeconds = 0;
-  Timer? _ticker;
-
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
+  bool _requestedByMe = false;
 
   Future<void> _download() async {
-    setState(() => _downloading = true);
+    final downloadService = context.read<ModelDownloadService>();
+    setState(() => _requestedByMe = true);
     for (final lang in widget.languages) {
-      setState(() {
-        _currentlyDownloading = lang;
-        _elapsedSeconds = 0;
-      });
-      _ticker?.cancel();
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _elapsedSeconds++);
-      });
-      try {
-        await widget.translationService.downloadModel(lang);
-      } catch (_) {
-        // Move on to the next language; the card will resurface for any
-        // language that's still missing next time this screen loads.
-      }
-      _ticker?.cancel();
+      await downloadService.download(lang);
     }
-    if (!mounted) return;
-    setState(() => _downloading = false);
-    widget.onDone();
+    if (mounted) widget.onDone();
   }
 
   @override
@@ -70,6 +42,8 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
     if (_dismissed) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     final names = widget.languages.map((l) => AppLanguage.byLanguage(l).displayName).join(', ');
+    final downloadService = context.watch<ModelDownloadService>();
+    final isDownloading = _requestedByMe && downloadService.isDownloading;
 
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -94,15 +68,16 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _downloading
-                        ? 'Загружаем «${AppLanguage.byLanguage(_currentlyDownloading!).displayName}»... $_elapsedSeconds с'
+                    isDownloading
+                        ? 'Загружаем «${AppLanguage.byLanguage(downloadService.activeLanguage!).displayName}»... '
+                              '${downloadService.elapsedSeconds} с'
                         : 'Языки: $names. Нужно скачать один раз, дальше перевод работает офлайн.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSecondaryContainer,
                     ),
                   ),
                   const SizedBox(height: 10),
-                  if (_downloading)
+                  if (isDownloading)
                     SizedBox(
                       height: 16,
                       width: 16,
@@ -113,13 +88,13 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                     )
                   else
                     FilledButton.tonal(
-                      onPressed: _download,
+                      onPressed: downloadService.isDownloading ? null : _download,
                       child: const Text('Скачать'),
                     ),
                 ],
               ),
             ),
-            if (!_downloading)
+            if (!isDownloading)
               IconButton(
                 icon: const Icon(Icons.close, size: 18),
                 visualDensity: VisualDensity.compact,

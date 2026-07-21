@@ -71,7 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final library = context.watch<LibraryService>();
     final documents = library.documents;
-    final translationService = context.read<TranslationService>();
 
     return Scaffold(
       appBar: AppBar(
@@ -92,7 +91,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ModelSuggestionCard(
               key: ValueKey(_missingModels.join(',')),
               languages: _missingModels,
-              translationService: translationService,
               onDone: _checkMissingModels,
             ),
           Expanded(

@@ -1,74 +1,79 @@
+import 'dart:ui';
+
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
-enum ReflowBlockType { paragraph, imageGap }
+enum ReflowBlockType { paragraph, image }
 
-/// One unit of reflowed content: either a paragraph of text, or a marker
-/// where the original page had a large visual gap (almost always an image,
-/// chart or table) that this text-only reflow can't reproduce — the
-/// reader can switch back to the original PDF to see it.
+/// One unit of a reflowed page: either a paragraph of text, or a region
+/// that isn't text (almost always an image, chart or table) — carrying
+/// its PDF-space bounds so it can be rendered as a real, zoomable image
+/// instead of just a placeholder.
 class ReflowBlock {
-  const ReflowBlock.paragraph(this.text) : type = ReflowBlockType.paragraph;
-  const ReflowBlock.imageGap() : text = '', type = ReflowBlockType.imageGap;
+  const ReflowBlock.paragraph(this.text) : imageBounds = null;
+  const ReflowBlock.image(Rect bounds) : text = '', imageBounds = bounds;
 
-  final ReflowBlockType type;
+  final ReflowBlockType type = ReflowBlockType.paragraph;
   final String text;
+  final Rect? imageBounds;
+
+  bool get isImage => imageBounds != null;
 }
 
-/// Rebuilds a whole document's extracted text as a flowing list of
-/// paragraphs sized for phone reading, instead of the PDF's fixed page
-/// layout. Paragraphs are detected from vertical spacing between lines:
-/// a normal line-to-line gap continues the paragraph, a bigger gap starts
-/// a new one, and an unusually large gap is treated as a skipped image.
-List<ReflowBlock> buildReflowBlocks(PdfDocument document) {
-  final allLines = PdfTextExtractor(document).extractTextLines();
-  if (allLines.isEmpty) return const [];
-
-  final heightsByPage = <int, List<double>>{};
-  for (final line in allLines) {
-    if (line.bounds.height > 0) {
-      heightsByPage.putIfAbsent(line.pageIndex, () => []).add(line.bounds.height);
-    }
+/// Splits a single PDF page's extracted [lines] into reflowed paragraphs
+/// sized for phone reading, detecting non-text regions (images, charts,
+/// tables) from unusually large vertical gaps — including a gap before
+/// the first line or after the last one, since a header/footer figure has
+/// no adjacent text on that side at all.
+List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
+  final nonEmpty = lines.where((l) => l.text.trim().isNotEmpty).toList();
+  if (nonEmpty.isEmpty) {
+    if (pageSize.width <= 0 || pageSize.height <= 0) return const [];
+    return [ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, pageSize.height))];
   }
-  final medianHeightByPage = <int, double>{
-    for (final entry in heightsByPage.entries)
-      entry.key: (entry.value..sort())[entry.value.length ~/ 2],
-  };
+
+  final heights = nonEmpty.map((l) => l.bounds.height).where((h) => h > 0).toList()..sort();
+  final medianHeight = heights.isEmpty ? 12.0 : heights[heights.length ~/ 2];
 
   final blocks = <ReflowBlock>[];
   final buffer = StringBuffer();
-  double? previousBottom;
-  int? previousPageIndex;
 
-  void flushParagraph() {
+  void flush() {
     final text = buffer.toString().trim();
     if (text.isNotEmpty) blocks.add(ReflowBlock.paragraph(text));
     buffer.clear();
   }
 
-  for (final line in allLines) {
-    final text = line.text.trim();
-    if (text.isEmpty) continue;
+  final firstTop = nonEmpty.first.bounds.top;
+  if (firstTop > medianHeight * 3) {
+    blocks.add(ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, firstTop)));
+  }
 
-    final pageChanged = previousPageIndex != null && previousPageIndex != line.pageIndex;
-    if (pageChanged) {
-      flushParagraph();
-    } else if (previousBottom != null) {
-      final medianHeight = medianHeightByPage[line.pageIndex] ?? 12.0;
+  double? previousBottom;
+  for (final line in nonEmpty) {
+    final text = line.text.trim();
+    if (previousBottom != null) {
       final gap = line.bounds.top - previousBottom;
       if (gap > medianHeight * 3) {
-        flushParagraph();
-        blocks.add(const ReflowBlock.imageGap());
+        flush();
+        blocks.add(
+          ReflowBlock.image(Rect.fromLTWH(0, previousBottom, pageSize.width, gap)),
+        );
       } else if (gap > medianHeight * 1.6) {
-        flushParagraph();
+        flush();
       } else {
         buffer.write(' ');
       }
     }
-
     buffer.write(text);
     previousBottom = line.bounds.bottom;
-    previousPageIndex = line.pageIndex;
   }
-  flushParagraph();
+  flush();
+
+  final lastBottom = nonEmpty.last.bounds.bottom;
+  final trailingGap = pageSize.height - lastBottom;
+  if (trailingGap > medianHeight * 3) {
+    blocks.add(ReflowBlock.image(Rect.fromLTWH(0, lastBottom, pageSize.width, trailingGap)));
+  }
+
   return blocks;
 }

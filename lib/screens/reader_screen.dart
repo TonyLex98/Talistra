@@ -9,7 +9,6 @@ import '../models/library_document.dart';
 import '../services/library_service.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
-import '../utils/reflow_builder.dart';
 import '../utils/sentence_finder.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/reflow_view.dart';
@@ -26,6 +25,7 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   final _viewerKey = GlobalKey();
+  final _reflowKey = GlobalKey<ReflowPdfViewState>();
   late final PdfViewerController _controller;
   late LibraryDocument _document;
 
@@ -45,8 +45,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
   DateTime? _pointerDownTime;
 
   bool _reflowMode = false;
-  bool _reflowLoading = false;
-  List<ReflowBlock>? _reflowBlocks;
   double _reflowFontSize = 17;
 
   @override
@@ -88,16 +86,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _onPageChanged(PdfPageChangedDetails details) {
+    _updateCurrentPage(details.newPageNumber);
     setState(() {
-      _currentPage = details.newPageNumber;
       _selectedWord = null;
       _selectedSentence = null;
       _tapHighlightRect = null;
       _sentenceHighlightRects = const [];
     });
+  }
+
+  void _updateCurrentPage(int page) {
+    setState(() => _currentPage = page);
     context.read<LibraryService>().updateProgress(
       widget.documentId,
-      lastPage: details.newPageNumber,
+      lastPage: page,
       pageCount: _pageCount,
     );
   }
@@ -251,45 +253,25 @@ class _ReaderScreenState extends State<ReaderScreen> {
         ],
       ),
     );
-    if (target != null && target >= 1 && target <= _pageCount) {
+    if (target == null || target < 1 || target > _pageCount) return;
+    if (_reflowMode) {
+      _reflowKey.currentState?.jumpToPage(target);
+    } else {
       _controller.jumpToPage(target);
     }
   }
 
-  Future<void> _toggleReflow() async {
-    if (_reflowMode) {
-      setState(() => _reflowMode = false);
-      return;
-    }
+  void _toggleReflow() {
     _clearSelection();
-    if (_reflowBlocks != null) {
-      setState(() => _reflowMode = true);
-      return;
-    }
-    final document = _pdfDocument;
-    if (document == null) return;
-    setState(() {
-      _reflowLoading = true;
-      _reflowMode = true;
-    });
-    // Yield a frame so the loading spinner actually paints before the
-    // synchronous extraction work blocks the UI thread.
-    await Future.delayed(Duration.zero);
-    List<ReflowBlock> blocks;
-    try {
-      blocks = buildReflowBlocks(document);
-    } catch (_) {
-      blocks = const [];
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось подготовить адаптированный вид')),
-        );
+    setState(() => _reflowMode = !_reflowMode);
+    // Both views stay mounted, so re-sync whichever one just became
+    // visible to the page the other one was on.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_reflowMode) {
+        _reflowKey.currentState?.jumpToPage(_currentPage);
+      } else if (_currentPage > 1) {
+        _controller.jumpToPage(_currentPage);
       }
-    }
-    if (!mounted) return;
-    setState(() {
-      _reflowBlocks = blocks;
-      _reflowLoading = false;
     });
   }
 
@@ -387,11 +369,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 () => _reflowFontSize = (_reflowFontSize + 1).clamp(13, 26),
               ),
             ),
-          ] else
-            TextButton(
-              onPressed: _pageCount == 0 ? null : _jumpToPage,
-              child: Text(_pageCount == 0 ? '' : '$_currentPage / $_pageCount'),
-            ),
+          ],
+          TextButton(
+            onPressed: _pageCount == 0 ? null : _jumpToPage,
+            child: Text(_pageCount == 0 ? '' : '$_currentPage / $_pageCount'),
+          ),
           IconButton(
             icon: Icon(_reflowMode ? Icons.picture_as_pdf_outlined : Icons.auto_stories_outlined),
             tooltip: _reflowMode ? 'Оригинал PDF' : 'Адаптировать под телефон',
@@ -399,39 +381,44 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ],
       ),
-      body: _reflowMode
-          ? _buildReflowBody(translationService, settings)
-          : _buildPdfBody(settings, translationService),
+      // Both views stay mounted (just hidden via Offstage) instead of one
+      // replacing the other: SfPdfViewer's dispose() releases its
+      // syncfusion PdfDocument, and reflow reads text from that very same
+      // document — removing it from the tree while switching modes would
+      // corrupt it out from under the reflow view.
+      body: Stack(
+        children: [
+          Offstage(
+            offstage: _reflowMode,
+            child: _buildPdfBody(settings, translationService),
+          ),
+          if (_pdfDocument != null)
+            Offstage(
+              offstage: !_reflowMode,
+              child: _buildReflowBody(settings, translationService),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildReflowBody(TranslationService translationService, SettingsService settings) {
-    if (_reflowLoading || _reflowBlocks == null) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Готовим адаптированный вид...'),
-          ],
-        ),
-      );
+  Widget _buildReflowBody(SettingsService settings, TranslationService translationService) {
+    final document = _pdfDocument;
+    if (document == null) {
+      return const Center(child: CircularProgressIndicator());
     }
-    if (_reflowBlocks!.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('В этом документе не нашлось текста для адаптации.'),
-        ),
-      );
-    }
-    return ReflowView(
-      blocks: _reflowBlocks!,
+    return ReflowPdfView(
+      key: _reflowKey,
+      filePath: _document.filePath,
+      document: document,
+      pageCount: _pageCount,
+      initialPage: _currentPage,
+      linesCache: _pageLinesCache,
       source: settings.sourceLanguage,
       target: settings.targetLanguage,
       translationService: translationService,
       fontSize: _reflowFontSize,
+      onPageChanged: _updateCurrentPage,
     );
   }
 
