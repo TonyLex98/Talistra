@@ -38,8 +38,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
   String? _selectedWord;
   SentenceMatch? _selectedSentence;
 
-  Rect? _tapHighlightRect;
-  List<Rect> _sentenceHighlightRects = const [];
+  // The word/sentence highlight is stored in PDF-space (page index + PDF
+  // point bounds), not screen coordinates: screen position is recomputed
+  // from these on every build, including ones triggered by the scroll/zoom
+  // listener below, so the highlight tracks the text instead of staying
+  // frozen at the screen position it was tapped at.
+  int? _selectedPageIndex;
+  Rect? _selectedWordPdfBounds;
+  List<Rect> _selectedSentenceLineBoundsPdf = const [];
 
   Offset? _pointerDownPosition;
   DateTime? _pointerDownTime;
@@ -57,6 +63,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
         .firstWhere((d) => d.id == widget.documentId);
     _currentPage = _document.lastPage;
     _pageCount = _document.pageCount;
+    _controller.addListener(_onViewerTransformChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onViewerTransformChanged);
+    super.dispose();
+  }
+
+  // Scrolling or zooming while a translation is open needs to reposition
+  // the highlight (its screen position depends on scroll/zoom), not just
+  // leave it stuck where it was tapped.
+  void _onViewerTransformChanged() {
+    if (_selectedWord != null) setState(() {});
   }
 
   void _onDocumentLoaded(PdfDocumentLoadedDetails details) {
@@ -87,12 +107,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   void _onPageChanged(PdfPageChangedDetails details) {
     _updateCurrentPage(details.newPageNumber);
-    setState(() {
-      _selectedWord = null;
-      _selectedSentence = null;
-      _tapHighlightRect = null;
-      _sentenceHighlightRects = const [];
-    });
+    _clearSelection();
   }
 
   void _updateCurrentPage(int page) {
@@ -195,28 +210,45 @@ class _ReaderScreenState extends State<ReaderScreen> {
       cachedLines: lines,
     );
 
-    // Convert PDF-space bounds back to screen space to flash highlights
-    // where the user tapped: a strong one on the word, a fainter one over
-    // the whole sentence it belongs to.
-    Rect toScreenRect(Rect pdfBounds) {
-      final left = (pdfBounds.left * scale - scrollOffset.dx) * zoom;
-      final top = ((cumulative + pdfBounds.top * scale) - scrollOffset.dy) * zoom;
-      return Rect.fromLTWH(
-        left,
-        top,
-        pdfBounds.width * scale * zoom,
-        pdfBounds.height * scale * zoom,
-      );
-    }
-
     setState(() {
       _selectedWord = hit.text;
       _selectedSentence = sentence;
-      _tapHighlightRect = toScreenRect(hit.bounds);
-      _sentenceHighlightRects = sentence == null
-          ? const []
-          : [for (final b in sentence.lineBounds) toScreenRect(b)];
+      _selectedPageIndex = pageIndex;
+      _selectedWordPdfBounds = hit.bounds;
+      _selectedSentenceLineBoundsPdf = sentence?.lineBounds ?? const [];
     });
+  }
+
+  /// Recomputes a stored PDF-space rect into the CURRENT screen position,
+  /// using whatever scroll offset/zoom the viewer has right now — called
+  /// fresh on every build so the highlight tracks scrolling instead of
+  /// staying frozen at the position it was tapped at.
+  Rect? _pdfRectToScreen(int pageIndex, Rect pdfBounds) {
+    final document = _pdfDocument;
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (document == null || box == null || pageIndex >= _pageAspectRatios.length) {
+      return null;
+    }
+    final viewportWidth = box.size.width;
+    if (viewportWidth <= 0) return null;
+    final zoom = _controller.zoomLevel == 0 ? 1.0 : _controller.zoomLevel;
+    final scrollOffset = _controller.scrollOffset;
+    const pageSpacing = 4.0;
+    var cumulative = 0.0;
+    for (var i = 0; i < pageIndex; i++) {
+      cumulative += viewportWidth * _pageAspectRatios[i] + pageSpacing;
+    }
+    final pageSize = document.pages[pageIndex].size;
+    if (pageSize.width == 0) return null;
+    final scale = viewportWidth / pageSize.width;
+    final left = (pdfBounds.left * scale - scrollOffset.dx) * zoom;
+    final top = ((cumulative + pdfBounds.top * scale) - scrollOffset.dy) * zoom;
+    return Rect.fromLTWH(
+      left,
+      top,
+      pdfBounds.width * scale * zoom,
+      pdfBounds.height * scale * zoom,
+    );
   }
 
   void _clearSelection() {
@@ -224,8 +256,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
     setState(() {
       _selectedWord = null;
       _selectedSentence = null;
-      _tapHighlightRect = null;
-      _sentenceHighlightRects = const [];
+      _selectedPageIndex = null;
+      _selectedWordPdfBounds = null;
+      _selectedSentenceLineBoundsPdf = const [];
     });
   }
 
@@ -264,15 +297,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void _toggleReflow() {
     _clearSelection();
     setState(() => _reflowMode = !_reflowMode);
-    // Both views stay mounted, so re-sync whichever one just became
-    // visible to the page the other one was on.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_reflowMode) {
-        _reflowKey.currentState?.jumpToPage(_currentPage);
-      } else if (_currentPage > 1) {
+    // Reflow is rebuilt fresh each time (it already opens at
+    // widget.initialPage), but the PDF view stays alive the whole time, so
+    // only it needs an explicit re-sync — and only if it's not already on
+    // the right page, since a no-op jump would still force a re-layout.
+    if (!_reflowMode && _controller.pageNumber != _currentPage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         _controller.jumpToPage(_currentPage);
-      }
-    });
+      });
+    }
   }
 
   Future<void> _quickLanguageSwitch() async {
@@ -381,22 +414,25 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ],
       ),
-      // Both views stay mounted (just hidden via Offstage) instead of one
-      // replacing the other: SfPdfViewer's dispose() releases its
-      // syncfusion PdfDocument, and reflow reads text from that very same
-      // document — removing it from the tree while switching modes would
-      // corrupt it out from under the reflow view.
+      // The PDF view stays mounted AND actually painting at all times
+      // (never Offstage) instead of one view replacing the other: besides
+      // SfPdfViewer.dispose() releasing its syncfusion PdfDocument (which
+      // reflow reads from), fully hiding it also let it evict its
+      // rendered-page cache, making it re-rasterize from scratch — and
+      // thus feel very slow — every time you switched back. A near-zero
+      // opacity keeps it rendering (so its cache stays warm) while being
+      // invisible and untouchable behind reflow.
       body: Stack(
         children: [
-          Offstage(
-            offstage: _reflowMode,
-            child: _buildPdfBody(settings, translationService),
-          ),
-          if (_pdfDocument != null)
-            Offstage(
-              offstage: !_reflowMode,
-              child: _buildReflowBody(settings, translationService),
+          IgnorePointer(
+            ignoring: _reflowMode,
+            child: Opacity(
+              opacity: _reflowMode ? 0.001 : 1,
+              child: _buildPdfBody(settings, translationService),
             ),
+          ),
+          if (_pdfDocument != null && _reflowMode)
+            _buildReflowBody(settings, translationService),
         ],
       ),
     );
@@ -418,11 +454,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
       target: settings.targetLanguage,
       translationService: translationService,
       fontSize: _reflowFontSize,
+      readingTheme: settings.readingTheme,
       onPageChanged: _updateCurrentPage,
     );
   }
 
   Widget _buildPdfBody(SettingsService settings, TranslationService translationService) {
+    // Recomputed from PDF-space bounds on every build (including ones the
+    // scroll/zoom listener triggers) so the highlight tracks scrolling
+    // instead of staying frozen at the position it was tapped at.
+    Rect? wordRect;
+    final sentenceRects = <Rect>[];
+    if (_selectedWord != null && _selectedPageIndex != null) {
+      if (_selectedWordPdfBounds != null) {
+        wordRect = _pdfRectToScreen(_selectedPageIndex!, _selectedWordPdfBounds!);
+      }
+      for (final pdfRect in _selectedSentenceLineBoundsPdf) {
+        final rect = _pdfRectToScreen(_selectedPageIndex!, pdfRect);
+        if (rect != null) sentenceRects.add(rect);
+      }
+    }
+
     return Stack(
       children: [
         Listener(
@@ -444,32 +496,30 @@ class _ReaderScreenState extends State<ReaderScreen> {
         // the tapped word sits on top with a stronger tint. Both stay
         // visible for as long as the translation panel is open, so the
         // reader can see exactly what's being translated.
-        if (_selectedWord != null) ...[
-          for (final rect in _sentenceHighlightRects)
-            Positioned.fromRect(
-              rect: rect,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+        for (final rect in sentenceRects)
+          Positioned.fromRect(
+            rect: rect,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-          if (_tapHighlightRect != null)
-            Positioned.fromRect(
-              rect: _tapHighlightRect!,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
+          ),
+        if (wordRect != null)
+          Positioned.fromRect(
+            rect: wordRect,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(3),
                 ),
               ),
             ),
-        ],
+          ),
         if (_selectedWord != null)
           Positioned(
             left: 0,

@@ -23,6 +23,8 @@ class SettingsScreen extends StatelessWidget {
           Divider(height: 32),
           _SectionHeader('Оформление'),
           _ThemeSection(),
+          SizedBox(height: 16),
+          _ReadingThemeSection(),
           Divider(height: 32),
           _SectionHeader('О приложении'),
           _AboutSection(),
@@ -225,6 +227,38 @@ class _ThemeSection extends StatelessWidget {
         ],
         selected: {settings.themeMode},
         onSelectionChanged: (selection) => settings.setThemeMode(selection.first),
+      ),
+    );
+  }
+}
+
+class _ReadingThemeSection extends StatelessWidget {
+  const _ReadingThemeSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsService>();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Фон адаптивного режима',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<ReadingTheme>(
+            segments: [
+              for (final theme in ReadingTheme.values)
+                ButtonSegment(value: theme, label: Text(theme.label)),
+            ],
+            selected: {settings.readingTheme},
+            onSelectionChanged: (selection) => settings.setReadingTheme(selection.first),
+          ),
+        ],
       ),
     );
   }

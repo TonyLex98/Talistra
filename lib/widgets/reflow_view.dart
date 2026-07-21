@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, TextLine;
 
+import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../utils/pdf_region_renderer.dart';
 import '../utils/reflow_builder.dart';
@@ -28,6 +29,7 @@ class ReflowPdfView extends StatefulWidget {
     required this.target,
     required this.translationService,
     required this.fontSize,
+    required this.readingTheme,
     required this.onPageChanged,
   });
 
@@ -40,6 +42,7 @@ class ReflowPdfView extends StatefulWidget {
   final TranslateLanguage target;
   final TranslationService translationService;
   final double fontSize;
+  final ReadingTheme readingTheme;
   final ValueChanged<int> onPageChanged;
 
   @override
@@ -92,26 +95,31 @@ class ReflowPdfViewState extends State<ReflowPdfView> {
   @override
   Widget build(BuildContext context) {
     final renderer = _renderer;
-    if (renderer == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return PageView.builder(
-      controller: _pageController,
-      itemCount: widget.pageCount,
-      onPageChanged: (index) => widget.onPageChanged(index + 1),
-      itemBuilder: (context, index) {
-        return _ReflowPage(
-          key: ValueKey(index),
-          pageIndex: index,
-          document: widget.document,
-          linesCache: widget.linesCache,
-          imageFor: _imageFor,
-          source: widget.source,
-          target: widget.target,
-          translationService: widget.translationService,
-          fontSize: widget.fontSize,
-        );
-      },
+    // The reading surface defaults to (and usually stays) plain white,
+    // independent of the app's own light/dark theme — see [ReadingTheme].
+    return ColoredBox(
+      color: widget.readingTheme.background,
+      child: renderer == null
+          ? const Center(child: CircularProgressIndicator())
+          : PageView.builder(
+              controller: _pageController,
+              itemCount: widget.pageCount,
+              onPageChanged: (index) => widget.onPageChanged(index + 1),
+              itemBuilder: (context, index) {
+                return _ReflowPage(
+                  key: ValueKey(index),
+                  pageIndex: index,
+                  document: widget.document,
+                  linesCache: widget.linesCache,
+                  imageFor: _imageFor,
+                  source: widget.source,
+                  target: widget.target,
+                  translationService: widget.translationService,
+                  fontSize: widget.fontSize,
+                  readingTheme: widget.readingTheme,
+                );
+              },
+            ),
     );
   }
 }
@@ -127,6 +135,7 @@ class _ReflowPage extends StatefulWidget {
     required this.target,
     required this.translationService,
     required this.fontSize,
+    required this.readingTheme,
   });
 
   final int pageIndex;
@@ -137,6 +146,7 @@ class _ReflowPage extends StatefulWidget {
   final TranslateLanguage target;
   final TranslationService translationService;
   final double fontSize;
+  final ReadingTheme readingTheme;
 
   @override
   State<_ReflowPage> createState() => _ReflowPageState();
@@ -279,16 +289,15 @@ class _ReflowPageState extends State<_ReflowPage> {
   static final _wordPattern = RegExp(r'[\p{L}\p{N}]+', unicode: true);
 
   Widget _buildParagraph(BuildContext context, int blockIndex, String text) {
-    final scheme = Theme.of(context).colorScheme;
     final baseStyle = TextStyle(
       fontSize: widget.fontSize,
       height: 1.55,
-      color: scheme.onSurface,
+      color: widget.readingTheme.onBackground,
     );
     final highlightStyle = baseStyle.copyWith(
       fontWeight: FontWeight.w700,
-      color: scheme.primary,
-      backgroundColor: scheme.primaryContainer.withValues(alpha: 0.5),
+      color: widget.readingTheme.accent,
+      backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.16),
     );
 
     final spans = <InlineSpan>[];

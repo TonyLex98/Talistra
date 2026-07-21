@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
+import 'text_join.dart';
+
 enum ReflowBlockType { paragraph, image }
 
 /// One unit of a reflowed page: either a paragraph of text, or a region
@@ -35,12 +37,12 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
   final medianHeight = heights.isEmpty ? 12.0 : heights[heights.length ~/ 2];
 
   final blocks = <ReflowBlock>[];
-  final buffer = StringBuffer();
+  var paragraph = '';
 
   void flush() {
-    final text = buffer.toString().trim();
+    final text = paragraph.trim();
     if (text.isNotEmpty) blocks.add(ReflowBlock.paragraph(text));
-    buffer.clear();
+    paragraph = '';
   }
 
   final firstTop = nonEmpty.first.bounds.top;
@@ -58,13 +60,21 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
         blocks.add(
           ReflowBlock.image(Rect.fromLTWH(0, previousBottom, pageSize.width, gap)),
         );
+        paragraph = text;
+        previousBottom = line.bounds.bottom;
+        continue;
       } else if (gap > medianHeight * 1.6) {
         flush();
+        paragraph = text;
+        previousBottom = line.bounds.bottom;
+        continue;
       } else {
-        buffer.write(' ');
+        paragraph = joinLines(paragraph, text);
+        previousBottom = line.bounds.bottom;
+        continue;
       }
     }
-    buffer.write(text);
+    paragraph = text;
     previousBottom = line.bounds.bottom;
   }
   flush();

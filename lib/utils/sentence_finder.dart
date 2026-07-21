@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
+import 'text_join.dart';
+
 /// A word found under a tap, with its PDF-space bounds (page-local points).
 class WordHit {
   const WordHit({required this.text, required this.bounds});
@@ -12,13 +14,42 @@ class WordHit {
 /// Finds the word whose bounds contain [point] (page-local PDF points),
 /// with a small [padding] tolerance so near-misses at the edge of a
 /// glyph still register.
+///
+/// Syncfusion's [TextLine.wordCollection] includes whitespace runs as
+/// entries of their own (e.g. "This", " ", "is", " ", "page" — not just
+/// the non-blank words), which doubles as a reliable word-boundary
+/// signal: some poorly-structured PDFs split one visual word into
+/// several text runs (typically at a font/style change) with no such
+/// whitespace entry between them, so a tap would otherwise only ever
+/// select half the word. Any run of consecutive non-blank entries — i.e.
+/// with no whitespace entry between them — is merged into a single hit.
 WordHit? hitTestWord(List<TextLine> lines, Offset point, {double padding = 3}) {
   for (final line in lines) {
     if (!line.bounds.inflate(padding).contains(point)) continue;
-    for (final word in line.wordCollection) {
-      if (word.bounds.inflate(padding).contains(point)) {
-        return WordHit(text: word.text, bounds: word.bounds);
+    final words = line.wordCollection;
+    for (var i = 0; i < words.length; i++) {
+      if (words[i].text.trim().isEmpty) continue;
+      if (!words[i].bounds.inflate(padding).contains(point)) continue;
+
+      var left = i;
+      var right = i;
+      while (left > 0 && words[left - 1].text.trim().isNotEmpty) {
+        left--;
       }
+      while (right < words.length - 1 && words[right + 1].text.trim().isNotEmpty) {
+        right++;
+      }
+
+      if (left == right) {
+        return WordHit(text: words[i].text, bounds: words[i].bounds);
+      }
+      final buffer = StringBuffer();
+      var bounds = words[left].bounds;
+      for (var k = left; k <= right; k++) {
+        buffer.write(words[k].text);
+        bounds = bounds.expandToInclude(words[k].bounds);
+      }
+      return WordHit(text: buffer.toString(), bounds: bounds);
     }
   }
   return null;
@@ -58,54 +89,137 @@ SentenceMatch? findSentenceForWord({
       ).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex);
   if (lines.isEmpty) return null;
 
+  // Lines are joined with [joinLines] so a word split across two lines by
+  // a line-break hyphen ("exam-" / "ple") reads as one continuous token —
+  // otherwise a whole-word search for it would never match.
   final buffer = StringBuffer();
   final lineRanges = <({int start, int end})>[];
   for (final line in lines) {
-    final start = buffer.length;
-    buffer.write(line.text);
-    lineRanges.add((start: start, end: buffer.length));
-    buffer.write(' ');
+    final text = line.text;
+    if (buffer.isEmpty) {
+      buffer.write(text);
+      lineRanges.add((start: 0, end: buffer.length));
+      continue;
+    }
+    final joined = joinLines(buffer.toString(), text);
+    buffer.clear();
+    buffer.write(joined);
+    lineRanges.add((start: joined.length - text.length, end: joined.length));
   }
   final pageText = buffer.toString();
-  final wordLower = word.toLowerCase();
 
-  for (final range in _splitSentenceRanges(pageText)) {
-    final sentence = pageText.substring(range.start, range.end).trim();
-    final idx = _findWholeWordIndex(sentence.toLowerCase(), wordLower);
-    if (idx == -1) continue;
+  final match = _matchSentence(pageText, word);
+  if (match == null) return null;
 
-    final lineBounds = <Rect>[
-      for (var i = 0; i < lines.length; i++)
-        if (lineRanges[i].start < range.end && lineRanges[i].end > range.start)
-          lines[i].bounds,
-    ];
+  final lineBounds = <Rect>[
+    for (var i = 0; i < lines.length; i++)
+      if (lineRanges[i].start < match.rangeEnd && lineRanges[i].end > match.rangeStart)
+        lines[i].bounds,
+  ];
 
-    return SentenceMatch(
-      sentence: sentence,
-      wordStart: idx,
-      wordEnd: idx + word.length,
-      lineBounds: lineBounds,
-    );
-  }
-  return null;
+  return SentenceMatch(
+    sentence: match.sentence,
+    wordStart: match.wordStart,
+    wordEnd: match.wordEnd,
+    lineBounds: lineBounds,
+  );
 }
 
 /// Finds the sentence inside [text] that contains [word] — the same
 /// matching used by [findSentenceForWord], but for plain text that isn't
 /// tied to PDF page geometry (e.g. reflowed paragraphs).
 SentenceMatch? findSentenceInText(String text, String word) {
+  final match = _matchSentence(text, word);
+  if (match == null) return null;
+  return SentenceMatch(
+    sentence: match.sentence,
+    wordStart: match.wordStart,
+    wordEnd: match.wordEnd,
+    lineBounds: const [],
+  );
+}
+
+/// A meaningfully translatable sentence should be more than a couple of
+/// words (so there's real context to translate) but also not unboundedly
+/// long (a badly-structured PDF can lack sentence-ending punctuation for
+/// a whole page, which would otherwise turn "the sentence" into
+/// everything up to the next period).
+const _minSentenceLength = 25;
+const _maxSentenceLength = 320;
+
+/// Locates [word] as a whole word inside [text], expanding the naive
+/// punctuation-based sentence it falls in to meet [_minSentenceLength] by
+/// pulling in neighboring sentences, or trimming it down to
+/// [_maxSentenceLength] (snapped to word boundaries, centered on the
+/// word) if it runs unreasonably long. Returns the final sentence text,
+/// the word's position within it, and the absolute [text] offsets it
+/// came from (so callers with page geometry can map it back to lines).
+({String sentence, int wordStart, int wordEnd, int rangeStart, int rangeEnd})? _matchSentence(
+  String text,
+  String word,
+) {
   final wordLower = word.toLowerCase();
-  for (final range in _splitSentenceRanges(text)) {
-    final sentence = text.substring(range.start, range.end).trim();
-    final idx = _findWholeWordIndex(sentence.toLowerCase(), wordLower);
-    if (idx != -1) {
-      return SentenceMatch(
-        sentence: sentence,
-        wordStart: idx,
-        wordEnd: idx + word.length,
-        lineBounds: const [],
-      );
+  final ranges = _splitSentenceRanges(text);
+
+  for (var i = 0; i < ranges.length; i++) {
+    final range = ranges[i];
+    final candidate = text.substring(range.start, range.end);
+    final relIdx = _findWholeWordIndex(candidate.toLowerCase(), wordLower);
+    if (relIdx == -1) continue;
+    final wordAbsStart = range.start + relIdx;
+
+    var leftIdx = i;
+    var rightIdx = i;
+    var extendRight = true;
+    while (ranges[rightIdx].end - ranges[leftIdx].start < _minSentenceLength &&
+        (leftIdx > 0 || rightIdx < ranges.length - 1)) {
+      if (extendRight && rightIdx < ranges.length - 1) {
+        rightIdx++;
+      } else if (leftIdx > 0) {
+        leftIdx--;
+      } else if (rightIdx < ranges.length - 1) {
+        rightIdx++;
+      }
+      extendRight = !extendRight;
     }
+
+    var start = ranges[leftIdx].start;
+    var end = ranges[rightIdx].end;
+
+    if (end - start > _maxSentenceLength) {
+      final half = _maxSentenceLength ~/ 2;
+      var windowStart = wordAbsStart - half;
+      var windowEnd = wordAbsStart + word.length + half;
+      if (windowStart < start) {
+        windowEnd += start - windowStart;
+        windowStart = start;
+      }
+      if (windowEnd > end) {
+        windowStart -= windowEnd - end;
+        windowEnd = end;
+      }
+      windowStart = windowStart.clamp(start, end);
+      windowEnd = windowEnd.clamp(start, end);
+      while (windowStart > start && isMidWord(text, windowStart)) {
+        windowStart--;
+      }
+      while (windowEnd < end && isMidWord(text, windowEnd)) {
+        windowEnd++;
+      }
+      start = windowStart;
+      end = windowEnd;
+    }
+
+    final sentence = text.substring(start, end).trim();
+    final idx = _findWholeWordIndex(sentence.toLowerCase(), wordLower);
+    if (idx == -1) continue;
+    return (
+      sentence: sentence,
+      wordStart: idx,
+      wordEnd: idx + word.length,
+      rangeStart: start,
+      rangeEnd: end,
+    );
   }
   return null;
 }
