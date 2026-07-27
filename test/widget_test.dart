@@ -16,7 +16,9 @@ import 'package:transreade/services/statistics_service.dart';
 // throwaway temp directory instead.
 class _FakePathProviderPlatform extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
-  final String _path = Directory.systemTemp.createTempSync('transread_test_').path;
+  final String _path = Directory.systemTemp
+      .createTempSync('transread_test_')
+      .path;
 
   @override
   Future<String?> getApplicationSupportPath() async => _path;
@@ -31,7 +33,9 @@ class _FakePathProviderPlatform extends PathProviderPlatform
 void main() {
   PathProviderPlatform.instance = _FakePathProviderPlatform();
 
-  testWidgets('Home screen shows empty library state', (WidgetTester tester) async {
+  testWidgets('Home screen shows empty library state', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
 
     // Real file I/O (the thumbnail/preview caches touch the real
@@ -51,16 +55,18 @@ void main() {
       statistics = await StatisticsService.load(prefs);
     });
 
-    await tester.pumpWidget(TransReadeApp(
-      settings: settings,
-      library: library,
-      thumbnailCache: thumbnailCache,
-      previewCache: previewCache,
-      statistics: statistics,
-    ));
+    await tester.pumpWidget(
+      TransReadeApp(
+        settings: settings,
+        library: library,
+        thumbnailCache: thumbnailCache,
+        previewCache: previewCache,
+        statistics: statistics,
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('TransRead'), findsOneWidget);
+    expect(find.text('Litra'), findsOneWidget);
     expect(find.text('Ваша библиотека пуста'), findsOneWidget);
   });
 }

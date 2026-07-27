@@ -35,7 +35,9 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final languages = AppLanguage.all
-        .where((l) => l.displayName.toLowerCase().contains(_query.toLowerCase()))
+        .where(
+          (l) => l.displayName.toLowerCase().contains(_query.toLowerCase()),
+        )
         .toList();
 
     return DraggableScrollableSheet(
@@ -47,7 +49,10 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+              child: Text(
+                widget.title,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -74,10 +79,16 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
                   final lang = languages[i];
                   final selected = lang.language == widget.current;
                   return ListTile(
-                    leading: Text(lang.flag, style: const TextStyle(fontSize: 22)),
+                    leading: Text(
+                      lang.flag,
+                      style: const TextStyle(fontSize: 22),
+                    ),
                     title: Text(lang.displayName),
                     trailing: selected
-                        ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary)
+                        ? Icon(
+                            Icons.check_circle,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
                         : null,
                     onTap: () => Navigator.pop(context, lang.language),
                   );

@@ -29,24 +29,25 @@ class AppTheme {
     // towards grey, so nothing looks pasted on from another palette.
     Color layer(double amount) => Color.lerp(reading.background, ink, amount)!;
 
-    final scheme = ColorScheme.fromSeed(
-      seedColor: _seed,
-      brightness: isDark ? Brightness.dark : Brightness.light,
-    ).copyWith(
-      surface: reading.background,
-      surfaceContainerLowest: reading.background,
-      surfaceContainerLow: reading.secondaryBackground,
-      surfaceContainer: layer(0.055),
-      surfaceContainerHigh: layer(0.085),
-      surfaceContainerHighest: layer(0.12),
-      onSurface: ink,
-      onSurfaceVariant: layer(0.55),
-      outlineVariant: reading.readingDivider,
-      outline: layer(0.35),
-      // No tonal elevation overlay: it would wash the paper colour with
-      // the accent hue on anything raised.
-      surfaceTint: const Color(0x00000000),
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: _seed,
+          brightness: isDark ? Brightness.dark : Brightness.light,
+        ).copyWith(
+          surface: reading.background,
+          surfaceContainerLowest: reading.background,
+          surfaceContainerLow: reading.secondaryBackground,
+          surfaceContainer: layer(0.055),
+          surfaceContainerHigh: layer(0.085),
+          surfaceContainerHighest: layer(0.12),
+          onSurface: ink,
+          onSurfaceVariant: layer(0.55),
+          outlineVariant: reading.readingDivider,
+          outline: layer(0.35),
+          // No tonal elevation overlay: it would wash the paper colour with
+          // the accent hue on anything raised.
+          surfaceTint: const Color(0x00000000),
+        );
 
     return ThemeData(
       useMaterial3: true,
@@ -75,7 +76,9 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
@@ -94,7 +97,11 @@ class AppTheme {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
       ),
-      dividerTheme: DividerThemeData(color: scheme.outlineVariant, space: 1, thickness: 1),
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        space: 1,
+        thickness: 1,
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

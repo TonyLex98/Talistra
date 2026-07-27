@@ -192,7 +192,9 @@ class _TranslationPanelState extends State<TranslationPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l10n.wrongSourceLanguage(AppLanguage.byLanguage(widget.source).displayName),
+            l10n.wrongSourceLanguage(
+              AppLanguage.byLanguage(widget.source).displayName,
+            ),
             style: TextStyle(fontSize: 12, color: scheme.onErrorContainer),
           ),
           Align(
@@ -256,7 +258,9 @@ class _TranslationPanelState extends State<TranslationPanel> {
 
   Widget _buildNeedsDownload(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context);
-    final names = _missing.map((l) => AppLanguage.byLanguage(l).displayName).join(', ');
+    final names = _missing
+        .map((l) => AppLanguage.byLanguage(l).displayName)
+        .join(', ');
     final downloadService = context.watch<ModelDownloadService>();
     final relevantDownload = _missing.contains(downloadService.activeLanguage);
 
@@ -284,7 +288,9 @@ class _TranslationPanelState extends State<TranslationPanel> {
             )
           else
             FilledButton.tonalIcon(
-              onPressed: downloadService.isDownloading ? null : _downloadMissing,
+              onPressed: downloadService.isDownloading
+                  ? null
+                  : _downloadMissing,
               icon: const Icon(Icons.download, size: 18),
               label: Text(l10n.download),
             ),
@@ -377,7 +383,9 @@ class _TranslationPanelState extends State<TranslationPanel> {
     TextStyle? base,
     TextStyle? highlight,
   ) {
-    if (word == null || word.trim().isEmpty) return TextSpan(text: sentence, style: base);
+    if (word == null || word.trim().isEmpty) {
+      return TextSpan(text: sentence, style: base);
+    }
     final match = findFuzzyWordMatch(sentence, word);
     if (match == null) return TextSpan(text: sentence, style: base);
     return _highlightedSpan(sentence, match.start, match.end, base, highlight);

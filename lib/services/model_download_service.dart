@@ -24,7 +24,8 @@ class ModelDownloadService extends ChangeNotifier {
   int get elapsedSeconds => _elapsedSeconds;
   bool get isDownloading => _activeLanguage != null;
 
-  bool isDownloadingLanguage(TranslateLanguage language) => _activeLanguage == language;
+  bool isDownloadingLanguage(TranslateLanguage language) =>
+      _activeLanguage == language;
 
   /// Downloads [language]'s model, unless a download is already running (in
   /// which case callers should just watch this service instead of starting

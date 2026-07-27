@@ -41,13 +41,33 @@ const _nonBreakingSpace = '\u{00A0}';
 /// ("others▯ thank you", "It▯s a stronger work"). Undefined slots in this
 /// byte range fall back to a space rather than leaving the control char.
 const _cp1252ControlRange = <String, String>{
-  '\u{80}': '€', '\u{82}': '‚', '\u{83}': 'ƒ', '\u{84}': '„',
-  '\u{85}': '…', '\u{86}': '†', '\u{87}': '‡', '\u{88}': 'ˆ',
-  '\u{89}': '‰', '\u{8A}': 'Š', '\u{8B}': '‹', '\u{8C}': 'Œ',
-  '\u{8E}': 'Ž', '\u{91}': '‘', '\u{92}': '’', '\u{93}': '“',
-  '\u{94}': '”', '\u{95}': '•', '\u{96}': '–', '\u{97}': '—',
-  '\u{98}': '˜', '\u{99}': '™', '\u{9A}': 'š', '\u{9B}': '›',
-  '\u{9C}': 'œ', '\u{9E}': 'ž', '\u{9F}': 'Ÿ',
+  '\u{80}': '€',
+  '\u{82}': '‚',
+  '\u{83}': 'ƒ',
+  '\u{84}': '„',
+  '\u{85}': '…',
+  '\u{86}': '†',
+  '\u{87}': '‡',
+  '\u{88}': 'ˆ',
+  '\u{89}': '‰',
+  '\u{8A}': 'Š',
+  '\u{8B}': '‹',
+  '\u{8C}': 'Œ',
+  '\u{8E}': 'Ž',
+  '\u{91}': '‘',
+  '\u{92}': '’',
+  '\u{93}': '“',
+  '\u{94}': '”',
+  '\u{95}': '•',
+  '\u{96}': '–',
+  '\u{97}': '—',
+  '\u{98}': '˜',
+  '\u{99}': '™',
+  '\u{9A}': 'š',
+  '\u{9B}': '›',
+  '\u{9C}': 'œ',
+  '\u{9E}': 'ž',
+  '\u{9F}': 'Ÿ',
 };
 final _cp1252ControlPattern = RegExp('[\u{80}-\u{9F}]', unicode: true);
 
@@ -148,11 +168,14 @@ String joinEmbeddedHyphenBreaks(String text) {
     final before = text.substring(start, i);
     final nextChar = i + 1 < text.length ? text[i + 1] : '';
     final beforeHyphen = before.length >= 2 ? before[before.length - 2] : '';
-    final isSoftHyphenBreak = before.endsWith('-') &&
+    final isSoftHyphenBreak =
+        before.endsWith('-') &&
         isLetter(beforeHyphen) &&
         isLetter(nextChar) &&
         nextChar == nextChar.toLowerCase();
-    buffer.write(isSoftHyphenBreak ? before.substring(0, before.length - 1) : '$before ');
+    buffer.write(
+      isSoftHyphenBreak ? before.substring(0, before.length - 1) : '$before ',
+    );
     start = i + 1;
   }
   buffer.write(text.substring(start));
@@ -211,7 +234,9 @@ String joinLines(String previous, String next, {Set<String>? lexicon}) {
   if (previous.endsWith('-') && previous.length >= 2) {
     final beforeHyphen = previous[previous.length - 2];
     final nextFirst = next[0];
-    if (isLetter(beforeHyphen) && isLetter(nextFirst) && nextFirst == nextFirst.toLowerCase()) {
+    if (isLetter(beforeHyphen) &&
+        isLetter(nextFirst) &&
+        nextFirst == nextFirst.toLowerCase()) {
       if (lexicon != null && _isRealCompound(previous, next, lexicon)) {
         return '$previous$next';
       }
@@ -243,8 +268,42 @@ bool _isRealCompound(String previous, String next, Set<String> lexicon) {
 /// full of typos.
 final _questionMarkInsideWord = RegExp(r'(?<=\p{L})\?(?=\p{L})', unicode: true);
 
-const _leadingTrimChars = {'«', '"', '“', '‘', "'", '(', '[', '{', '¿', '¡', '—', '–', '-', '.', ','};
-const _trailingTrimChars = {'.', ',', ';', ':', '!', '?', '…', '»', '"', '”', '’', "'", ')', ']', '}', '—', '–'};
+const _leadingTrimChars = {
+  '«',
+  '"',
+  '“',
+  '‘',
+  "'",
+  '(',
+  '[',
+  '{',
+  '¿',
+  '¡',
+  '—',
+  '–',
+  '-',
+  '.',
+  ',',
+};
+const _trailingTrimChars = {
+  '.',
+  ',',
+  ';',
+  ':',
+  '!',
+  '?',
+  '…',
+  '»',
+  '"',
+  '”',
+  '’',
+  "'",
+  ')',
+  ']',
+  '}',
+  '—',
+  '–',
+};
 const _closerToOpener = {')': '(', ']': '[', '}': '{', '»': '«', '”': '“'};
 
 /// Strips the punctuation hanging off a word picked out of a page, so a

@@ -28,7 +28,9 @@ const _cp1251HighBytes =
 String _decodeWindows1251(Uint8List bytes) {
   final buffer = StringBuffer();
   for (final byte in bytes) {
-    buffer.write(byte < 0x80 ? String.fromCharCode(byte) : _cp1251HighBytes[byte - 0x80]);
+    buffer.write(
+      byte < 0x80 ? String.fromCharCode(byte) : _cp1251HighBytes[byte - 0x80],
+    );
   }
   return buffer.toString();
 }

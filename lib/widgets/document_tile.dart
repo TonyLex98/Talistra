@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
+import '../services/djvu_service.dart';
 import '../services/page_image_cache.dart';
 import '../utils/pdf_region_renderer.dart';
 
@@ -62,6 +63,24 @@ class _DocumentTileState extends State<DocumentTile> {
     if (cached != null) return cached;
 
     try {
+      if (widget.document.isDjvu) {
+        final document = await DjvuDocument.open(widget.document.filePath);
+        try {
+          final info = await document.pageInfo(0);
+          const width = 160;
+          final height = (width / info.aspectRatio).round().clamp(1, 300);
+          final bytes = await document.renderPage(
+            0,
+            width: width,
+            height: height,
+          );
+          await cache.write(widget.document.id, bytes);
+          return bytes;
+        } finally {
+          await document.close();
+        }
+      }
+
       final renderer = await PdfRegionRenderer.open(widget.document.filePath);
       try {
         final size = await renderer.pageSize(0);
@@ -121,7 +140,10 @@ class _DocumentTileState extends State<DocumentTile> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        l10n.pageProgress(widget.document.lastPage, widget.document.pageCount),
+                        l10n.pageProgress(
+                          widget.document.lastPage,
+                          widget.document.pageCount,
+                        ),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ] else
@@ -134,10 +156,14 @@ class _DocumentTileState extends State<DocumentTile> {
               ),
               IconButton(
                 icon: Icon(
-                  widget.document.starred ? Icons.star_rounded : Icons.star_outline_rounded,
+                  widget.document.starred
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
                   color: widget.document.starred ? scheme.primary : null,
                 ),
-                tooltip: widget.document.starred ? l10n.unpinTooltip : l10n.pinTooltip,
+                tooltip: widget.document.starred
+                    ? l10n.unpinTooltip
+                    : l10n.pinTooltip,
                 onPressed: widget.onToggleStar,
               ),
               ReorderableDragStartListener(
@@ -177,6 +203,8 @@ class _DocumentTileState extends State<DocumentTile> {
                   // than the PDF one.
                   widget.document.isTextDocument
                       ? Icons.menu_book_rounded
+                      : widget.document.isDjvu
+                      ? Icons.auto_stories_rounded
                       : Icons.picture_as_pdf_rounded,
                   color: scheme.onPrimaryContainer,
                 ),

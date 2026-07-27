@@ -16,13 +16,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Add a PDF or TXT to start reading and translating words with a single tap.';
+      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF or TXT — Litra will open it in the right reading mode.';
 
   @override
   String get importingLabel => 'Adding...';
 
   @override
   String get addPdfLabel => 'Add book';
+
+  @override
+  String get archiveChooseBook => 'Choose a book from the archive';
+
+  @override
+  String get archiveNoBooks => 'No supported books were found in the archive.';
+
+  @override
+  String get unsupportedDocumentFormat =>
+      'Litra can’t recognise or open this file format.';
 
   @override
   String pageProgress(int page, int total) {
@@ -57,7 +67,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String openFailed(String error) {
-    return 'Couldn\'t open the PDF: $error';
+    return 'Couldn\'t open the book: $error';
+  }
+
+  @override
+  String get djvuOpening => 'Opening DjVu…';
+
+  @override
+  String get djvuInvalidDocument => 'This DjVu file is damaged or incomplete.';
+
+  @override
+  String get djvuTextLayer => 'Page text';
+
+  @override
+  String get djvuNoTextLayer =>
+      'This scanned page has no embedded text layer. You can still read and zoom the original image.';
+
+  @override
+  String djvuPageFailed(String error) {
+    return 'Couldn\'t render this DjVu page: $error';
   }
 
   @override
@@ -181,7 +209,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutText =>
-      'TransRead — a PDF reader with built-in on-device word translation. Tap a word while reading to see its translation.';
+      'Litra is a reader for PDF, DjVu and popular e-book formats with built-in on-device word translation.';
 
   @override
   String get suggestDownloadTitle => 'Download the translation dictionary?';

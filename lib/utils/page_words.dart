@@ -34,7 +34,9 @@ List<PageWord> buildPageWords(List<TextLine> lines) {
     for (final word in ordered[lineIndex].wordCollection) {
       final text = sanitizeExtractedText(word.text);
       if (text.trim().isEmpty) continue;
-      words.add(PageWord(text: text, bounds: word.bounds, lineIndex: lineIndex));
+      words.add(
+        PageWord(text: text, bounds: word.bounds, lineIndex: lineIndex),
+      );
     }
   }
   return words;
@@ -64,8 +66,8 @@ int? wordIndexAt(List<PageWord> words, Offset point, {double padding = 2}) {
     final horizontalDistance = point.dx < bounds.left
         ? bounds.left - point.dx
         : point.dx > bounds.right
-            ? point.dx - bounds.right
-            : 0.0;
+        ? point.dx - bounds.right
+        : 0.0;
     if (verticallyInside && horizontalDistance < bestOnLineDistance) {
       bestOnLineDistance = horizontalDistance;
       bestOnLine = i;
@@ -109,7 +111,9 @@ int? wordIndexAt(List<PageWord> words, Offset point, {double padding = 2}) {
       if (previousRight != null) {
         // Same rule the reflow builder uses: a real gap means a space,
         // flush fragments ("V*" + "(") are one word.
-        final minSpace = word.bounds.height > 0 ? word.bounds.height * 0.15 : 1.0;
+        final minSpace = word.bounds.height > 0
+            ? word.bounds.height * 0.15
+            : 1.0;
         if (word.bounds.left - previousRight >= minSpace) buffer.write(' ');
       }
       buffer.write(word.text);
@@ -123,7 +127,9 @@ int? wordIndexAt(List<PageWord> words, Offset point, {double padding = 2}) {
 
   var text = '';
   for (final lineText in lineTexts) {
-    text = text.isEmpty ? lineText : joinLines(text, lineText, lexicon: lexicon);
+    text = text.isEmpty
+        ? lineText
+        : joinLines(text, lineText, lexicon: lexicon);
   }
   return (text: text, rects: rects);
 }

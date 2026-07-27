@@ -7,6 +7,7 @@ import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../utils/reading_text_style.dart';
 import '../utils/reflow_builder.dart';
+import '../utils/reflow_paginator.dart';
 import '../utils/sentence_finder.dart';
 import 'translation_panel.dart';
 
@@ -49,6 +50,10 @@ class TxtPageView extends StatefulWidget {
 /// a [GlobalKey]) from its own "Go to page" dialog.
 class TxtPageViewState extends State<TxtPageView> {
   late final PageController _pageController;
+  Size _paginationSize = Size.zero;
+  double _paginationFontSize = 0;
+  List<_TextSubPage> _subPages = const [];
+  bool _initialPositionApplied = false;
 
   @override
   void initState() {
@@ -56,7 +61,10 @@ class TxtPageViewState extends State<TxtPageView> {
     _pageController = PageController(initialPage: widget.initialPage - 1);
   }
 
-  void jumpToPage(int page) => _pageController.jumpToPage(page - 1);
+  void jumpToPage(int page) {
+    final index = _subPages.indexWhere((item) => item.sourcePage == page - 1);
+    if (index >= 0) _pageController.jumpToPage(index);
+  }
 
   @override
   void dispose() {
@@ -68,30 +76,103 @@ class TxtPageViewState extends State<TxtPageView> {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: widget.readingTheme.background,
-      child: PageView.builder(
-        controller: _pageController,
-        itemCount: widget.pages.length,
-        onPageChanged: (index) => widget.onPageChanged(index + 1),
-        itemBuilder: (context, index) => _TxtPage(
-          key: ValueKey(index),
-          blocks: widget.pages[index],
-          source: widget.source,
-          target: widget.target,
-          translationService: widget.translationService,
-          fontSize: widget.fontSize,
-          readingTheme: widget.readingTheme,
-          settings: widget.settings,
-          translatorEnabled: widget.translatorEnabled,
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _paginateIfNeeded(constraints.biggest, context);
+          if (_subPages.isEmpty) return const SizedBox.shrink();
+          if (!_initialPositionApplied) {
+            _initialPositionApplied = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              final index = _subPages.indexWhere(
+                (item) => item.sourcePage == widget.initialPage - 1,
+              );
+              if (index >= 0) _pageController.jumpToPage(index);
+            });
+          }
+          return PageView.builder(
+            controller: _pageController,
+            itemCount: _subPages.length,
+            onPageChanged: (index) =>
+                widget.onPageChanged(_subPages[index].sourcePage + 1),
+            itemBuilder: (context, index) {
+              final page = _subPages[index];
+              return _TxtPage(
+                key: ValueKey(index),
+                blocks: page.blocks,
+                slices: page.slices,
+                source: widget.source,
+                target: widget.target,
+                translationService: widget.translationService,
+                fontSize: widget.fontSize,
+                readingTheme: widget.readingTheme,
+                settings: widget.settings,
+                translatorEnabled: widget.translatorEnabled,
+              );
+            },
+          );
+        },
       ),
     );
   }
+
+  void _paginateIfNeeded(Size size, BuildContext context) {
+    if (size == _paginationSize && widget.fontSize == _paginationFontSize) {
+      return;
+    }
+    _paginationSize = size;
+    _paginationFontSize = widget.fontSize;
+    final available = size.width - 40;
+    final width = math.min(available, widget.fontSize * 38);
+    final height = size.height - 54;
+    final pages = <_TextSubPage>[];
+    for (var sourcePage = 0; sourcePage < widget.pages.length; sourcePage++) {
+      final blocks = widget.pages[sourcePage];
+      final slices = paginateReflowBlocks(
+        blocks: blocks,
+        width: width,
+        height: height,
+        fontSize: widget.fontSize,
+        styleFor: (_) => DefaultTextStyle.of(context).style.merge(
+          readingTextStyle(
+            settings: widget.settings,
+            fontSize: widget.fontSize,
+          ),
+        ),
+        blockSpacing: 16,
+        imageSpacing: 16,
+        textScaler: MediaQuery.textScalerOf(context),
+      );
+      for (final slicePage in slices) {
+        pages.add(
+          _TextSubPage(
+            sourcePage: sourcePage,
+            blocks: blocks,
+            slices: slicePage,
+          ),
+        );
+      }
+    }
+    _subPages = pages;
+  }
+}
+
+class _TextSubPage {
+  const _TextSubPage({
+    required this.sourcePage,
+    required this.blocks,
+    required this.slices,
+  });
+  final int sourcePage;
+  final List<ReflowBlock> blocks;
+  final List<ReflowSlice> slices;
 }
 
 class _TxtPage extends StatefulWidget {
   const _TxtPage({
     super.key,
     required this.blocks,
+    required this.slices,
     required this.source,
     required this.target,
     required this.translationService,
@@ -102,6 +183,7 @@ class _TxtPage extends StatefulWidget {
   });
 
   final List<ReflowBlock> blocks;
+  final List<ReflowSlice> slices;
   final TranslateLanguage source;
   final TranslateLanguage target;
   final TranslationService translationService;
@@ -145,7 +227,7 @@ class _TxtPageState extends State<_TxtPage> {
 
   static final _wordPattern = RegExp(r'[\p{L}\p{N}]+', unicode: true);
 
-  Widget _buildParagraph(int blockIndex, ReflowBlock block) {
+  Widget _buildParagraph(int blockIndex, ReflowBlock block, ReflowSlice slice) {
     final text = block.text;
     final baseStyle = readingTextStyle(
       settings: widget.settings,
@@ -162,28 +244,38 @@ class _TxtPageState extends State<_TxtPage> {
     }
 
     final spans = <InlineSpan>[];
-    var last = 0;
-    for (final match in _wordPattern.allMatches(text)) {
-      if (match.start > last) {
-        spans.add(TextSpan(text: text.substring(last, match.start), style: baseStyle));
+    var last = slice.start;
+    for (final match in _wordPattern.allMatches(
+      text.substring(slice.start, slice.end),
+    )) {
+      final start = slice.start + match.start;
+      final end = slice.start + match.end;
+      if (start > last) {
+        spans.add(
+          TextSpan(text: text.substring(last, start), style: baseStyle),
+        );
       }
       final word = match.group(0)!;
-      final isSelected = blockIndex == _selectedBlockIndex &&
-          match.start == _selectedWordStart &&
-          match.end == _selectedWordEnd;
+      final isSelected =
+          blockIndex == _selectedBlockIndex &&
+          start == _selectedWordStart &&
+          end == _selectedWordEnd;
       spans.add(
         TextSpan(
           text: word,
           style: styleAt(selected: isSelected),
           recognizer: widget.translatorEnabled
-              ? (TapGestureRecognizer()..onTap = () => _onWordTap(blockIndex, match.start, match.end, word))
+              ? (TapGestureRecognizer()
+                  ..onTap = () => _onWordTap(blockIndex, start, end, word))
               : null,
         ),
       );
-      last = match.end;
+      last = end;
     }
-    if (last < text.length) {
-      spans.add(TextSpan(text: text.substring(last), style: baseStyle));
+    if (last < slice.end) {
+      spans.add(
+        TextSpan(text: text.substring(last, slice.end), style: baseStyle),
+      );
     }
     return Text.rich(TextSpan(children: spans));
   }
@@ -200,12 +292,26 @@ class _TxtPageState extends State<_TxtPage> {
             final available = constraints.maxWidth - 40;
             final columnWidth = math.min(available, widget.fontSize * 38);
             final sideMargin = 20 + (available - columnWidth) / 2;
-            return ListView.builder(
-              padding: EdgeInsets.fromLTRB(sideMargin, 18, sideMargin, 140),
-              itemCount: widget.blocks.length,
-              itemBuilder: (context, index) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _buildParagraph(index, widget.blocks[index]),
+            return Padding(
+              padding: EdgeInsets.fromLTRB(sideMargin, 18, sideMargin, 36),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < widget.slices.length; i++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: 16,
+                        top: i == 0 || !widget.slices[i].isFirstOfBlock
+                            ? 0
+                            : 16,
+                      ),
+                      child: _buildParagraph(
+                        widget.slices[i].blockIndex,
+                        widget.blocks[widget.slices[i].blockIndex],
+                        widget.slices[i],
+                      ),
+                    ),
+                ],
               ),
             );
           },
@@ -218,7 +324,9 @@ class _TxtPageState extends State<_TxtPage> {
             child: Align(
               alignment: Alignment.bottomCenter,
               child: TranslationPanel(
-                key: ValueKey('$_selectedWord-${widget.source}-${widget.target}'),
+                key: ValueKey(
+                  '$_selectedWord-${widget.source}-${widget.target}',
+                ),
                 word: _selectedWord!,
                 sentenceMatch: _selectedSentence,
                 source: widget.source,

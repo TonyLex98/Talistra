@@ -55,7 +55,10 @@ Future<ui.Rect?> findInkBounds(Uint8List pngBytes) async {
         // Fully transparent pixels are paper too (a region rendered
         // without an opaque background), not content.
         if (pixels[i + 3] < 8) continue;
-        final darkest = math.min(pixels[i], math.min(pixels[i + 1], pixels[i + 2]));
+        final darkest = math.min(
+          pixels[i],
+          math.min(pixels[i + 1], pixels[i + 2]),
+        );
         if (255 - darkest <= _inkThreshold) continue;
         samples++;
         if (x < minX) minX = x;

@@ -41,7 +41,8 @@ class PageImageCache {
     return PageImageCache._(dir);
   }
 
-  File _fileFor(String documentId) => File(p.join(_dir.path, '$documentId.png'));
+  File _fileFor(String documentId) =>
+      File(p.join(_dir.path, '$documentId.png'));
 
   Future<Uint8List?> read(String documentId) async {
     final file = _fileFor(documentId);
@@ -77,11 +78,15 @@ class ThumbnailCache {
   final PageImageCache _cache;
 
   static Future<ThumbnailCache> create() async => ThumbnailCache(
-    await PageImageCache.open('thumbnails_v2', legacySubdirectory: 'thumbnails'),
+    await PageImageCache.open(
+      'thumbnails_v2',
+      legacySubdirectory: 'thumbnails',
+    ),
   );
 
   Future<Uint8List?> read(String documentId) => _cache.read(documentId);
-  Future<void> write(String documentId, Uint8List bytes) => _cache.write(documentId, bytes);
+  Future<void> write(String documentId, Uint8List bytes) =>
+      _cache.write(documentId, bytes);
   Future<void> delete(String documentId) => _cache.delete(documentId);
 }
 
@@ -93,10 +98,14 @@ class PagePreviewCache {
   final PageImageCache _cache;
 
   static Future<PagePreviewCache> create() async => PagePreviewCache(
-    await PageImageCache.open('page_preview_v2', legacySubdirectory: 'page_preview'),
+    await PageImageCache.open(
+      'page_preview_v2',
+      legacySubdirectory: 'page_preview',
+    ),
   );
 
   Future<Uint8List?> read(String documentId) => _cache.read(documentId);
-  Future<void> write(String documentId, Uint8List bytes) => _cache.write(documentId, bytes);
+  Future<void> write(String documentId, Uint8List bytes) =>
+      _cache.write(documentId, bytes);
   Future<void> delete(String documentId) => _cache.delete(documentId);
 }

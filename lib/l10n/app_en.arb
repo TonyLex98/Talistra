@@ -3,9 +3,12 @@
 
   "settingsTooltip": "Settings",
   "emptyLibraryTitle": "Your library is empty",
-  "emptyLibrarySubtitle": "Add a PDF or TXT to start reading and translating words with a single tap.",
+  "emptyLibrarySubtitle": "Add PDF, DjVu, EPUB, FB2, DOCX, RTF or TXT — Litra will open it in the right reading mode.",
   "importingLabel": "Adding...",
   "addPdfLabel": "Add book",
+  "archiveChooseBook": "Choose a book from the archive",
+  "archiveNoBooks": "No supported books were found in the archive.",
+  "unsupportedDocumentFormat": "Litra can’t recognise or open this file format.",
 
   "pageProgress": "Page {page} of {total}",
   "neverOpened": "Not opened yet",
@@ -17,7 +20,15 @@
   "cancel": "Cancel",
   "delete": "Delete",
 
-  "openFailed": "Couldn't open the PDF: {error}",
+  "openFailed": "Couldn't open the book: {error}",
+  "djvuOpening": "Opening DjVu…",
+  "djvuInvalidDocument": "This DjVu file is damaged or incomplete.",
+  "djvuTextLayer": "Page text",
+  "djvuNoTextLayer": "This scanned page has no embedded text layer. You can still read and zoom the original image.",
+  "djvuPageFailed": "Couldn't render this DjVu page: {error}",
+  "@djvuPageFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
   "goToPageTitle": "Go to page",
   "goToPageHint": "1 – {max}",
   "go": "Go",
@@ -56,7 +67,7 @@
   "readingThemeNight": "Night",
   "readingThemeDark": "Dark",
   "appLanguageSection": "App language",
-  "aboutText": "TransRead — a PDF reader with built-in on-device word translation. Tap a word while reading to see its translation.",
+  "aboutText": "Litra is a reader for PDF, DjVu and popular e-book formats with built-in on-device word translation.",
 
   "suggestDownloadTitle": "Download the translation dictionary?",
   "downloadingNamed": "Downloading \"{language}\"... {seconds}s",

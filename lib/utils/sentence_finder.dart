@@ -41,17 +41,22 @@ WordHit? hitTestWord(List<TextLine> lines, Offset point, {double padding = 3}) {
       var right = i;
       while (left > 0 &&
           texts[left - 1].trim().isNotEmpty &&
-          words[left].bounds.left - words[left - 1].bounds.right < touchThreshold) {
+          words[left].bounds.left - words[left - 1].bounds.right <
+              touchThreshold) {
         left--;
       }
       while (right < words.length - 1 &&
           texts[right + 1].trim().isNotEmpty &&
-          words[right + 1].bounds.left - words[right].bounds.right < touchThreshold) {
+          words[right + 1].bounds.left - words[right].bounds.right <
+              touchThreshold) {
         right++;
       }
 
       if (left == right) {
-        return WordHit(text: trimWordPunctuation(texts[i]), bounds: words[i].bounds);
+        return WordHit(
+          text: trimWordPunctuation(texts[i]),
+          bounds: words[i].bounds,
+        );
       }
       final buffer = StringBuffer();
       var bounds = words[left].bounds;
@@ -59,7 +64,10 @@ WordHit? hitTestWord(List<TextLine> lines, Offset point, {double padding = 3}) {
         buffer.write(texts[k]);
         bounds = bounds.expandToInclude(words[k].bounds);
       }
-      return WordHit(text: trimWordPunctuation(buffer.toString()), bounds: bounds);
+      return WordHit(
+        text: trimWordPunctuation(buffer.toString()),
+        bounds: bounds,
+      );
     }
   }
   return null;
@@ -123,12 +131,18 @@ SentenceMatch? findSentenceForWord({
   } catch (_) {
     pageSize = Size.zero;
   }
-  final contentLines = withoutMarginFurniture(ordered, pageSize, medianLineHeight(ordered));
+  final contentLines = withoutMarginFurniture(
+    ordered,
+    pageSize,
+    medianLineHeight(ordered),
+  );
 
   // Lines are joined with [joinLines] so a word split across two lines by
   // a line-break hyphen ("exam-" / "ple") reads as one continuous token —
   // otherwise a whole-word search for it would never match.
-  final lineTexts = [for (final line in contentLines) sanitizeExtractedText(line.text)];
+  final lineTexts = [
+    for (final line in contentLines) sanitizeExtractedText(line.text),
+  ];
   final lexicon = buildPageLexicon(lineTexts.map((t) => t.trim()));
   final buffer = StringBuffer();
   final lineRanges = <({int start, int end})>[];
@@ -148,13 +162,20 @@ SentenceMatch? findSentenceForWord({
   final match = _matchSentence(
     pageText,
     word,
-    hintOffset: _offsetOfTappedWord(contentLines, lineTexts, lineRanges, word, wordBounds),
+    hintOffset: _offsetOfTappedWord(
+      contentLines,
+      lineTexts,
+      lineRanges,
+      word,
+      wordBounds,
+    ),
   );
   if (match == null) return null;
 
   final lineBounds = <Rect>[
     for (var i = 0; i < contentLines.length; i++)
-      if (lineRanges[i].start < match.rangeEnd && lineRanges[i].end > match.rangeStart)
+      if (lineRanges[i].start < match.rangeEnd &&
+          lineRanges[i].end > match.rangeStart)
         contentLines[i].bounds,
   ];
 
@@ -193,7 +214,10 @@ int? _offsetOfTappedWord(
   if (bestLine < 0) return null;
 
   final lineStart = lineRanges[bestLine].start;
-  final inLine = _findWholeWordIndex(lineTexts[bestLine].toLowerCase(), word.toLowerCase());
+  final inLine = _findWholeWordIndex(
+    lineTexts[bestLine].toLowerCase(),
+    word.toLowerCase(),
+  );
   return inLine == -1 ? lineStart : lineStart + inLine;
 }
 
@@ -226,11 +250,8 @@ const _maxSentenceLength = 320;
 /// punctuation). Returns the final sentence text, the word's position
 /// within it, and the absolute [text] offsets it came from (so callers
 /// with page geometry can map it back to lines).
-({String sentence, int wordStart, int wordEnd, int rangeStart, int rangeEnd})? _matchSentence(
-  String text,
-  String word, {
-  int? hintOffset,
-}) {
+({String sentence, int wordStart, int wordEnd, int rangeStart, int rangeEnd})?
+_matchSentence(String text, String word, {int? hintOffset}) {
   final wordLower = word.toLowerCase();
   final allRanges = _splitSentenceRanges(text);
 
@@ -241,7 +262,9 @@ const _maxSentenceLength = 320;
   final ranges = <({int start, int end})>[];
   if (hintOffset != null) {
     for (final range in allRanges) {
-      if (hintOffset >= range.start && hintOffset < range.end) ranges.add(range);
+      if (hintOffset >= range.start && hintOffset < range.end) {
+        ranges.add(range);
+      }
     }
   }
   ranges.addAll(allRanges);
@@ -321,7 +344,11 @@ List<TextLine> extractPageLines(PdfDocument document, int pageIndex) {
       tokenStart = tokenStart == -1 ? i : tokenStart;
       buffer.write(ch);
     } else if (tokenStart != -1) {
-      tokens.add((start: tokenStart, end: i, text: buffer.toString().toLowerCase()));
+      tokens.add((
+        start: tokenStart,
+        end: i,
+        text: buffer.toString().toLowerCase(),
+      ));
       buffer.clear();
       tokenStart = -1;
     }
@@ -335,7 +362,9 @@ List<TextLine> extractPageLines(PdfDocument document, int pageIndex) {
   var bestShared = 0;
   for (final t in tokens) {
     final shared = _commonPrefixLength(t.text, wordLower);
-    final shorter = wordLower.length < t.text.length ? wordLower.length : t.text.length;
+    final shorter = wordLower.length < t.text.length
+        ? wordLower.length
+        : t.text.length;
     final threshold = shorter >= 3 ? 3 : shorter;
     if (shared >= threshold && shared > bestShared) {
       bestShared = shared;
@@ -367,7 +396,9 @@ int _findWholeWordIndex(String haystackLower, String needleLower) {
     if (idx == -1) return -1;
     final before = idx > 0 ? haystackLower[idx - 1] : '';
     final afterIdx = idx + needleLower.length;
-    final after = afterIdx < haystackLower.length ? haystackLower[afterIdx] : '';
+    final after = afterIdx < haystackLower.length
+        ? haystackLower[afterIdx]
+        : '';
     if (!_isLetter(before) && !_isLetter(after)) return idx;
     start = idx + 1;
   }

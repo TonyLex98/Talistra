@@ -19,7 +19,9 @@ EbookFormat? ebookFormatFromPath(String path) {
   final lower = path.toLowerCase();
   if (lower.endsWith('.txt')) return EbookFormat.txt;
   if (lower.endsWith('.epub')) return EbookFormat.epub;
-  if (lower.endsWith('.fb2') || lower.endsWith('.fb2.zip')) return EbookFormat.fb2;
+  if (lower.endsWith('.fb2') || lower.endsWith('.fb2.zip')) {
+    return EbookFormat.fb2;
+  }
   if (lower.endsWith('.rtf')) return EbookFormat.rtf;
   if (lower.endsWith('.docx')) return EbookFormat.docx;
   return null;
@@ -49,7 +51,8 @@ List<String> extractEbookParagraphs(Uint8List bytes, EbookFormat format) {
 List<String> _splitPlainText(String text) {
   return [
     for (final block in text.split(RegExp(r'\n[ \t]*\n')))
-      if (block.trim().isNotEmpty) block.replaceAll(RegExp(r'\s*\n\s*'), ' ').trim(),
+      if (block.trim().isNotEmpty)
+        block.replaceAll(RegExp(r'\s*\n\s*'), ' ').trim(),
   ];
 }
 
@@ -69,12 +72,16 @@ List<String> _epubParagraphs(Uint8List bytes) {
   final order = <String>[];
   if (opfName != null) {
     final opf = XmlDocument.parse(_utf8OfFile(files[opfName]!));
-    final base = opfName.contains('/') ? opfName.substring(0, opfName.lastIndexOf('/') + 1) : '';
+    final base = opfName.contains('/')
+        ? opfName.substring(0, opfName.lastIndexOf('/') + 1)
+        : '';
     final hrefById = <String, String>{};
     for (final item in opf.findAllElements('item')) {
       final id = item.getAttribute('id');
       final href = item.getAttribute('href');
-      if (id != null && href != null) hrefById[id] = _normalizeZipPath('$base$href');
+      if (id != null && href != null) {
+        hrefById[id] = _normalizeZipPath('$base$href');
+      }
     }
     for (final ref in opf.findAllElements('itemref')) {
       final href = hrefById[ref.getAttribute('idref')];
@@ -85,9 +92,10 @@ List<String> _epubParagraphs(Uint8List bytes) {
     order.addAll(
       files.keys.where((name) {
         final lower = name.toLowerCase();
-        return lower.endsWith('.xhtml') || lower.endsWith('.html') || lower.endsWith('.htm');
-      }).toList()
-        ..sort(),
+        return lower.endsWith('.xhtml') ||
+            lower.endsWith('.html') ||
+            lower.endsWith('.htm');
+      }).toList()..sort(),
     );
   }
 
@@ -103,7 +111,10 @@ String? _epubOpfPath(Map<String, ArchiveFile> files) {
   if (container != null) {
     try {
       final xml = XmlDocument.parse(_utf8OfFile(container));
-      final path = xml.findAllElements('rootfile').first.getAttribute('full-path');
+      final path = xml
+          .findAllElements('rootfile')
+          .first
+          .getAttribute('full-path');
       if (path != null && files.containsKey(path)) return path;
     } catch (_) {
       // Fall through to the search below.
@@ -267,7 +278,9 @@ List<String> _rtfParagraphs(Uint8List bytes) {
           if (skipDepth < 0) {
             flushPending();
             final code = int.tryParse(match.group(2) ?? '');
-            if (code != null) current.writeCharCode(code < 0 ? code + 65536 : code);
+            if (code != null) {
+              current.writeCharCode(code < 0 ? code + 65536 : code);
+            }
           }
           // RTF repeats the character after a \u escape for readers that
           // don't do Unicode ("ၕ?"), and \ucN says how many of those
@@ -310,10 +323,20 @@ List<String> _rtfParagraphs(Uint8List bytes) {
 List<String> _htmlParagraphs(String html) {
   var text = html
       // Anything that isn't prose goes first, contents and all.
-      .replaceAll(RegExp(r'<(script|style|head)[^>]*>.*?</\1>', dotAll: true, caseSensitive: false), '')
+      .replaceAll(
+        RegExp(
+          r'<(script|style|head)[^>]*>.*?</\1>',
+          dotAll: true,
+          caseSensitive: false,
+        ),
+        '',
+      )
       // Block boundaries become paragraph breaks before tags are removed.
       .replaceAll(
-        RegExp(r'</(p|div|h[1-6]|li|tr|blockquote|section|article)\s*>', caseSensitive: false),
+        RegExp(
+          r'</(p|div|h[1-6]|li|tr|blockquote|section|article)\s*>',
+          caseSensitive: false,
+        ),
         '\n\n',
       )
       .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
@@ -372,6 +395,8 @@ int _skipUnicodeFallback(String source, int start, int count) {
 
 String _utf8OfFile(ArchiveFile file) {
   final content = file.content;
-  final bytes = content is Uint8List ? content : Uint8List.fromList(content as List<int>);
+  final bytes = content is Uint8List
+      ? content
+      : Uint8List.fromList(content as List<int>);
   return decodeTextFile(bytes);
 }

@@ -74,12 +74,14 @@ List<ReflowSubPage> paginateReflowBlocks({
       // and never taller than the screen it has to fit on.
       final imageHeight = math.min(width * aspect, height * 0.9) + imageSpacing;
       if (used > 0 && used + imageHeight > height) closePage();
-      current.add(ReflowSlice(
-        blockIndex: blockIndex,
-        start: 0,
-        end: 0,
-        isFirstOfBlock: true,
-      ));
+      current.add(
+        ReflowSlice(
+          blockIndex: blockIndex,
+          start: 0,
+          end: 0,
+          isFirstOfBlock: true,
+        ),
+      );
       used += imageHeight;
       if (used >= height) closePage();
       continue;
@@ -109,12 +111,14 @@ List<ReflowSubPage> paginateReflowBlocks({
         textScaler: textScaler,
       );
       final end = math.max(offset + 1, fits.end);
-      current.add(ReflowSlice(
-        blockIndex: blockIndex,
-        start: offset,
-        end: end,
-        isFirstOfBlock: firstSlice,
-      ));
+      current.add(
+        ReflowSlice(
+          blockIndex: blockIndex,
+          start: offset,
+          end: end,
+          isFirstOfBlock: firstSlice,
+        ),
+      );
       used += spacing + fits.height;
       offset = end;
       firstSlice = false;
@@ -126,7 +130,12 @@ List<ReflowSubPage> paginateReflowBlocks({
   return pages;
 }
 
-double _measureLineHeight(TextStyle style, double width, double fontSize, TextScaler textScaler) {
+double _measureLineHeight(
+  TextStyle style,
+  double width,
+  double fontSize,
+  TextScaler textScaler,
+) {
   final painter = TextPainter(
     text: TextSpan(text: 'Ag', style: style),
     textDirection: TextDirection.ltr,
@@ -180,7 +189,8 @@ double _measureLineHeight(TextStyle style, double width, double fontSize, TextSc
     }
     // The character at the start of the first line that did NOT fit is
     // exactly where this sub-page ends.
-    final nextLineTop = metrics[lines - 1].baseline + metrics[lines - 1].descent + 1;
+    final nextLineTop =
+        metrics[lines - 1].baseline + metrics[lines - 1].descent + 1;
     final cutoff = painter.getPositionForOffset(Offset(0, nextLineTop)).offset;
     if (cutoff <= 0) return (end: text.length, height: painter.height);
     return (end: start + cutoff, height: consumed);

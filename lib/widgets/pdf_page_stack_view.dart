@@ -97,7 +97,13 @@ class PdfPageStackView extends StatefulWidget {
   /// content/zoom conversion), so a caller can anchor a translation
   /// popup right next to where the reader actually tapped instead of
   /// always docking it to the bottom of the screen.
-  final void Function(int pageIndex, WordHit hit, SentenceMatch? sentence, Offset screenAnchor) onWordSelected;
+  final void Function(
+    int pageIndex,
+    WordHit hit,
+    SentenceMatch? sentence,
+    Offset screenAnchor,
+  )
+  onWordSelected;
 
   /// Long-press then drag: a text-range selection. Fires continuously as
   /// the finger moves (with [finished] false) and once more when it lifts,
@@ -111,13 +117,19 @@ class PdfPageStackView extends StatefulWidget {
   /// with the current zoom, vertical scroll-fraction-within-page, and
   /// horizontal pan fraction, so the reader can persist all three per
   /// document.
-  final void Function(double zoom, double scrollFraction, double scrollFractionX) onViewSettled;
+  final void Function(
+    double zoom,
+    double scrollFraction,
+    double scrollFractionX,
+  )
+  onViewSettled;
 
   @override
   State<PdfPageStackView> createState() => PdfPageStackViewState();
 }
 
-class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerProviderStateMixin {
+class PdfPageStackViewState extends State<PdfPageStackView>
+    with SingleTickerProviderStateMixin {
   double _zoom = _minZoom;
   Offset _scrollOffset = Offset.zero;
 
@@ -163,7 +175,8 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
   void initState() {
     super.initState();
     _zoom = widget.initialZoom;
-    _flingController = AnimationController.unbounded(vsync: this)..addListener(_onFlingTick);
+    _flingController = AnimationController.unbounded(vsync: this)
+      ..addListener(_onFlingTick);
     _pokeBubble();
   }
 
@@ -231,10 +244,15 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     if (_pageHeights.isEmpty) return;
     final page = (_reportedPage - 1).clamp(0, _pageHeights.length - 1);
     final fraction = _pageHeights[page] > 0
-        ? ((_scrollOffset.dy - _cumulativeY[page]) / _pageHeights[page]).clamp(0.0, 1.0)
+        ? ((_scrollOffset.dy - _cumulativeY[page]) / _pageHeights[page]).clamp(
+            0.0,
+            1.0,
+          )
         : 0.0;
     final maxDx = _maxDx;
-    final fractionX = maxDx > 0 ? (_scrollOffset.dx / maxDx).clamp(0.0, 1.0) : 0.0;
+    final fractionX = maxDx > 0
+        ? (_scrollOffset.dx / maxDx).clamp(0.0, 1.0)
+        : 0.0;
     widget.onViewSettled(_zoom, fraction, fractionX);
   }
 
@@ -271,7 +289,9 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     // below — otherwise a rotation (or any other width change) leaves a
     // stale raw pixel offset that no longer lines up with anything.
     final oldMaxDx = _maxDx;
-    final capturedFractionX = oldMaxDx > 0 ? (_scrollOffset.dx / oldMaxDx).clamp(0.0, 1.0) : 0.0;
+    final capturedFractionX = oldMaxDx > 0
+        ? (_scrollOffset.dx / oldMaxDx).clamp(0.0, 1.0)
+        : 0.0;
 
     _viewportWidth = viewportWidth;
     _contentWidth = contentWidth;
@@ -287,7 +307,10 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
       // NaN/Infinity here would propagate through the running sum and
       // silently blank out the rest of the document.
       var h = contentWidth * 1.4;
-      if (size.width > 0 && size.height > 0 && size.width.isFinite && size.height.isFinite) {
+      if (size.width > 0 &&
+          size.height > 0 &&
+          size.width.isFinite &&
+          size.height.isFinite) {
         final candidate = contentWidth * (size.height / size.width);
         if (candidate.isFinite && candidate > 0) h = candidate;
       }
@@ -297,10 +320,13 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     _cumulativeY = cumulative;
     _pageHeights = heights;
 
-    if (capturedPage != null && capturedFraction != null && capturedPage < _pageHeights.length) {
+    if (capturedPage != null &&
+        capturedFraction != null &&
+        capturedPage < _pageHeights.length) {
       _scrollOffset = Offset(
         capturedFractionX * _maxDx,
-        _cumulativeY[capturedPage] + capturedFraction * _pageHeights[capturedPage],
+        _cumulativeY[capturedPage] +
+            capturedFraction * _pageHeights[capturedPage],
       );
     }
   }
@@ -308,10 +334,15 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
   /// The width to draw pages at: the viewport in portrait, and whatever
   /// makes the page fit vertically in landscape.
   double _fittedContentWidth(double viewportWidth, double viewportHeight) {
-    if (viewportWidth <= viewportHeight || viewportHeight <= 0) return viewportWidth;
+    if (viewportWidth <= viewportHeight || viewportHeight <= 0) {
+      return viewportWidth;
+    }
     var aspect = 1.4;
     for (final size in widget.pageSizes) {
-      if (size.width > 0 && size.height > 0 && size.width.isFinite && size.height.isFinite) {
+      if (size.width > 0 &&
+          size.height > 0 &&
+          size.width.isFinite &&
+          size.height.isFinite) {
         aspect = size.height / size.width;
         break;
       }
@@ -325,7 +356,10 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
       _pageHeights.isEmpty ? 0 : _cumulativeY.last + _pageHeights.last;
 
   Offset _screenToContent(Offset screen) {
-    return Offset(screen.dx / _zoom + _scrollOffset.dx, screen.dy / _zoom + _scrollOffset.dy);
+    return Offset(
+      screen.dx / _zoom + _scrollOffset.dx,
+      screen.dy / _zoom + _scrollOffset.dy,
+    );
   }
 
   void _onScaleStart(ScaleStartDetails details) {
@@ -361,12 +395,18 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     // A pinch briefly reports pointerCount back down to 1 as fingers
     // lift, so once a gesture has ever seen 2+ pointers it's remembered
     // for the rest of the gesture (see _onScaleEnd).
-    if (details.pointerCount > _activePointerCount) _activePointerCount = details.pointerCount;
+    if (details.pointerCount > _activePointerCount) {
+      _activePointerCount = details.pointerCount;
+    }
     if (_activePointerCount > 1) _longPressTimer?.cancel();
 
-    final newZoom = (_gestureStartZoom * details.scale).clamp(_minZoom, _maxZoom);
+    final newZoom = (_gestureStartZoom * details.scale).clamp(
+      _minZoom,
+      _maxZoom,
+    );
     final totalDx = details.localFocalPoint.dx - _gestureStartFocalScreen.dx;
-    _totalMoveDistance = (details.localFocalPoint - _gestureStartFocalScreen).distance;
+    _totalMoveDistance =
+        (details.localFocalPoint - _gestureStartFocalScreen).distance;
     if (_totalMoveDistance > 14) _longPressTimer?.cancel();
 
     double effectiveFocalX;
@@ -382,11 +422,15 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     }
 
     var newDx = _gestureStartFocalContent.dx - effectiveFocalX / newZoom;
-    var newDy = _gestureStartFocalContent.dy - details.localFocalPoint.dy / newZoom;
+    var newDy =
+        _gestureStartFocalContent.dy - details.localFocalPoint.dy / newZoom;
 
     final maxDx = math.max(0.0, _viewportWidth - _viewportWidth / newZoom);
     newDx = newDx.clamp(0.0, maxDx);
-    final maxDy = math.max(0.0, _totalContentHeight - _viewportHeight / newZoom);
+    final maxDy = math.max(
+      0.0,
+      _totalContentHeight - _viewportHeight / newZoom,
+    );
     newDy = newDy.clamp(0.0, maxDy);
 
     setState(() {
@@ -406,11 +450,15 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
       return;
     }
     final start = _gestureStartTime;
-    final elapsed = start == null ? const Duration(seconds: 1) : DateTime.now().difference(start);
+    final elapsed = start == null
+        ? const Duration(seconds: 1)
+        : DateTime.now().difference(start);
     // Only a genuine single-finger tap should open a translation — a
     // pinch that happens to end with very little net movement (common
     // right as the second finger lifts) must never be mistaken for one.
-    if (_activePointerCount <= 1 && _totalMoveDistance <= 14 && elapsed <= const Duration(milliseconds: 400)) {
+    if (_activePointerCount <= 1 &&
+        _totalMoveDistance <= 14 &&
+        elapsed <= const Duration(milliseconds: 400)) {
       _handleTap(_gestureStartFocalScreen);
     } else if (_activePointerCount <= 1 && !_horizontalUnlocked) {
       // A fast vertical flick keeps scrolling with momentum, like any
@@ -428,7 +476,10 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     final maxDy = math.max(0.0, _totalContentHeight - _viewportHeight / _zoom);
     if (maxDy <= 0) return;
     _flingController.value = _scrollOffset.dy;
-    final simulation = ClampingScrollSimulation(position: _scrollOffset.dy, velocity: contentVelocity);
+    final simulation = ClampingScrollSimulation(
+      position: _scrollOffset.dy,
+      velocity: contentVelocity,
+    );
     _flingController.animateWith(simulation);
   }
 
@@ -459,7 +510,9 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     }
   }
 
-  ({int pageIndex, WordHit hit, List<TextLine> lines})? _wordAtScreenPoint(Offset screenPoint) {
+  ({int pageIndex, WordHit hit, List<TextLine> lines})? _wordAtScreenPoint(
+    Offset screenPoint,
+  ) {
     if (_pageHeights.isEmpty) return null;
     final content = _screenToContent(screenPoint);
     int? pageIndex;
@@ -672,7 +725,12 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
       pageIndex,
       () => widget.renderer.renderRegion(
         pageIndex: pageIndex,
-        pdfBounds: Rect.fromLTWH(0, 0, widget.pageSizes[pageIndex].width, widget.pageSizes[pageIndex].height),
+        pdfBounds: Rect.fromLTWH(
+          0,
+          0,
+          widget.pageSizes[pageIndex].width,
+          widget.pageSizes[pageIndex].height,
+        ),
         scale: renderScale,
       ),
     );
@@ -701,7 +759,6 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
     );
   }
 
-
   double get _maxDyForScrub =>
       math.max(0.0, _totalContentHeight - _viewportHeight / _zoom);
 
@@ -712,8 +769,13 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
   /// and the "go to page" dialog needs a number you may not know).
   Widget _buildScrubber(int currentPage) {
     final maxDy = _maxDyForScrub;
-    final trackHeight = math.max(0.0, _viewportHeight - _scrubberMargin * 2 - _scrubberHeight);
-    final progress = maxDy > 0 ? (_scrollOffset.dy / maxDy).clamp(0.0, 1.0) : 0.0;
+    final trackHeight = math.max(
+      0.0,
+      _viewportHeight - _scrubberMargin * 2 - _scrubberHeight,
+    );
+    final progress = maxDy > 0
+        ? (_scrollOffset.dy / maxDy).clamp(0.0, 1.0)
+        : 0.0;
 
     return Positioned(
       right: 4,
@@ -727,8 +789,11 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
         },
         onVerticalDragUpdate: (details) {
           if (trackHeight <= 0 || maxDy <= 0) return;
-          final newDy = (_scrollOffset.dy + details.delta.dy / trackHeight * maxDy)
-              .clamp(0.0, maxDy);
+          final newDy =
+              (_scrollOffset.dy + details.delta.dy / trackHeight * maxDy).clamp(
+                0.0,
+                maxDy,
+              );
           setState(() => _scrollOffset = Offset(_scrollOffset.dx, newDy));
           _maybeReportPageChange();
           _pokeBubble();
@@ -757,7 +822,11 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.drag_indicator, size: 15, color: Colors.white70),
+                const Icon(
+                  Icons.drag_indicator,
+                  size: 15,
+                  color: Colors.white70,
+                ),
                 const SizedBox(width: 2),
                 Text(
                   '$currentPage',
@@ -784,7 +853,10 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
 
         if (!_initializedPosition) {
           _initializedPosition = true;
-          final index = (widget.initialPage - 1).clamp(0, widget.pageSizes.length - 1);
+          final index = (widget.initialPage - 1).clamp(
+            0,
+            widget.pageSizes.length - 1,
+          );
           final fraction = widget.initialScrollFraction.clamp(0.0, 1.0);
           final fractionX = widget.initialScrollFractionX.clamp(0.0, 1.0);
           _scrollOffset = Offset(
@@ -838,7 +910,10 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
           // time: the page being looked at gets its quick preview first,
           // then its sharp render, and only then do the neighbours queue up.
           _previewFor(visibleIndex);
-          _imageFor(visibleIndex, _renderScaleFor(visibleIndex, dpr, supersample));
+          _imageFor(
+            visibleIndex,
+            _renderScaleFor(visibleIndex, dpr, supersample),
+          );
           for (var i = lo; i <= hi; i++) {
             if (i == visibleIndex) continue;
             _previewFor(i);
@@ -846,10 +921,14 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
           }
         }
 
-        final wordRect = _contentRectFor(widget.selectedPageIndex, widget.selectedWordPdfBounds);
+        final wordRect = _contentRectFor(
+          widget.selectedPageIndex,
+          widget.selectedWordPdfBounds,
+        );
         final sentenceRects = <Rect>[
           for (final r in widget.selectedSentenceLineBoundsPdf)
-            if (_contentRectFor(widget.selectedPageIndex, r) case final rect?) rect,
+            if (_contentRectFor(widget.selectedPageIndex, r) case final rect?)
+              rect,
         ];
 
         final selectionRects = <Rect>[
@@ -873,7 +952,9 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
             // childless ColoredBox takes the smallest size it's allowed —
             // i.e. 0x0 — so as a plain child it silently painted nothing
             // at all and the Scaffold showed through anyway.
-            Positioned.fill(child: ColoredBox(color: widget.readingTheme.background)),
+            Positioned.fill(
+              child: ColoredBox(color: widget.readingTheme.background),
+            ),
             ClipRect(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -883,7 +964,12 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
                 child: Transform(
                   transform: Matrix4.identity()
                     ..scaleByDouble(_zoom, _zoom, 1.0, 1.0)
-                    ..translateByDouble(-_scrollOffset.dx, -_scrollOffset.dy, 0.0, 1.0),
+                    ..translateByDouble(
+                      -_scrollOffset.dx,
+                      -_scrollOffset.dy,
+                      0.0,
+                      1.0,
+                    ),
                   // No explicit size here: a Box can never legally be
                   // bigger than the (viewport-sized, tight) constraints
                   // handed down from the parent, so sizing this to the
@@ -919,11 +1005,23 @@ class PdfPageStackViewState extends State<PdfPageStackView> with SingleTickerPro
                       // it, so a word inside its own sentence still reads
                       // as the stronger mark.
                       for (final rect in sentenceRects)
-                        _Highlight(rect: rect, color: theme.sentenceHighlight, theme: theme),
+                        _Highlight(
+                          rect: rect,
+                          color: theme.sentenceHighlight,
+                          theme: theme,
+                        ),
                       for (final rect in selectionRects)
-                        _Highlight(rect: rect, color: theme.rangeHighlight, theme: theme),
+                        _Highlight(
+                          rect: rect,
+                          color: theme.rangeHighlight,
+                          theme: theme,
+                        ),
                       if (wordRect != null)
-                        _Highlight(rect: wordRect, color: theme.wordHighlight, theme: theme),
+                        _Highlight(
+                          rect: wordRect,
+                          color: theme.wordHighlight,
+                          theme: theme,
+                        ),
                     ],
                   ),
                 ),
@@ -946,7 +1044,11 @@ const double _scrubberMargin = 8;
 /// can be strong enough to see without dimming the text under it (see
 /// [ReadingThemeStyle.highlightBlendMode]).
 class _Highlight extends StatelessWidget {
-  const _Highlight({required this.rect, required this.color, required this.theme});
+  const _Highlight({
+    required this.rect,
+    required this.color,
+    required this.theme,
+  });
 
   final Rect rect;
   final Color color;
@@ -1042,7 +1144,9 @@ class _PdfPageImageState extends State<_PdfPageImage> {
         gaplessPlayback: true,
         // Scaling a low-resolution stand-in up to page size looks better
         // smoothed than blocky.
-        filterQuality: _sharp != null ? FilterQuality.low : FilterQuality.medium,
+        filterQuality: _sharp != null
+            ? FilterQuality.low
+            : FilterQuality.medium,
       ),
     );
   }

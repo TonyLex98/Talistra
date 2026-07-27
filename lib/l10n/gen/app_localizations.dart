@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyLibrarySubtitle.
   ///
   /// In ru, this message translates to:
-  /// **'Добавьте PDF или TXT, чтобы начать читать и переводить слова одним нажатием.'**
+  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Litra сама выберет подходящий режим чтения.'**
   String get emptyLibrarySubtitle;
 
   /// No description provided for @importingLabel.
@@ -127,6 +127,24 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Добавить книгу'**
   String get addPdfLabel;
+
+  /// No description provided for @archiveChooseBook.
+  ///
+  /// In ru, this message translates to:
+  /// **'Выберите книгу из архива'**
+  String get archiveChooseBook;
+
+  /// No description provided for @archiveNoBooks.
+  ///
+  /// In ru, this message translates to:
+  /// **'В архиве не нашлось поддерживаемых книг.'**
+  String get archiveNoBooks;
+
+  /// No description provided for @unsupportedDocumentFormat.
+  ///
+  /// In ru, this message translates to:
+  /// **'Litra не смогла распознать или открыть формат этого файла.'**
+  String get unsupportedDocumentFormat;
 
   /// No description provided for @pageProgress.
   ///
@@ -185,8 +203,38 @@ abstract class AppLocalizations {
   /// No description provided for @openFailed.
   ///
   /// In ru, this message translates to:
-  /// **'Не удалось открыть PDF: {error}'**
+  /// **'Не удалось открыть книгу: {error}'**
   String openFailed(String error);
+
+  /// No description provided for @djvuOpening.
+  ///
+  /// In ru, this message translates to:
+  /// **'Открываем DjVu…'**
+  String get djvuOpening;
+
+  /// No description provided for @djvuInvalidDocument.
+  ///
+  /// In ru, this message translates to:
+  /// **'Файл DjVu повреждён или скачан не полностью.'**
+  String get djvuInvalidDocument;
+
+  /// No description provided for @djvuTextLayer.
+  ///
+  /// In ru, this message translates to:
+  /// **'Текст страницы'**
+  String get djvuTextLayer;
+
+  /// No description provided for @djvuNoTextLayer.
+  ///
+  /// In ru, this message translates to:
+  /// **'В этой сканированной странице нет встроенного текстового слоя. Оригинал всё равно можно читать и увеличивать.'**
+  String get djvuNoTextLayer;
+
+  /// No description provided for @djvuPageFailed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось отрисовать страницу DjVu: {error}'**
+  String djvuPageFailed(String error);
 
   /// No description provided for @goToPageTitle.
   ///
@@ -413,7 +461,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutText.
   ///
   /// In ru, this message translates to:
-  /// **'TransRead — читалка PDF со встроенным переводом слов на устройстве. Нажмите на слово при чтении, чтобы увидеть перевод.'**
+  /// **'Litra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.'**
   String get aboutText;
 
   /// No description provided for @suggestDownloadTitle.

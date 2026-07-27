@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -9,14 +13,17 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/ads_service.dart';
+import '../services/djvu_service.dart';
 import '../services/incoming_file_service.dart';
 import '../services/library_service.dart';
 import '../services/page_image_cache.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
+import '../utils/document_format.dart';
 import '../widgets/document_tile.dart';
 import '../widgets/model_suggestion_card.dart';
+import 'djvu_reader_screen.dart';
 import 'reader_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
@@ -43,7 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// it a document ("Open with"), that document is what the reader asked
   /// for — reopening the last-read book as well would bury it.
   Future<void> _bootstrap() async {
-    final openedIncoming = await IncomingFileService.instance.listen(_onIncomingFile);
+    final openedIncoming = await IncomingFileService.instance.listen(
+      _onIncomingFile,
+    );
     if (!mounted) return;
     _checkMissingModels();
     if (!openedIncoming) _resumeLastDocument();
@@ -57,29 +66,54 @@ class _HomeScreenState extends State<HomeScreen> {
   void _resumeLastDocument() {
     final lastId = context.read<SettingsService>().lastDocumentId;
     if (lastId == null) return;
-    final exists = context.read<LibraryService>().documents.any((d) => d.id == lastId);
-    if (!exists) return;
+    final document = context
+        .read<LibraryService>()
+        .documents
+        .where((d) => d.id == lastId)
+        .firstOrNull;
+    // Older builds could import a generic .bin supplied by a file manager
+    // and then try to paginate its binary data forever on startup.
+    if (document == null || !_bookExtensions.contains(document.format)) return;
     _openDocument(lastId);
   }
 
   /// A document opened from another app ("Open with", or the share sheet).
   void _onIncomingFile(String path) {
     if (!mounted) return;
-    _importPath(path, p.basename(path));
+    _importPath(path, p.basename(path), replaceReaderStack: true);
   }
 
   /// Routes to the right reader for [documentId]'s format — plain .txt
   /// files get the much simpler [TxtReaderScreen]; everything else (PDF)
   /// keeps using the full [ReaderScreen].
-  void _openDocument(String documentId) {
-    final document = context.read<LibraryService>().documents.firstWhere((d) => d.id == documentId);
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => document.isTextDocument
-            ? TxtReaderScreen(documentId: documentId)
-            : ReaderScreen(documentId: documentId),
-      ),
+  void _openDocument(String documentId, {bool replaceReaderStack = false}) {
+    final document = context.read<LibraryService>().documents.firstWhere(
+      (d) => d.id == documentId,
     );
+    if (!_bookExtensions.contains(document.format)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).unsupportedDocumentFormat),
+        ),
+      );
+      return;
+    }
+    final route = MaterialPageRoute<void>(
+      builder: (_) {
+        if (document.isDjvu) {
+          return DjvuReaderScreen(documentId: documentId);
+        }
+        if (document.isTextDocument) {
+          return TxtReaderScreen(documentId: documentId);
+        }
+        return ReaderScreen(documentId: documentId);
+      },
+    );
+    if (replaceReaderStack) {
+      Navigator.of(context).pushAndRemoveUntil(route, (route) => route.isFirst);
+    } else {
+      Navigator.of(context).push(route);
+    }
   }
 
   Future<void> _checkMissingModels() async {
@@ -97,10 +131,27 @@ class _HomeScreenState extends State<HomeScreen> {
   /// rest are reflowable text formats and open in the paginated text
   /// reader (see [extractEbookParagraphs]).
   ///
-  /// DjVu is deliberately absent: decoding it needs a native library
-  /// (djvulibre) that has no Dart or Flutter binding, so it can't be read
-  /// without shipping and maintaining a per-platform native build.
-  static const _supportedExtensions = ['pdf', 'txt', 'epub', 'fb2', 'rtf', 'docx'];
+  static const _supportedExtensions = [
+    'pdf',
+    'txt',
+    'epub',
+    'fb2',
+    'rtf',
+    'docx',
+    'djvu',
+    'djv',
+    'zip',
+  ];
+  static const _bookExtensions = {
+    'pdf',
+    'txt',
+    'epub',
+    'fb2',
+    'rtf',
+    'docx',
+    'djvu',
+    'djv',
+  };
 
   Future<void> _importFile() async {
     final result = await FilePicker.pickFiles(
@@ -116,26 +167,152 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Imports a file that came from anywhere — the picker, or another app
   /// via "Open with"/share (see [IncomingFileService]) — and opens it.
-  Future<void> _importPath(String path, String fileName) async {
+  Future<void> _importPath(
+    String path,
+    String fileName, {
+    bool replaceReaderStack = false,
+  }) async {
     setState(() => _importing = true);
     try {
       final library = context.read<LibraryService>();
       final title = p.basenameWithoutExtension(fileName);
-      final extension = p.extension(fileName).toLowerCase().replaceFirst('.', '');
-      final document = extension == 'pdf' || extension.isEmpty
+      final format = await detectDocumentFormat(path, fileName: fileName);
+      if (format == null ||
+          (!supportedBookFormats.contains(format) &&
+              !supportedArchiveFormats.contains(format))) {
+        throw const _UnsupportedDocumentException();
+      }
+      if (format == 'zip') {
+        final document = await _importArchive(path, fileName, library);
+        if (document != null && mounted) {
+          _openDocument(document.id, replaceReaderStack: replaceReaderStack);
+        }
+        return;
+      }
+      if (format == 'djvu') {
+        // A matching header alone is not enough: parse the directory before
+        // adding the file so truncated/corrupt DjVu downloads never become
+        // permanent dead entries in the library.
+        final validation = await DjvuDocument.open(path);
+        await validation.close();
+      }
+      final document = format == 'pdf'
           ? await library.importPdf(sourcePath: path, title: title)
-          : await library.importText(sourcePath: path, title: title, format: extension);
+          : await library.importText(
+              sourcePath: path,
+              title: title,
+              format: format,
+            );
       if (!mounted) return;
-      _openDocument(document.id);
+      _openDocument(document.id, replaceReaderStack: replaceReaderStack);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).openFailed('$e'))),
-      );
+      final l10n = AppLocalizations.of(context);
+      final message = switch (e) {
+        _UnsupportedDocumentException() => l10n.unsupportedDocumentFormat,
+        PlatformException(code: 'djvu_error') => l10n.openFailed(
+          l10n.djvuInvalidDocument,
+        ),
+        _ => l10n.openFailed('$e'),
+      };
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _importing = false);
     }
   }
+
+  /// A ZIP is a container, not an e-book format. We only offer actual books
+  /// from inside it, so an EPUB itself still goes through its normal reader.
+  Future<LibraryDocument?> _importArchive(
+    String path,
+    String archiveName,
+    LibraryService library,
+  ) async {
+    final archive = ZipDecoder().decodeBytes(
+      await File(path).readAsBytes(),
+      verify: true,
+    );
+    if (archive.files.length > 2000) {
+      throw const FormatException('The archive contains too many files');
+    }
+    final books = <_ArchivedBook>[];
+    var expandedBytes = 0;
+    for (final file in archive.files) {
+      if (!file.isFile) continue;
+      expandedBytes += file.size;
+      if (expandedBytes > 500 * 1024 * 1024) {
+        throw const FormatException('The unpacked archive is too large');
+      }
+      if (file.size > 250 * 1024 * 1024) continue;
+      final bytes = archiveFileBytes(file);
+      final format = detectDocumentFormatBytes(bytes, fileName: file.name);
+      if (format != null && supportedBookFormats.contains(format)) {
+        books.add(_ArchivedBook(file.name, format, bytes));
+      }
+    }
+    if (books.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).archiveNoBooks)),
+        );
+      }
+      return null;
+    }
+    final picked = books.length == 1
+        ? books.single
+        : await _pickArchiveBook(books);
+    if (picked == null) return null;
+    final document = await library.importBytes(
+      bytes: picked.bytes,
+      title: p.basenameWithoutExtension(picked.name),
+      format: picked.format,
+      sourceFingerprint:
+          'zip_${p.basename(path)}_${picked.name}_${picked.bytes.length}',
+    );
+    if (picked.format == 'djvu') {
+      try {
+        final validation = await DjvuDocument.open(document.filePath);
+        await validation.close();
+      } catch (_) {
+        await library.remove(document.id);
+        rethrow;
+      }
+    }
+    return document;
+  }
+
+  Future<_ArchivedBook?> _pickArchiveBook(List<_ArchivedBook> books) =>
+      showModalBottomSheet<_ArchivedBook>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                child: Text(
+                  AppLocalizations.of(context).archiveChooseBook,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              for (final book in books)
+                ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: Text(
+                    p.basename(book.name),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(book.format.toUpperCase()),
+                  onTap: () => Navigator.pop(sheetContext, book),
+                ),
+            ],
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -147,29 +324,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TransRead'),
+        title: const Text('Litra'),
         actions: [
           IconButton(
             icon: Icon(
               Icons.translate,
-              color: settings.translatorEnabled ? scheme.primary : scheme.onSurfaceVariant.withValues(alpha: 0.5),
+              color: settings.translatorEnabled
+                  ? scheme.primary
+                  : scheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
-            tooltip: settings.translatorEnabled ? l10n.translatorOnTooltip : l10n.translatorOffTooltip,
-            onPressed: () => settings.setTranslatorEnabled(!settings.translatorEnabled),
+            tooltip: settings.translatorEnabled
+                ? l10n.translatorOnTooltip
+                : l10n.translatorOffTooltip,
+            onPressed: () =>
+                settings.setTranslatorEnabled(!settings.translatorEnabled),
           ),
           IconButton(
-            icon: Icon(Icons.query_stats, color: scheme.onSurfaceVariant.withValues(alpha: 0.7)),
-            tooltip: l10n.statisticsTooltip,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const StatisticsScreen()),
+            icon: Icon(
+              Icons.query_stats,
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
+            tooltip: l10n.statisticsTooltip,
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const StatisticsScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: l10n.settingsTooltip,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
         ],
       ),
@@ -182,7 +367,9 @@ class _HomeScreenState extends State<HomeScreen> {
               onDone: _checkMissingModels,
             ),
           Expanded(
-            child: documents.isEmpty ? _buildEmptyState(context) : _buildList(documents),
+            child: documents.isEmpty
+                ? _buildEmptyState(context)
+                : _buildList(documents),
           ),
         ],
       ),
@@ -223,7 +410,8 @@ class _HomeScreenState extends State<HomeScreen> {
           index: index,
           onTap: () => _openDocument(doc.id),
           onDelete: () => _deleteDocument(doc.id),
-          onToggleStar: () => context.read<LibraryService>().toggleStarred(doc.id),
+          onToggleStar: () =>
+              context.read<LibraryService>().toggleStarred(doc.id),
         );
       },
     );
@@ -263,7 +451,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             Text(
               l10n.emptyLibrarySubtitle,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
@@ -271,4 +461,16 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+class _ArchivedBook {
+  const _ArchivedBook(this.name, this.format, this.bytes);
+
+  final String name;
+  final String format;
+  final Uint8List bytes;
+}
+
+class _UnsupportedDocumentException implements Exception {
+  const _UnsupportedDocumentException();
 }

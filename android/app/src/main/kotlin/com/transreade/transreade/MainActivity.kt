@@ -2,12 +2,15 @@ package com.transreade.transreade
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.concurrent.Executors
 
 /**
  * Receives documents opened from outside the app — a file manager's "Open
@@ -22,17 +25,20 @@ import java.io.File
  */
 class MainActivity : FlutterActivity() {
     private companion object {
-        const val CHANNEL = "transread/incoming_file"
+        const val INCOMING_CHANNEL = "transread/incoming_file"
+        const val DJVU_CHANNEL = "litra/djvu"
     }
 
     private var channel: MethodChannel? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val djvuWorkers = Executors.newFixedThreadPool(2)
 
     /** A file that arrived before Dart was listening. */
     private var pendingPath: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).apply {
+        channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INCOMING_CHANNEL).apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
                     // Asked once on startup: is anything waiting to be opened?
@@ -44,7 +50,94 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DJVU_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "open" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.error("bad_arguments", "Missing DjVu path", null)
+                        } else {
+                            runDjvu(result) {
+                                val info = DjvuNative.open(path)
+                                mapOf("handle" to info[0], "pageCount" to info[1])
+                            }
+                        }
+                    }
+                    "pageInfo" -> withDjvuPageArguments(call.arguments, result) {
+                        handle, page -> runDjvu(result) {
+                            val info = DjvuNative.pageInfo(handle, page)
+                            mapOf(
+                                "width" to info[0],
+                                "height" to info[1],
+                                "dpi" to info[2],
+                            )
+                        }
+                    }
+                    "renderPage" -> withDjvuPageArguments(call.arguments, result) {
+                        handle, page ->
+                        @Suppress("UNCHECKED_CAST")
+                        val args = call.arguments as Map<String, Any?>
+                        val width = (args["width"] as? Number)?.toInt()?.coerceIn(1, 2400)
+                        val height = (args["height"] as? Number)?.toInt()?.coerceIn(1, 4000)
+                        if (width == null || height == null) {
+                            result.error("bad_arguments", "Missing DjVu render size", null)
+                        } else {
+                            runDjvu(result) {
+                                DjvuNative.renderPage(handle, page, width, height)
+                            }
+                        }
+                    }
+                    "pageText" -> withDjvuPageArguments(call.arguments, result) {
+                        handle, page -> runDjvu(result) {
+                            DjvuNative.pageText(handle, page)
+                        }
+                    }
+                    "close" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val args = call.arguments as? Map<String, Any?>
+                        val handle = (args?.get("handle") as? Number)?.toLong()
+                        if (handle == null) {
+                            result.error("bad_arguments", "Missing DjVu handle", null)
+                        } else {
+                            runDjvu(result) {
+                                DjvuNative.close(handle)
+                                null
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         handleIntent(intent)
+    }
+
+    private fun withDjvuPageArguments(
+        rawArguments: Any?,
+        result: MethodChannel.Result,
+        block: (Long, Int) -> Unit,
+    ) {
+        @Suppress("UNCHECKED_CAST")
+        val args = rawArguments as? Map<String, Any?>
+        val handle = (args?.get("handle") as? Number)?.toLong()
+        val page = (args?.get("page") as? Number)?.toInt()
+        if (handle == null || page == null || page < 0) {
+            result.error("bad_arguments", "Invalid DjVu document or page", null)
+            return
+        }
+        block(handle, page)
+    }
+
+    private fun runDjvu(result: MethodChannel.Result, block: () -> Any?) {
+        djvuWorkers.execute {
+            try {
+                val value = block()
+                mainHandler.post { result.success(value) }
+            } catch (error: Throwable) {
+                val message = error.message ?: error.javaClass.simpleName
+                mainHandler.post { result.error("djvu_error", message, null) }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

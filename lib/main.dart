@@ -33,13 +33,15 @@ void main() async {
     await _seedInstructionsPdf(settings, library);
   }
 
-  runApp(TransReadeApp(
-    settings: settings,
-    library: library,
-    thumbnailCache: thumbnailCache,
-    previewCache: previewCache,
-    statistics: statistics,
-  ));
+  runApp(
+    TransReadeApp(
+      settings: settings,
+      library: library,
+      thumbnailCache: thumbnailCache,
+      previewCache: previewCache,
+      statistics: statistics,
+    ),
+  );
 }
 
 // Adds the bundled user-guide PDF to the library exactly once, right after
@@ -48,13 +50,21 @@ void main() async {
 // missing) must never block app startup, so it's swallowed silently; the
 // flag is only marked seeded on success, so a failed attempt can still be
 // retried on the next cold start.
-Future<void> _seedInstructionsPdf(SettingsService settings, LibraryService library) async {
+Future<void> _seedInstructionsPdf(
+  SettingsService settings,
+  LibraryService library,
+) async {
   try {
-    final data = await rootBundle.load('assets/instructions/transread_guide.pdf');
-    final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    final data = await rootBundle.load(
+      'assets/instructions/transread_guide.pdf',
+    );
+    final bytes = data.buffer.asUint8List(
+      data.offsetInBytes,
+      data.lengthInBytes,
+    );
     final title = settings.appLocale.languageCode == 'ru'
-        ? 'Инструкция — как пользоваться TransRead'
-        : 'TransRead — User Guide';
+        ? 'Инструкция — как пользоваться Litra'
+        : 'Litra — User Guide';
     await library.importBytes(bytes: bytes, title: title);
     await settings.markInstructionsSeeded();
   } catch (error, stack) {
@@ -92,7 +102,8 @@ class TransReadeApp extends StatelessWidget {
           dispose: (_, service) => service.dispose(),
         ),
         ChangeNotifierProxyProvider<TranslationService, ModelDownloadService>(
-          create: (context) => ModelDownloadService(context.read<TranslationService>()),
+          create: (context) =>
+              ModelDownloadService(context.read<TranslationService>()),
           update: (context, translationService, previous) =>
               previous ?? ModelDownloadService(translationService),
         ),
@@ -100,7 +111,7 @@ class TransReadeApp extends StatelessWidget {
       child: Consumer<SettingsService>(
         builder: (context, settings, _) {
           return MaterialApp(
-            title: 'TransRead',
+            title: 'Litra',
             debugShowCheckedModeBanner: false,
             // One appearance for the whole app, built from the reading
             // settings (see [AppTheme.from]) — the library and settings

@@ -11,14 +11,7 @@ import '../models/app_language.dart';
 /// white regardless of how the rest of the app looks, since that's the
 /// safest default for text-heavy documents; sepia and dark are offered
 /// for readers who prefer them.
-enum ReadingTheme {
-  white,
-  cream,
-  sepia,
-  sage,
-  dark,
-  nightBlue,
-}
+enum ReadingTheme { white, cream, sepia, sage, dark, nightBlue }
 
 /// The typeface reflowed text is set in. Only the adaptive/compact view and
 /// plain-text files can honour it — a real PDF page is a picture and keeps
@@ -27,7 +20,15 @@ enum ReadingTheme {
 /// All three bundled families are variable fonts covering Latin and
 /// Cyrillic, so [SettingsService.readingWeight] can dial the weight
 /// continuously rather than jumping between regular and bold.
-enum ReadingFont { literata, lora, sourceSerif, ebGaramond, notoSerif, inter, system }
+enum ReadingFont {
+  literata,
+  lora,
+  sourceSerif,
+  ebGaramond,
+  notoSerif,
+  inter,
+  system,
+}
 
 extension ReadingFontStyle on ReadingFont {
   /// The family name as declared in pubspec.yaml, or null for the
@@ -127,11 +128,13 @@ extension ReadingThemeStyle on ReadingTheme {
   /// text stays black) while tinting the paper hard, and on an inverted
   /// dark page the same job is done by screen, which keeps the light text
   /// light while lifting the paper.
-  BlendMode get highlightBlendMode => isDarkPaper ? BlendMode.screen : BlendMode.multiply;
+  BlendMode get highlightBlendMode =>
+      isDarkPaper ? BlendMode.screen : BlendMode.multiply;
 
   /// Whether the paper is dark, i.e. the page image has to be inverted and
   /// highlights have to lighten rather than darken.
-  bool get isDarkPaper => this == ReadingTheme.dark || this == ReadingTheme.nightBlue;
+  bool get isDarkPaper =>
+      this == ReadingTheme.dark || this == ReadingTheme.nightBlue;
 
   /// The marker colour for a tapped word — the strongest of the three.
   Color get wordHighlight => switch (this) {
@@ -170,7 +173,9 @@ extension ReadingThemeStyle on ReadingTheme {
   /// how light) the letters are.
   Color inkAt(double contrast) {
     final t = contrast.clamp(0.0, 1.0);
-    final target = isDarkPaper ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
+    final target = isDarkPaper
+        ? const Color(0xFFFFFFFF)
+        : const Color(0xFF000000);
     return Color.lerp(onBackground, target, t)!;
   }
 
@@ -227,12 +232,31 @@ extension ReadingThemeStyle on ReadingTheme {
 
   static double _luma(Color c) => c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
 
-  static ColorFilter _channelMatrix({required double gain, required List<double> offsets}) {
+  static ColorFilter _channelMatrix({
+    required double gain,
+    required List<double> offsets,
+  }) {
     return ColorFilter.matrix(<double>[
-      gain, 0, 0, 0, offsets[0],
-      0, gain, 0, 0, offsets[1],
-      0, 0, gain, 0, offsets[2],
-      0, 0, 0, 1, 0,
+      gain,
+      0,
+      0,
+      0,
+      offsets[0],
+      0,
+      gain,
+      0,
+      0,
+      offsets[1],
+      0,
+      0,
+      gain,
+      0,
+      offsets[2],
+      0,
+      0,
+      0,
+      1,
+      0,
     ]);
   }
 

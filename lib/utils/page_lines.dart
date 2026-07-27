@@ -19,7 +19,8 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 /// come back positioned right after the header, long before the lines
 /// that actually sit above it.
 int readingOrderCompare(TextLine a, TextLine b) {
-  final overlaps = a.bounds.top < b.bounds.bottom && b.bounds.top < a.bounds.bottom;
+  final overlaps =
+      a.bounds.top < b.bounds.bottom && b.bounds.top < a.bounds.bottom;
   if (overlaps) return a.bounds.left.compareTo(b.bounds.left);
   return a.bounds.top.compareTo(b.bounds.top);
 }
@@ -64,7 +65,8 @@ double modalLineHeight(List<TextLine> lines) {
   for (final entry in counts.entries) {
     // On a tie the smaller height wins: body text is never the largest
     // thing on a page.
-    if (entry.value > bestCount || (entry.value == bestCount && entry.key < bestHeight)) {
+    if (entry.value > bestCount ||
+        (entry.value == bestCount && entry.key < bestHeight)) {
       bestHeight = entry.key;
       bestCount = entry.value;
     }

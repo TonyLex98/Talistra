@@ -2,7 +2,7 @@
     <!-- Needed once to download the on-device translation language models -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="TransRead"
+        android:label="Litra"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -45,6 +45,7 @@
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
                 <data android:mimeType="image/vnd.djvu"/>
                 <data android:mimeType="image/x-djvu"/>
+                <data android:mimeType="application/x-djvu"/>
                 <data android:mimeType="text/plain"/>
             </intent-filter>
 
@@ -63,9 +64,9 @@
                 <data android:pathPattern=".*\\.fb2"/>
                 <data android:pathPattern=".*\\.rtf"/>
                 <data android:pathPattern=".*\\.docx"/>
+                <data android:pathPattern=".*\\.txt"/>
                 <data android:pathPattern=".*\\.djvu"/>
                 <data android:pathPattern=".*\\.djv"/>
-                <data android:pathPattern=".*\\.txt"/>
             </intent-filter>
 
             <!-- Share sheet: "Share > TransRead". -->
@@ -78,6 +79,8 @@
                 <data android:mimeType="application/rtf"/>
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
                 <data android:mimeType="image/vnd.djvu"/>
+                <data android:mimeType="image/x-djvu"/>
+                <data android:mimeType="application/x-djvu"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

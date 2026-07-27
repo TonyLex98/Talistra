@@ -94,16 +94,32 @@ class PdfRegionRenderer {
     if (ink == null) return null;
 
     final trimmed = Rect.fromLTRB(
-      math.max(pdfBounds.left, pdfBounds.left + ink.left * pdfBounds.width - _trimPadding),
-      math.max(pdfBounds.top, pdfBounds.top + ink.top * pdfBounds.height - _trimPadding),
-      math.min(pdfBounds.right, pdfBounds.left + ink.right * pdfBounds.width + _trimPadding),
-      math.min(pdfBounds.bottom, pdfBounds.top + ink.bottom * pdfBounds.height + _trimPadding),
+      math.max(
+        pdfBounds.left,
+        pdfBounds.left + ink.left * pdfBounds.width - _trimPadding,
+      ),
+      math.max(
+        pdfBounds.top,
+        pdfBounds.top + ink.top * pdfBounds.height - _trimPadding,
+      ),
+      math.min(
+        pdfBounds.right,
+        pdfBounds.left + ink.right * pdfBounds.width + _trimPadding,
+      ),
+      math.min(
+        pdfBounds.bottom,
+        pdfBounds.top + ink.bottom * pdfBounds.height + _trimPadding,
+      ),
     );
     // A sliver this thin is a stray rule or the edge of a neighbouring
     // line, not a figure worth its own block in the reflowed text.
     if (trimmed.width < 8 || trimmed.height < 8) return null;
 
-    final bytes = await renderRegion(pageIndex: pageIndex, pdfBounds: trimmed, scale: scale);
+    final bytes = await renderRegion(
+      pageIndex: pageIndex,
+      pdfBounds: trimmed,
+      scale: scale,
+    );
     if (bytes == null || bytes.isEmpty) return null;
     return (bytes: bytes, pdfBounds: trimmed);
   }
@@ -128,7 +144,11 @@ class PdfRegionRenderer {
     }
   }
 
-  Future<Uint8List?> _renderNow(int pageIndex, Rect pdfBounds, double scale) async {
+  Future<Uint8List?> _renderNow(
+    int pageIndex,
+    Rect pdfBounds,
+    double scale,
+  ) async {
     final page = await _document.getPage(pageIndex + 1);
     try {
       final fullWidth = page.width * scale;

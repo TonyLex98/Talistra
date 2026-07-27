@@ -33,7 +33,8 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver {
+class _ReaderScreenState extends State<ReaderScreen>
+    with WidgetsBindingObserver {
   final _pdfViewKey = GlobalKey<PdfPageStackViewState>();
   final _reflowKey = GlobalKey<ReflowPdfViewState>();
   late LibraryDocument _document;
@@ -71,7 +72,6 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
   bool _rangeSettled = false;
   bool _translateRange = false;
 
-
   // Shown instantly on open (before the real PDF has finished loading)
   // so reopening a document doesn't start from a blank screen.
   Uint8List? _previewBytes;
@@ -87,10 +87,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
   @override
   void initState() {
     super.initState();
-    _document = context
-        .read<LibraryService>()
-        .documents
-        .firstWhere((d) => d.id == widget.documentId);
+    _document = context.read<LibraryService>().documents.firstWhere(
+      (d) => d.id == widget.documentId,
+    );
     _currentPage = _document.lastPage;
     _pageCount = _document.pageCount;
     _pageEnteredAt = DateTime.now();
@@ -103,7 +102,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
   }
 
   Future<void> _loadPreview() async {
-    final bytes = await context.read<PagePreviewCache>().read(widget.documentId);
+    final bytes = await context.read<PagePreviewCache>().read(
+      widget.documentId,
+    );
     if (mounted && bytes != null) setState(() => _previewBytes = bytes);
   }
 
@@ -113,7 +114,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
   void _cacheCurrentPagePreview() {
     final renderer = _renderer;
     final pageIndex = _currentPage - 1;
-    if (renderer == null || pageIndex < 0 || pageIndex >= _pageSizes.length) return;
+    if (renderer == null || pageIndex < 0 || pageIndex >= _pageSizes.length) {
+      return;
+    }
     final pageSize = _pageSizes[pageIndex];
     if (pageSize.width <= 0 || pageSize.height <= 0) return;
     final viewportWidth = MediaQuery.sizeOf(context).width;
@@ -242,7 +245,11 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     _clearSelection();
   }
 
-  void _onPdfViewSettled(double zoom, double scrollFraction, double scrollFractionX) {
+  void _onPdfViewSettled(
+    double zoom,
+    double scrollFraction,
+    double scrollFractionX,
+  ) {
     context.read<LibraryService>().updateProgress(
       widget.documentId,
       lastPage: _currentPage,
@@ -262,7 +269,12 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     );
   }
 
-  void _onWordSelected(int pageIndex, WordHit hit, SentenceMatch? sentence, Offset screenAnchor) {
+  void _onWordSelected(
+    int pageIndex,
+    WordHit hit,
+    SentenceMatch? sentence,
+    Offset screenAnchor,
+  ) {
     setState(() {
       _selectedWord = hit.text;
       _selectedSentence = sentence;
@@ -344,7 +356,10 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
 
   /// The bar of actions for a settled range selection: how much was
   /// selected, and what can be done with it.
-  Widget _buildRangeActions(SettingsService settings, TranslationService translationService) {
+  Widget _buildRangeActions(
+    SettingsService settings,
+    TranslationService translationService,
+  ) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final text = _rangeText!;
@@ -355,7 +370,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
         right: 12,
         bottom: 12,
         child: TranslationPanel(
-          key: ValueKey('range-$text-${settings.sourceLanguage}-${settings.targetLanguage}'),
+          key: ValueKey(
+            'range-$text-${settings.sourceLanguage}-${settings.targetLanguage}',
+          ),
           word: text,
           sentenceMatch: null,
           source: settings.sourceLanguage,
@@ -383,7 +400,10 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                   text,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               IconButton(
@@ -480,14 +500,20 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.translationLanguageTitle, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  l10n.translationLanguageTitle,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 12),
                 Consumer<SettingsService>(
                   builder: (context, settings, _) => Column(
                     children: [
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Text(settings.sourceAppLanguage.flag, style: const TextStyle(fontSize: 22)),
+                        leading: Text(
+                          settings.sourceAppLanguage.flag,
+                          style: const TextStyle(fontSize: 22),
+                        ),
                         title: Text(l10n.fromLanguage),
                         subtitle: Text(settings.sourceAppLanguage.displayName),
                         trailing: const Icon(Icons.chevron_right),
@@ -497,7 +523,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                             current: settings.sourceLanguage,
                             title: l10n.fromLanguagePickerTitle,
                           );
-                          if (picked != null) settings.setSourceLanguage(picked);
+                          if (picked != null) {
+                            settings.setSourceLanguage(picked);
+                          }
                         },
                       ),
                       IconButton(
@@ -507,7 +535,10 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                       ),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Text(settings.targetAppLanguage.flag, style: const TextStyle(fontSize: 22)),
+                        leading: Text(
+                          settings.targetAppLanguage.flag,
+                          style: const TextStyle(fontSize: 22),
+                        ),
                         title: Text(l10n.toLanguage),
                         subtitle: Text(settings.targetAppLanguage.displayName),
                         trailing: const Icon(Icons.chevron_right),
@@ -517,7 +548,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                             current: settings.targetLanguage,
                             title: l10n.toLanguagePickerTitle,
                           );
-                          if (picked != null) settings.setTargetLanguage(picked);
+                          if (picked != null) {
+                            settings.setTargetLanguage(picked);
+                          }
                         },
                       ),
                     ],
@@ -575,7 +608,10 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                           // of the way on its own.
                           child: Padding(
                             padding: const EdgeInsets.only(top: _barHeight),
-                            child: _buildReflowBody(settings, translationService),
+                            child: _buildReflowBody(
+                              settings,
+                              translationService,
+                            ),
                           ),
                         ),
                       ],
@@ -599,7 +635,11 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
   /// clean page. Rounded bottom corners and a soft shadow keep it clearly
   /// a separate surface floating above the text rather than something
   /// blending into it.
-  Widget _buildFloatingBar(AppLocalizations l10n, SettingsService settings, ColorScheme scheme) {
+  Widget _buildFloatingBar(
+    AppLocalizations l10n,
+    SettingsService settings,
+    ColorScheme scheme,
+  ) {
     return Positioned(
       top: 0,
       left: 0,
@@ -677,7 +717,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
           icon: const Icon(Icons.text_decrease, size: 22),
           tooltip: l10n.smallerText,
           onPressed: () {
-            setState(() => _reflowFontSize = (_reflowFontSize - 1).clamp(13, 26));
+            setState(
+              () => _reflowFontSize = (_reflowFontSize - 1).clamp(13, 26),
+            );
             _saveReflowFontSize();
           },
         ),
@@ -686,7 +728,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
           icon: const Icon(Icons.text_increase, size: 22),
           tooltip: l10n.largerText,
           onPressed: () {
-            setState(() => _reflowFontSize = (_reflowFontSize + 1).clamp(13, 26));
+            setState(
+              () => _reflowFontSize = (_reflowFontSize + 1).clamp(13, 26),
+            );
             _saveReflowFontSize();
           },
         ),
@@ -704,8 +748,11 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
               ? scheme.primary
               : scheme.onSurfaceVariant.withValues(alpha: 0.55),
         ),
-        tooltip: settings.translatorEnabled ? l10n.translatorOnTooltip : l10n.translatorOffTooltip,
-        onPressed: () => settings.setTranslatorEnabled(!settings.translatorEnabled),
+        tooltip: settings.translatorEnabled
+            ? l10n.translatorOnTooltip
+            : l10n.translatorOffTooltip,
+        onPressed: () =>
+            settings.setTranslatorEnabled(!settings.translatorEnabled),
       ),
       if (settings.translatorEnabled)
         InkWell(
@@ -715,9 +762,19 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
             padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
             child: Row(
               children: [
-                Text(settings.sourceAppLanguage.flag, style: const TextStyle(fontSize: 13)),
-                Icon(Icons.arrow_right_alt, size: 15, color: scheme.onSurfaceVariant),
-                Text(settings.targetAppLanguage.flag, style: const TextStyle(fontSize: 13)),
+                Text(
+                  settings.sourceAppLanguage.flag,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                Icon(
+                  Icons.arrow_right_alt,
+                  size: 15,
+                  color: scheme.onSurfaceVariant,
+                ),
+                Text(
+                  settings.targetAppLanguage.flag,
+                  style: const TextStyle(fontSize: 13),
+                ),
               ],
             ),
           ),
@@ -725,7 +782,11 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
       IconButton(
         visualDensity: VisualDensity.compact,
         iconSize: 22,
-        icon: Icon(_reflowMode ? Icons.picture_as_pdf_outlined : Icons.auto_stories_outlined),
+        icon: Icon(
+          _reflowMode
+              ? Icons.picture_as_pdf_outlined
+              : Icons.auto_stories_outlined,
+        ),
         tooltip: _reflowMode ? l10n.originalPdf : l10n.adaptToPhone,
         onPressed: _pageCount == 0 ? null : _toggleReflow,
       ),
@@ -742,8 +803,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                 : scheme.onSurfaceVariant,
           ),
           tooltip: l10n.syncTranslationTooltip,
-          onPressed: () =>
-              settings.setSyncTranslationExperimental(!settings.syncTranslationExperimental),
+          onPressed: () => settings.setSyncTranslationExperimental(
+            !settings.syncTranslationExperimental,
+          ),
         ),
     ];
   }
@@ -774,7 +836,10 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     );
   }
 
-  Widget _buildReflowBody(SettingsService settings, TranslationService translationService) {
+  Widget _buildReflowBody(
+    SettingsService settings,
+    TranslationService translationService,
+  ) {
     return ReflowPdfView(
       key: _reflowKey,
       document: _pdfDocument!,
@@ -795,7 +860,10 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     );
   }
 
-  Widget _buildPdfBody(SettingsService settings, TranslationService translationService) {
+  Widget _buildPdfBody(
+    SettingsService settings,
+    TranslationService translationService,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         return Stack(
@@ -822,7 +890,9 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
                 // image, so it has to stay legible against the reading
                 // background rather than against app chrome.
                 highlightColor: settings.readingTheme.accent,
-                onWordSelected: settings.translatorEnabled ? _onWordSelected : (_, __, ___, ____) {},
+                onWordSelected: settings.translatorEnabled
+                    ? _onWordSelected
+                    : (_, __, ___, ____) {},
                 onRangeSelected: _onRangeSelected,
                 onTapEmpty: _onTapEmptyArea,
                 onPageChanged: _onPageChangedFromView,
@@ -830,7 +900,11 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
               ),
             ),
             if (_selectedWord != null)
-              ..._anchoredPanel(constraints.biggest, settings, translationService),
+              ..._anchoredPanel(
+                constraints.biggest,
+                settings,
+                translationService,
+              ),
             if (_rangeText != null && _rangeSettled)
               _buildRangeActions(settings, translationService),
           ],
@@ -849,7 +923,8 @@ class _ReaderScreenState extends State<ReaderScreen> with WidgetsBindingObserver
     TranslationService translationService,
   ) {
     const cardWidth = 320.0;
-    final anchor = _selectionAnchor ?? Offset(viewport.width / 2, viewport.height / 2);
+    final anchor =
+        _selectionAnchor ?? Offset(viewport.width / 2, viewport.height / 2);
     final maxLeft = math.max(8.0, viewport.width - cardWidth - 8);
     final left = (anchor.dx - cardWidth / 2).clamp(8.0, maxLeft);
     final showBelow = anchor.dy < viewport.height * 0.6;

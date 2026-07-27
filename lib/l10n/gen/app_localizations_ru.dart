@@ -16,13 +16,23 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Добавьте PDF или TXT, чтобы начать читать и переводить слова одним нажатием.';
+      'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Litra сама выберет подходящий режим чтения.';
 
   @override
   String get importingLabel => 'Добавление...';
 
   @override
   String get addPdfLabel => 'Добавить книгу';
+
+  @override
+  String get archiveChooseBook => 'Выберите книгу из архива';
+
+  @override
+  String get archiveNoBooks => 'В архиве не нашлось поддерживаемых книг.';
+
+  @override
+  String get unsupportedDocumentFormat =>
+      'Litra не смогла распознать или открыть формат этого файла.';
 
   @override
   String pageProgress(int page, int total) {
@@ -57,7 +67,26 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String openFailed(String error) {
-    return 'Не удалось открыть PDF: $error';
+    return 'Не удалось открыть книгу: $error';
+  }
+
+  @override
+  String get djvuOpening => 'Открываем DjVu…';
+
+  @override
+  String get djvuInvalidDocument =>
+      'Файл DjVu повреждён или скачан не полностью.';
+
+  @override
+  String get djvuTextLayer => 'Текст страницы';
+
+  @override
+  String get djvuNoTextLayer =>
+      'В этой сканированной странице нет встроенного текстового слоя. Оригинал всё равно можно читать и увеличивать.';
+
+  @override
+  String djvuPageFailed(String error) {
+    return 'Не удалось отрисовать страницу DjVu: $error';
   }
 
   @override
@@ -180,7 +209,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get aboutText =>
-      'TransRead — читалка PDF со встроенным переводом слов на устройстве. Нажмите на слово при чтении, чтобы увидеть перевод.';
+      'Litra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.';
 
   @override
   String get suggestDownloadTitle => 'Скачать словарь для перевода?';

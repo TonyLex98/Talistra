@@ -85,7 +85,8 @@ class LibraryService extends ChangeNotifier {
     required String format,
   }) async {
     final sourceFile = File(sourcePath);
-    final fingerprint = '${p.basename(sourcePath)}_${await sourceFile.length()}';
+    final fingerprint =
+        '${p.basename(sourcePath)}_${await sourceFile.length()}';
 
     for (final existing in _documents) {
       if (existing.sourceFingerprint == fingerprint &&
@@ -98,7 +99,8 @@ class LibraryService extends ChangeNotifier {
     final filesDir = Directory(p.join(docsDir.path, 'pdfs'));
     if (!await filesDir.exists()) await filesDir.create(recursive: true);
 
-    final id = '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
+    final id =
+        '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
     final destPath = p.join(filesDir.path, '$id.$format');
     await sourceFile.copy(destPath);
 
@@ -122,13 +124,16 @@ class LibraryService extends ChangeNotifier {
   Future<LibraryDocument> importBytes({
     required Uint8List bytes,
     required String title,
+    String format = 'pdf',
+    String? sourceFingerprint,
   }) async {
     final docsDir = await getApplicationDocumentsDirectory();
     final pdfsDir = Directory(p.join(docsDir.path, 'pdfs'));
     if (!await pdfsDir.exists()) await pdfsDir.create(recursive: true);
 
-    final id = '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
-    final destPath = p.join(pdfsDir.path, '$id.pdf');
+    final id =
+        '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
+    final destPath = p.join(pdfsDir.path, '$id.$format');
     await File(destPath).writeAsBytes(bytes);
 
     final document = LibraryDocument(
@@ -136,7 +141,8 @@ class LibraryService extends ChangeNotifier {
       title: title,
       filePath: destPath,
       addedAt: DateTime.now(),
-      sourceFingerprint: 'bundled_$id',
+      sourceFingerprint: sourceFingerprint ?? 'bundled_$id',
+      format: format,
     );
     _documents.add(document);
     await _persist();
@@ -189,7 +195,9 @@ class LibraryService extends ChangeNotifier {
   Future<void> toggleStarred(String id) async {
     final index = _documents.indexWhere((d) => d.id == id);
     if (index == -1) return;
-    _documents[index] = _documents[index].copyWith(starred: !_documents[index].starred);
+    _documents[index] = _documents[index].copyWith(
+      starred: !_documents[index].starred,
+    );
     await _persist();
     notifyListeners();
   }

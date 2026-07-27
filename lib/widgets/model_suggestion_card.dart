@@ -43,7 +43,9 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
     if (_dismissed) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final names = widget.languages.map((l) => AppLanguage.byLanguage(l).displayName).join(', ');
+    final names = widget.languages
+        .map((l) => AppLanguage.byLanguage(l).displayName)
+        .join(', ');
     final downloadService = context.watch<ModelDownloadService>();
     final isDownloading = _requestedByMe && downloadService.isDownloading;
 
@@ -72,7 +74,9 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                   Text(
                     isDownloading
                         ? l10n.downloadingNamed(
-                            AppLanguage.byLanguage(downloadService.activeLanguage!).displayName,
+                            AppLanguage.byLanguage(
+                              downloadService.activeLanguage!,
+                            ).displayName,
                             downloadService.elapsedSeconds,
                           )
                         : l10n.suggestDownloadBody(names),
@@ -92,7 +96,9 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                     )
                   else
                     FilledButton.tonal(
-                      onPressed: downloadService.isDownloading ? null : _download,
+                      onPressed: downloadService.isDownloading
+                          ? null
+                          : _download,
                       child: Text(l10n.download),
                     ),
                 ],

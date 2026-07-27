@@ -1,0 +1,219 @@
+use std::collections::HashMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Arc, LazyLock, Mutex};
+
+use djvu_rs::{Document, Pixmap};
+use jni::objects::{JClass, JString};
+use jni::sys::{jbyteArray, jint, jintArray, jlong, jlongArray, jstring};
+use jni::JNIEnv;
+
+static NEXT_HANDLE: AtomicI64 = AtomicI64::new(1);
+static DOCUMENTS: LazyLock<Mutex<HashMap<i64, Arc<Document>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn document(handle: jlong) -> Result<Arc<Document>, String> {
+    DOCUMENTS
+        .lock()
+        .map_err(|_| "DjVu document registry is unavailable".to_owned())?
+        .get(&handle)
+        .cloned()
+        .ok_or_else(|| "DjVu document is already closed".to_owned())
+}
+
+fn throw(env: &mut JNIEnv<'_>, error: impl ToString) {
+    let _ = env.throw_new("java/lang/IllegalStateException", error.to_string());
+}
+
+fn guarded<T>(operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    catch_unwind(AssertUnwindSafe(operation)).unwrap_or_else(|payload| {
+        let detail = payload
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("unknown decoder failure");
+        Err(format!("DjVu decoder rejected the page: {detail}"))
+    })
+}
+
+fn encode_png(pixmap: Pixmap) -> Result<Vec<u8>, String> {
+    let mut output = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut output, pixmap.width, pixmap.height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+        writer
+            .write_image_data(&pixmap.data)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(output)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_transreade_transreade_DjvuNative_open(
+    mut env: JNIEnv,
+    _class: JClass,
+    path: JString,
+) -> jlongArray {
+    let result = guarded(|| -> Result<[jlong; 2], String> {
+        let path: String = env
+            .get_string(&path)
+            .map_err(|e| e.to_string())?
+            .into();
+        let document = Arc::new(Document::open(path).map_err(|e| e.to_string())?);
+        let pages = document.page_count();
+        if pages == 0 {
+            return Err("The DjVu document has no pages".to_owned());
+        }
+        let handle = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
+        DOCUMENTS
+            .lock()
+            .map_err(|_| "DjVu document registry is unavailable".to_owned())?
+            .insert(handle, document);
+        Ok([handle, pages as jlong])
+    });
+
+    match result {
+        Ok(values) => match env.new_long_array(values.len() as jint) {
+            Ok(array) => {
+                if let Err(error) = env.set_long_array_region(&array, 0, &values) {
+                    throw(&mut env, error);
+                    std::ptr::null_mut()
+                } else {
+                    array.into_raw()
+                }
+            }
+            Err(error) => {
+                throw(&mut env, error);
+                std::ptr::null_mut()
+            }
+        },
+        Err(error) => {
+            throw(&mut env, error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageInfo(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    page_index: jint,
+) -> jintArray {
+    let result = guarded(|| -> Result<[jint; 3], String> {
+        let document = document(handle)?;
+        let page = document
+            .page(page_index.max(0) as usize)
+            .map_err(|e| e.to_string())?;
+        Ok([
+            page.display_width() as jint,
+            page.display_height() as jint,
+            page.dpi() as jint,
+        ])
+    });
+
+    match result {
+        Ok(values) => match env.new_int_array(values.len() as jint) {
+            Ok(array) => {
+                if let Err(error) = env.set_int_array_region(&array, 0, &values) {
+                    throw(&mut env, error);
+                    std::ptr::null_mut()
+                } else {
+                    array.into_raw()
+                }
+            }
+            Err(error) => {
+                throw(&mut env, error);
+                std::ptr::null_mut()
+            }
+        },
+        Err(error) => {
+            throw(&mut env, error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_transreade_transreade_DjvuNative_renderPage(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    page_index: jint,
+    width: jint,
+    height: jint,
+) -> jbyteArray {
+    let result = guarded(|| -> Result<Vec<u8>, String> {
+        let document = document(handle)?;
+        let page = document
+            .page(page_index.max(0) as usize)
+            .map_err(|e| e.to_string())?;
+        let pixmap = page
+            .render_to_size(width.max(1) as u32, height.max(1) as u32)
+            .map_err(|e| e.to_string())?;
+        encode_png(pixmap)
+    });
+
+    match result {
+        Ok(bytes) => match env.byte_array_from_slice(&bytes) {
+            Ok(array) => array.into_raw(),
+            Err(error) => {
+                throw(&mut env, error);
+                std::ptr::null_mut()
+            }
+        },
+        Err(error) => {
+            throw(&mut env, error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageText(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    page_index: jint,
+) -> jstring {
+    let result = guarded(|| -> Result<Option<String>, String> {
+        let document = document(handle)?;
+        document
+            .page(page_index.max(0) as usize)
+            .map_err(|e| e.to_string())?
+            .text()
+            .map_err(|e| e.to_string())
+    });
+
+    match result {
+        Ok(Some(text)) => match env.new_string(text) {
+            Ok(value) => value.into_raw(),
+            Err(error) => {
+                throw(&mut env, error);
+                std::ptr::null_mut()
+            }
+        },
+        Ok(None) => std::ptr::null_mut(),
+        Err(error) => {
+            throw(&mut env, error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_transreade_transreade_DjvuNative_close(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) {
+    match DOCUMENTS.lock() {
+        Ok(mut documents) => {
+            documents.remove(&handle);
+        }
+        Err(_) => throw(&mut env, "DjVu document registry is unavailable"),
+    }
+}

@@ -31,9 +31,11 @@ class LibraryDocument {
 
   /// Whether this document is read as flowing text (txt, epub, fb2, rtf,
   /// docx) rather than as PDF pages.
-  bool get isTextDocument => format != 'pdf';
+  bool get isTextDocument =>
+      const {'txt', 'epub', 'fb2', 'rtf', 'docx'}.contains(format);
 
   bool get isTxt => format == 'txt';
+  bool get isDjvu => format == 'djvu' || format == 'djv';
   final int pageCount;
   final int lastPage;
   final bool reflowMode;
@@ -131,7 +133,8 @@ class LibraryDocument {
       manualOrder: json['manualOrder'] as int?,
       pdfZoom: (json['pdfZoom'] as num?)?.toDouble() ?? 1.0,
       pdfScrollFraction: (json['pdfScrollFraction'] as num?)?.toDouble() ?? 0.0,
-      pdfScrollFractionX: (json['pdfScrollFractionX'] as num?)?.toDouble() ?? 0.0,
+      pdfScrollFractionX:
+          (json['pdfScrollFractionX'] as num?)?.toDouble() ?? 0.0,
       reflowFontSize: (json['reflowFontSize'] as num?)?.toDouble() ?? 17,
       lastOpenedAt: DateTime.tryParse(json['lastOpenedAt'] as String? ?? ''),
       sourceFingerprint: json['sourceFingerprint'] as String? ?? '',

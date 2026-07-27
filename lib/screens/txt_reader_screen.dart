@@ -33,7 +33,8 @@ class TxtReaderScreen extends StatefulWidget {
   State<TxtReaderScreen> createState() => _TxtReaderScreenState();
 }
 
-class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingObserver {
+class _TxtReaderScreenState extends State<TxtReaderScreen>
+    with WidgetsBindingObserver {
   final _pageViewKey = GlobalKey<TxtPageViewState>();
   late LibraryDocument _document;
 
@@ -51,7 +52,9 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
-    _document = context.read<LibraryService>().documents.firstWhere((d) => d.id == widget.documentId);
+    _document = context.read<LibraryService>().documents.firstWhere(
+      (d) => d.id == widget.documentId,
+    );
     _currentPage = _document.lastPage;
     _fontSize = _document.reflowFontSize;
     _pageEnteredAt = DateTime.now();
@@ -152,10 +155,15 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
           controller: controller,
           keyboardType: TextInputType.number,
           autofocus: true,
-          decoration: InputDecoration(hintText: l10n.goToPageHint(_pages.length)),
+          decoration: InputDecoration(
+            hintText: l10n.goToPageHint(_pages.length),
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.cancel),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text)),
             child: Text(l10n.go),
@@ -181,14 +189,20 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.translationLanguageTitle, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  l10n.translationLanguageTitle,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 12),
                 Consumer<SettingsService>(
                   builder: (context, settings, _) => Column(
                     children: [
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Text(settings.sourceAppLanguage.flag, style: const TextStyle(fontSize: 22)),
+                        leading: Text(
+                          settings.sourceAppLanguage.flag,
+                          style: const TextStyle(fontSize: 22),
+                        ),
                         title: Text(l10n.fromLanguage),
                         subtitle: Text(settings.sourceAppLanguage.displayName),
                         trailing: const Icon(Icons.chevron_right),
@@ -198,7 +212,9 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
                             current: settings.sourceLanguage,
                             title: l10n.fromLanguagePickerTitle,
                           );
-                          if (picked != null) settings.setSourceLanguage(picked);
+                          if (picked != null) {
+                            settings.setSourceLanguage(picked);
+                          }
                         },
                       ),
                       IconButton(
@@ -208,7 +224,10 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
                       ),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Text(settings.targetAppLanguage.flag, style: const TextStyle(fontSize: 22)),
+                        leading: Text(
+                          settings.targetAppLanguage.flag,
+                          style: const TextStyle(fontSize: 22),
+                        ),
                         title: Text(l10n.toLanguage),
                         subtitle: Text(settings.targetAppLanguage.displayName),
                         trailing: const Icon(Icons.chevron_right),
@@ -218,7 +237,9 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
                             current: settings.targetLanguage,
                             title: l10n.toLanguagePickerTitle,
                           );
-                          if (picked != null) settings.setTargetLanguage(picked);
+                          if (picked != null) {
+                            settings.setTargetLanguage(picked);
+                          }
                         },
                       ),
                     ],
@@ -261,7 +282,11 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
   /// The reader's single compact row, floating over the page — page counter
   /// (tap to jump), text size, translator toggle and the language pair, all
   /// in the reading palette.
-  Widget _buildFloatingBar(AppLocalizations l10n, SettingsService settings, ColorScheme scheme) {
+  Widget _buildFloatingBar(
+    AppLocalizations l10n,
+    SettingsService settings,
+    ColorScheme scheme,
+  ) {
     return Positioned(
       top: 0,
       left: 0,
@@ -287,23 +312,34 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
                     onTap: _pages.isEmpty ? null : _jumpToPage,
                     borderRadius: BorderRadius.circular(10),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            _pages.isEmpty ? _document.title : '$_currentPage / ${_pages.length}',
+                            _pages.isEmpty
+                                ? _document.title
+                                : '$_currentPage / ${_pages.length}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           if (_pages.isNotEmpty)
                             Text(
                               _document.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ),
                         ],
                       ),
@@ -336,19 +372,34 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
                   tooltip: settings.translatorEnabled
                       ? l10n.translatorOnTooltip
                       : l10n.translatorOffTooltip,
-                  onPressed: () => settings.setTranslatorEnabled(!settings.translatorEnabled),
+                  onPressed: () => settings.setTranslatorEnabled(
+                    !settings.translatorEnabled,
+                  ),
                 ),
                 if (settings.translatorEnabled)
                   InkWell(
                     onTap: _quickLanguageSwitch,
                     borderRadius: BorderRadius.circular(9),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 3,
+                        vertical: 6,
+                      ),
                       child: Row(
                         children: [
-                          Text(settings.sourceAppLanguage.flag, style: const TextStyle(fontSize: 13)),
-                          Icon(Icons.arrow_right_alt, size: 15, color: scheme.onSurfaceVariant),
-                          Text(settings.targetAppLanguage.flag, style: const TextStyle(fontSize: 13)),
+                          Text(
+                            settings.sourceAppLanguage.flag,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          Icon(
+                            Icons.arrow_right_alt,
+                            size: 15,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          Text(
+                            settings.targetAppLanguage.flag,
+                            style: const TextStyle(fontSize: 13),
+                          ),
                         ],
                       ),
                     ),
@@ -361,7 +412,10 @@ class _TxtReaderScreenState extends State<TxtReaderScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildBody(SettingsService settings, TranslationService translationService) {
+  Widget _buildBody(
+    SettingsService settings,
+    TranslationService translationService,
+  ) {
     if (_loading) {
       return ColoredBox(
         color: settings.readingTheme.background,

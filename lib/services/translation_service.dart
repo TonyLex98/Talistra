@@ -66,7 +66,10 @@ class TranslationService {
       return _translator!;
     }
     _translator?.close();
-    _translator = OnDeviceTranslator(sourceLanguage: source, targetLanguage: target);
+    _translator = OnDeviceTranslator(
+      sourceLanguage: source,
+      targetLanguage: target,
+    );
     _cachedSource = source;
     _cachedTarget = target;
     return _translator!;

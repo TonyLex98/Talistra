@@ -14,7 +14,13 @@ import 'text_join.dart';
 /// than the type actually is, and comparing that against neighbouring rows
 /// made every line of a formula-heavy paragraph look like a heading. This
 /// keeps the height of the row's dominant fragment — its body text.
-typedef _LineEntry = ({Rect bounds, double height, String text, List<FormatRun> runs, bool allBold});
+typedef _LineEntry = ({
+  Rect bounds,
+  double height,
+  String text,
+  List<FormatRun> runs,
+  bool allBold,
+});
 
 /// Merges extracted lines that are really one visual row.
 ///
@@ -35,10 +41,12 @@ List<_LineEntry> _mergeVisualRows(List<_LineEntry> entries) {
       continue;
     }
     final last = merged.last;
-    final overlap = math.min(last.bounds.bottom, entry.bounds.bottom) -
+    final overlap =
+        math.min(last.bounds.bottom, entry.bounds.bottom) -
         math.max(last.bounds.top, entry.bounds.top);
     final minHeight = math.min(last.bounds.height, entry.bounds.height);
-    final sameRow = minHeight > 0 &&
+    final sameRow =
+        minHeight > 0 &&
         overlap > minHeight * 0.5 &&
         entry.bounds.left >= last.bounds.left - 1;
     if (!sameRow) {
@@ -58,7 +66,12 @@ List<_LineEntry> _mergeVisualRows(List<_LineEntry> entries) {
       runs: [
         ...last.runs,
         for (final r in entry.runs)
-          FormatRun(start: r.start + shift, end: r.end + shift, bold: r.bold, italic: r.italic),
+          FormatRun(
+            start: r.start + shift,
+            end: r.end + shift,
+            bold: r.bold,
+            italic: r.italic,
+          ),
       ],
       allBold: last.allBold && entry.allBold,
     );
@@ -69,7 +82,12 @@ List<_LineEntry> _mergeVisualRows(List<_LineEntry> entries) {
 /// A bold/italic run within a [ReflowBlock]'s text, as [start, end)
 /// character offsets into that block's own `text` string.
 class FormatRun {
-  const FormatRun({required this.start, required this.end, required this.bold, required this.italic});
+  const FormatRun({
+    required this.start,
+    required this.end,
+    required this.bold,
+    required this.italic,
+  });
   final int start;
   final int end;
   final bool bold;
@@ -81,13 +99,16 @@ class FormatRun {
 /// its PDF-space bounds so it can be rendered as a real, zoomable image
 /// instead of just a placeholder.
 class ReflowBlock {
-  const ReflowBlock.paragraph(this.text, {this.formatRuns = const [], this.isHeading = false})
-      : imageBounds = null;
+  const ReflowBlock.paragraph(
+    this.text, {
+    this.formatRuns = const [],
+    this.isHeading = false,
+  }) : imageBounds = null;
   const ReflowBlock.image(Rect bounds)
-      : text = '',
-        imageBounds = bounds,
-        formatRuns = const [],
-        isHeading = false;
+    : text = '',
+      imageBounds = bounds,
+      formatRuns = const [],
+      isHeading = false;
 
   final String text;
   final Rect? imageBounds;
@@ -122,7 +143,9 @@ bool _looksLikeListItem(String text) => _listMarkerPattern.hasMatch(text);
 /// directly) so each word's bold/italic — from [TextWord.fontStyle], with
 /// the font name as a fallback for PDFs that don't set the style flags —
 /// can be recorded as a [FormatRun] against the exact same offsets.
-({String text, List<FormatRun> runs, bool allBold}) _lineTextWithRuns(TextLine line) {
+({String text, List<FormatRun> runs, bool allBold}) _lineTextWithRuns(
+  TextLine line,
+) {
   final buffer = StringBuffer();
   final runs = <FormatRun>[];
   // The extractor usually hands back the space between two words as its
@@ -152,7 +175,9 @@ bool _looksLikeListItem(String text) => _listMarkerPattern.hasMatch(text);
       continue;
     }
     if (!lastCharIsSpace && previousRight != null) {
-      final minSpace = word.bounds.height > 0 ? word.bounds.height * spaceGapRatio : 1.0;
+      final minSpace = word.bounds.height > 0
+          ? word.bounds.height * spaceGapRatio
+          : 1.0;
       if (word.bounds.left - previousRight >= minSpace) {
         buffer.write(' ');
       }
@@ -162,12 +187,17 @@ bool _looksLikeListItem(String text) => _listMarkerPattern.hasMatch(text);
     lastCharIsSpace = wordText.endsWith(' ');
     previousRight = word.bounds.right;
     final fontNameLower = word.fontName.toLowerCase();
-    final bold = word.fontStyle.contains(PdfFontStyle.bold) || fontNameLower.contains('bold');
-    final italic = word.fontStyle.contains(PdfFontStyle.italic) ||
+    final bold =
+        word.fontStyle.contains(PdfFontStyle.bold) ||
+        fontNameLower.contains('bold');
+    final italic =
+        word.fontStyle.contains(PdfFontStyle.italic) ||
         fontNameLower.contains('italic') ||
         fontNameLower.contains('oblique');
     if (bold || italic) {
-      runs.add(FormatRun(start: start, end: buffer.length, bold: bold, italic: italic));
+      runs.add(
+        FormatRun(start: start, end: buffer.length, bold: bold, italic: italic),
+      );
     }
     letterChars += wordText.trim().length;
     if (bold) boldChars += wordText.trim().length;
@@ -181,7 +211,10 @@ bool _looksLikeListItem(String text) => _listMarkerPattern.hasMatch(text);
 
 /// Trims [text] and shifts [runs] to match, since [_lineTextWithRuns]
 /// builds against the untrimmed line.
-({String text, List<FormatRun> runs}) _trimWithRuns(String text, List<FormatRun> runs) {
+({String text, List<FormatRun> runs}) _trimWithRuns(
+  String text,
+  List<FormatRun> runs,
+) {
   final leadingTrim = text.length - text.trimLeft().length;
   final trimmed = text.trim();
   if (leadingTrim == 0) return (text: trimmed, runs: runs);
@@ -189,7 +222,12 @@ bool _looksLikeListItem(String text) => _listMarkerPattern.hasMatch(text);
     text: trimmed,
     runs: [
       for (final r in runs)
-        FormatRun(start: r.start - leadingTrim, end: r.end - leadingTrim, bold: r.bold, italic: r.italic),
+        FormatRun(
+          start: r.start - leadingTrim,
+          end: r.end - leadingTrim,
+          bold: r.bold,
+          italic: r.italic,
+        ),
     ],
   );
 }
@@ -205,9 +243,10 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
   final orderedLines = orderedTextLines(lines);
   if (orderedLines.isEmpty) {
     if (pageSize.width <= 0 || pageSize.height <= 0) return const [];
-    return [ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, pageSize.height))];
+    return [
+      ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, pageSize.height)),
+    ];
   }
-
 
   // Running heads/page numbers are dropped from the text, but the geometry
   // below still measures gaps against the page's *original* extremes —
@@ -245,7 +284,9 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
   final bodyHeight = _modalHeight(heights);
   if (nonEmpty.isEmpty) {
     if (pageSize.width <= 0 || pageSize.height <= 0) return const [];
-    return [ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, pageSize.height))];
+    return [
+      ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, pageSize.height)),
+    ];
   }
   final lexicon = buildPageLexicon(nonEmpty.map((e) => e.text));
 
@@ -274,20 +315,21 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
     final entry = nonEmpty[i];
     final text = entry.text;
     if (text.length > 80) continue;
-    if (text.endsWith('.') || text.endsWith(',') || text.endsWith(';')) continue;
+    if (text.endsWith('.') || text.endsWith(',') || text.endsWith(';')) {
+      continue;
+    }
 
     final height = entry.height;
     final previous = i > 0 ? nonEmpty[i - 1] : null;
     final next = i + 1 < nonEmpty.length ? nonEmpty[i + 1] : null;
-    final neighbourHeight = math.max(
-      previous?.height ?? 0,
-      next?.height ?? 0,
-    );
-    final standsOutBySize = height > bodyHeight * 1.12 && height > neighbourHeight * 1.12;
+    final neighbourHeight = math.max(previous?.height ?? 0, next?.height ?? 0);
+    final standsOutBySize =
+        height > bodyHeight * 1.12 && height > neighbourHeight * 1.12;
     // Bold only counts when the surrounding text isn't also bold —
     // otherwise a bold paragraph or a bold-set table breaks up line by
     // line.
-    final standsOutByWeight = entry.allBold &&
+    final standsOutByWeight =
+        entry.allBold &&
         !(previous?.allBold ?? false) &&
         !(next?.allBold ?? false);
     headingFlags[i] = standsOutBySize || standsOutByWeight;
@@ -313,11 +355,13 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
       return;
     }
     if (text.isNotEmpty) {
-      blocks.add(ReflowBlock.paragraph(
-        text,
-        formatRuns: paragraphRuns,
-        isHeading: paragraphIsHeading,
-      ));
+      blocks.add(
+        ReflowBlock.paragraph(
+          text,
+          formatRuns: paragraphRuns,
+          isHeading: paragraphIsHeading,
+        ),
+      );
     }
     paragraph = '';
     paragraphRuns = [];
@@ -336,14 +380,21 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
     paragraphRuns = [
       ...paragraphRuns,
       for (final r in entry.runs)
-        FormatRun(start: r.start + shift, end: r.end + shift, bold: r.bold, italic: r.italic),
+        FormatRun(
+          start: r.start + shift,
+          end: r.end + shift,
+          bold: r.bold,
+          italic: r.italic,
+        ),
     ];
     paragraph = joined;
   }
 
   final firstTop = orderedLines.first.bounds.top;
   if (firstTop > imageGapThreshold) {
-    blocks.add(ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, firstTop)));
+    blocks.add(
+      ReflowBlock.image(Rect.fromLTWH(0, 0, pageSize.width, firstTop)),
+    );
   }
 
   double? previousBottom;
@@ -353,13 +404,16 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
     final startsNewListItem = _looksLikeListItem(entry.text);
     // A heading breaks the flow on both sides: it never joins the
     // paragraph above it, and the body text under it starts fresh.
-    final startsNewBlock = startsNewListItem || isHeadingAt(index) || paragraphIsHeading;
+    final startsNewBlock =
+        startsNewListItem || isHeadingAt(index) || paragraphIsHeading;
     if (previousBottom != null) {
       final gap = bounds.top - previousBottom;
       if (gap > imageGapThreshold) {
         flush();
         blocks.add(
-          ReflowBlock.image(Rect.fromLTWH(0, previousBottom, pageSize.width, gap)),
+          ReflowBlock.image(
+            Rect.fromLTWH(0, previousBottom, pageSize.width, gap),
+          ),
         );
         startParagraph(entry, index);
         previousBottom = bounds.bottom;
@@ -383,7 +437,11 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
   final lastBottom = orderedLines.last.bounds.bottom;
   final trailingGap = pageSize.height - lastBottom;
   if (trailingGap > imageGapThreshold) {
-    blocks.add(ReflowBlock.image(Rect.fromLTWH(0, lastBottom, pageSize.width, trailingGap)));
+    blocks.add(
+      ReflowBlock.image(
+        Rect.fromLTWH(0, lastBottom, pageSize.width, trailingGap),
+      ),
+    );
   }
 
   return blocks;
@@ -402,7 +460,8 @@ double _modalHeight(List<double> sortedHeights) {
   var bestHeight = counts.keys.first;
   var bestCount = 0;
   for (final entry in counts.entries) {
-    if (entry.value > bestCount || (entry.value == bestCount && entry.key < bestHeight)) {
+    if (entry.value > bestCount ||
+        (entry.value == bestCount && entry.key < bestHeight)) {
       bestHeight = entry.key;
       bestCount = entry.value;
     }

@@ -108,7 +108,10 @@ class _LanguageSection extends StatelessWidget {
     return Column(
       children: [
         ListTile(
-          leading: Text(settings.sourceAppLanguage.flag, style: const TextStyle(fontSize: 22)),
+          leading: Text(
+            settings.sourceAppLanguage.flag,
+            style: const TextStyle(fontSize: 22),
+          ),
           title: Text(l10n.originalLanguage),
           subtitle: Text(settings.sourceAppLanguage.displayName),
           trailing: const Icon(Icons.chevron_right),
@@ -129,7 +132,10 @@ class _LanguageSection extends StatelessWidget {
           ),
         ),
         ListTile(
-          leading: Text(settings.targetAppLanguage.flag, style: const TextStyle(fontSize: 22)),
+          leading: Text(
+            settings.targetAppLanguage.flag,
+            style: const TextStyle(fontSize: 22),
+          ),
           title: Text(l10n.translationLanguage),
           subtitle: Text(settings.targetAppLanguage.displayName),
           trailing: const Icon(Icons.chevron_right),
@@ -200,7 +206,9 @@ class _ModelStatusTileState extends State<_ModelStatusTile> {
   }
 
   Future<void> _refresh() async {
-    final downloaded = await widget.translation.isModelDownloaded(widget.language);
+    final downloaded = await widget.translation.isModelDownloaded(
+      widget.language,
+    );
     if (mounted) setState(() => _downloaded = downloaded);
   }
 
@@ -218,7 +226,9 @@ class _ModelStatusTileState extends State<_ModelStatusTile> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final downloadService = context.watch<ModelDownloadService>();
-    final isDownloadingThis = downloadService.isDownloadingLanguage(widget.language);
+    final isDownloadingThis = downloadService.isDownloadingLanguage(
+      widget.language,
+    );
 
     String subtitle;
     if (isDownloadingThis) {
@@ -240,7 +250,11 @@ class _ModelStatusTileState extends State<_ModelStatusTile> {
       trailing = TextButton(
         onPressed: _downloaded == null || downloadService.isDownloading
             ? null
-            : (_downloaded == true ? _delete : () => downloadService.download(widget.language).then((_) => _refresh())),
+            : (_downloaded == true
+                  ? _delete
+                  : () => downloadService
+                        .download(widget.language)
+                        .then((_) => _refresh())),
         child: Text(_downloaded == true ? l10n.delete : l10n.download),
       );
     }
@@ -346,7 +360,9 @@ class _AppLanguageSection extends StatelessWidget {
                   child: _LanguageButton(
                     flag: language.flag,
                     name: language.name,
-                    selected: settings.appLocale.languageCode == language.locale.languageCode,
+                    selected:
+                        settings.appLocale.languageCode ==
+                        language.locale.languageCode,
                     onTap: () => settings.setAppLocale(language.locale),
                   ),
                 ),
@@ -514,19 +530,19 @@ class _ReadingTypographySection extends StatelessWidget {
           ),
           Text(
             l10n.readingTypographyNote,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ),
     );
   }
 
-  TextStyle? _labelStyle(BuildContext context) =>
-      Theme.of(context).textTheme.bodyMedium?.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      );
+  TextStyle? _labelStyle(BuildContext context) => Theme.of(context)
+      .textTheme
+      .bodyMedium
+      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
 }
 
 /// The sample page: real reading colours, real reading typeface, at the
@@ -572,9 +588,10 @@ class _ReadingPreview extends StatelessWidget {
               color: theme.wordHighlight,
               child: Text(
                 l10n.selectionCopy,
-                style: readingTextStyle(settings: settings, fontSize: 14).copyWith(
-                  color: const Color(0xFF1A1A1A),
-                ),
+                style: readingTextStyle(
+                  settings: settings,
+                  fontSize: 14,
+                ).copyWith(color: const Color(0xFF1A1A1A)),
               ),
             ),
           ],

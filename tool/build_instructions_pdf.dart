@@ -28,7 +28,12 @@ const _ink = PdfColor.fromInt(0xFF1A1A1A);
 const _muted = PdfColor.fromInt(0xFF5F6368);
 
 class _Section {
-  const _Section({required this.title, required this.body, this.imageName, this.bullets = const []});
+  const _Section({
+    required this.title,
+    required this.body,
+    this.imageName,
+    this.bullets = const [],
+  });
   final String title;
   final String body;
   final String? imageName;
@@ -164,11 +169,15 @@ Future<void> main(List<String> args) async {
   fontBoldPath ??= Platform.isWindows ? r'C:\Windows\Fonts\arialbd.ttf' : null;
 
   if (fontRegularPath == null || !File(fontRegularPath).existsSync()) {
-    stderr.writeln('No Cyrillic TTF found. Pass --font-regular=/path/to.ttf (and --font-bold=...).');
+    stderr.writeln(
+      'No Cyrillic TTF found. Pass --font-regular=/path/to.ttf (and --font-bold=...).',
+    );
     exit(1);
   }
 
-  final regularFont = pw.Font.ttf(File(fontRegularPath).readAsBytesSync().buffer.asByteData());
+  final regularFont = pw.Font.ttf(
+    File(fontRegularPath).readAsBytesSync().buffer.asByteData(),
+  );
   final boldFont = (fontBoldPath != null && File(fontBoldPath).existsSync())
       ? pw.Font.ttf(File(fontBoldPath).readAsBytesSync().buffer.asByteData())
       : regularFont;
@@ -188,12 +197,25 @@ Future<void> main(List<String> args) async {
             pw.Container(
               width: 96,
               height: 96,
-              decoration: pw.BoxDecoration(color: _brand, borderRadius: pw.BorderRadius.circular(24)),
+              decoration: pw.BoxDecoration(
+                color: _brand,
+                borderRadius: pw.BorderRadius.circular(24),
+              ),
               alignment: pw.Alignment.center,
-              child: pw.Text('T', style: pw.TextStyle(color: PdfColors.white, fontSize: 48, font: boldFont)),
+              child: pw.Text(
+                'T',
+                style: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 48,
+                  font: boldFont,
+                ),
+              ),
             ),
             pw.SizedBox(height: 24),
-            pw.Text('TransRead', style: pw.TextStyle(fontSize: 34, font: boldFont, color: _ink)),
+            pw.Text(
+              'TransRead',
+              style: pw.TextStyle(fontSize: 34, font: boldFont, color: _ink),
+            ),
             pw.SizedBox(height: 8),
             pw.Text(
               'Читайте PDF и переводите слова прямо на устройстве',
@@ -201,7 +223,10 @@ Future<void> main(List<String> args) async {
               textAlign: pw.TextAlign.center,
             ),
             pw.SizedBox(height: 40),
-            pw.Text('Краткое руководство', style: pw.TextStyle(fontSize: 13, color: _muted)),
+            pw.Text(
+              'Краткое руководство',
+              style: pw.TextStyle(fontSize: 13, color: _muted),
+            ),
           ],
         ),
       ),
@@ -214,7 +239,9 @@ Future<void> main(List<String> args) async {
       final candidate = File('${screenshotsDir.path}/${section.imageName}.png');
       if (candidate.existsSync()) imageFile = candidate;
     }
-    final image = imageFile != null ? pw.MemoryImage(imageFile.readAsBytesSync()) : null;
+    final image = imageFile != null
+        ? pw.MemoryImage(imageFile.readAsBytesSync())
+        : null;
 
     doc.addPage(
       pw.Page(
@@ -225,9 +252,15 @@ Future<void> main(List<String> args) async {
           children: [
             pw.Container(width: 40, height: 4, color: _brand),
             pw.SizedBox(height: 12),
-            pw.Text(section.title, style: pw.TextStyle(fontSize: 22, font: boldFont, color: _ink)),
+            pw.Text(
+              section.title,
+              style: pw.TextStyle(fontSize: 22, font: boldFont, color: _ink),
+            ),
             pw.SizedBox(height: 12),
-            pw.Text(section.body, style: pw.TextStyle(fontSize: 12.5, color: _ink, lineSpacing: 3)),
+            pw.Text(
+              section.body,
+              style: pw.TextStyle(fontSize: 12.5, color: _ink, lineSpacing: 3),
+            ),
             if (section.bullets.isNotEmpty) ...[
               pw.SizedBox(height: 10),
               for (final bullet in section.bullets)
@@ -240,9 +273,21 @@ Future<void> main(List<String> args) async {
                         margin: const pw.EdgeInsets.only(top: 5, right: 8),
                         width: 5,
                         height: 5,
-                        decoration: const pw.BoxDecoration(color: _brand, shape: pw.BoxShape.circle),
+                        decoration: const pw.BoxDecoration(
+                          color: _brand,
+                          shape: pw.BoxShape.circle,
+                        ),
                       ),
-                      pw.Expanded(child: pw.Text(bullet, style: pw.TextStyle(fontSize: 12, color: _ink, lineSpacing: 2))),
+                      pw.Expanded(
+                        child: pw.Text(
+                          bullet,
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: _ink,
+                            lineSpacing: 2,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
