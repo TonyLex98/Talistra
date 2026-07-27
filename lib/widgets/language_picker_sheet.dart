@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/app_language.dart';
 
 /// Opens a searchable bottom sheet listing every language ML Kit supports
@@ -53,7 +54,7 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
               child: TextField(
                 autofocus: false,
                 decoration: InputDecoration(
-                  hintText: 'Поиск языка',
+                  hintText: AppLocalizations.of(context).searchLanguageHint,
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   border: OutlineInputBorder(

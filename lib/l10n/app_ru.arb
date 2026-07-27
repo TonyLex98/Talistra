@@ -1,0 +1,150 @@
+{
+  "@@locale": "ru",
+
+  "settingsTooltip": "Настройки",
+  "emptyLibraryTitle": "Ваша библиотека пуста",
+  "emptyLibrarySubtitle": "Добавьте PDF или TXT, чтобы начать читать и переводить слова одним нажатием.",
+  "importingLabel": "Добавление...",
+  "addPdfLabel": "Добавить книгу",
+
+  "pageProgress": "Стр. {page} из {total}",
+  "@pageProgress": {
+    "placeholders": { "page": {"type": "int"}, "total": {"type": "int"} }
+  },
+  "neverOpened": "Ещё не открывалась",
+  "unpinTooltip": "Открепить",
+  "pinTooltip": "Закрепить наверху",
+  "removeFromLibrary": "Удалить из библиотеки",
+  "deleteDocumentTitle": "Удалить книгу?",
+  "deleteDocumentBody": "«{title}» будет удалена из библиотеки вместе с прогрессом чтения.",
+  "@deleteDocumentBody": {
+    "placeholders": { "title": {"type": "String"} }
+  },
+  "cancel": "Отмена",
+  "delete": "Удалить",
+
+  "openFailed": "Не удалось открыть PDF: {error}",
+  "@openFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "goToPageTitle": "Перейти на страницу",
+  "goToPageHint": "1 – {max}",
+  "@goToPageHint": {
+    "placeholders": { "max": {"type": "int"} }
+  },
+  "go": "Перейти",
+  "smallerText": "Меньше текст",
+  "largerText": "Крупнее текст",
+  "originalPdf": "Оригинал PDF",
+  "adaptToPhone": "Адаптировать под телефон",
+  "translationLanguageTitle": "Язык перевода",
+  "fromLanguage": "С какого языка",
+  "fromLanguagePickerTitle": "С какого языка переводить",
+  "toLanguage": "На какой язык",
+  "toLanguagePickerTitle": "На какой язык переводить",
+  "swapLanguagesTooltip": "Поменять языки местами",
+
+  "settingsScreenTitle": "Настройки",
+  "sectionTranslation": "Перевод",
+  "sectionAppearance": "Оформление",
+  "sectionAbout": "О приложении",
+  "originalLanguage": "Язык оригинала",
+  "translationLanguage": "Язык перевода",
+  "translationOfflineNote": "Перевод выполняется прямо на устройстве — офлайн-модели для выбранных языков скачиваются один раз и не требуют интернета при чтении.",
+  "modelLabel": "Модель: {language}",
+  "@modelLabel": {
+    "placeholders": { "language": {"type": "String"} }
+  },
+  "downloadingProgress": "Загрузка... {seconds} с",
+  "@downloadingProgress": {
+    "placeholders": { "seconds": {"type": "int"} }
+  },
+  "checkingModel": "Проверка...",
+  "modelDownloaded": "Скачана, доступна офлайн",
+  "modelNotDownloaded": "Не скачана",
+  "download": "Скачать",
+  "themeSystem": "Системная",
+  "themeLight": "Светлая",
+  "themeDark": "Тёмная",
+  "readingThemeBackground": "Фон страницы (PDF и адаптивный режим)",
+  "readingThemeWhite": "Белая",
+  "readingThemeSepia": "Сепия",
+  "readingThemeCream": "Кремовая",
+  "readingThemeSage": "Мятная",
+  "readingThemeNight": "Ночная",
+  "readingThemeDark": "Тёмная",
+  "appLanguageSection": "Язык приложения",
+  "aboutText": "TransRead — читалка PDF со встроенным переводом слов на устройстве. Нажмите на слово при чтении, чтобы увидеть перевод.",
+
+  "suggestDownloadTitle": "Скачать словарь для перевода?",
+  "downloadingNamed": "Загружаем «{language}»... {seconds} с",
+  "@downloadingNamed": {
+    "placeholders": { "language": {"type": "String"}, "seconds": {"type": "int"} }
+  },
+  "suggestDownloadBody": "Языки: {names}. Нужно скачать один раз, дальше перевод работает офлайн.",
+  "@suggestDownloadBody": {
+    "placeholders": { "names": {"type": "String"} }
+  },
+
+  "searchLanguageHint": "Поиск языка",
+
+  "translating": "Переводим...",
+  "translationFailed": "Не удалось перевести",
+  "retry": "Повторить",
+  "needsModelBody": "Нужна языковая модель: {names}.\nОна скачивается один раз и работает офлайн.",
+  "@needsModelBody": {
+    "placeholders": { "names": {"type": "String"} }
+  },
+  "copyTranslationTooltip": "Копировать перевод",
+  "sentenceTranslationLabel": "Перевод предложения",
+
+  "noTextOnPage": "На этой странице не нашлось текста для адаптации.",
+  "selectionCopy": "Копировать",
+  "selectionTranslate": "Перевести выделенное",
+  "selectionClose": "Снять выделение",
+  "wrongSourceLanguage": "Текст не похож на {language} — перевод будет бессмысленным. Сменить язык оригинала?",
+  "@wrongSourceLanguage": {
+    "placeholders": { "language": {"type": "String"} }
+  },
+  "changeSourceLanguage": "Сменить язык",
+  "readingTypographySection": "Текст при чтении",
+  "readingFontLabel": "Шрифт",
+  "readingWeightLabel": "Насыщенность",
+  "readingContrastLabel": "Контраст",
+  "readingPreviewTitle": "Как это выглядит",
+  "readingPreviewText": "Съешь ещё этих мягких французских булок, да выпей чаю. A quick brown fox jumps over the lazy dog.",
+  "readingTypographyNote": "Применяется к адаптивному режиму и текстовым файлам. У PDF своя типографика, но контраст влияет и на него.",
+  "copiedLabel": "Скопировано",
+  "translatorOnTooltip": "Переводчик включён (нажмите, чтобы выключить)",
+  "translatorOffTooltip": "Переводчик выключен (нажмите, чтобы включить)",
+  "translatorSectionTitle": "Переводчик",
+  "translatorDisabledNote": "Переводчик выключен — приложение работает как обычная читалка. Включить можно значком «文A» в шапке экрана.",
+  "statisticsTooltip": "Статистика",
+  "statisticsScreenTitle": "Статистика чтения",
+  "statisticsTotalTime": "Всего времени за чтением",
+  "statisticsTotalPages": "Страниц прочитано",
+  "statisticsByBook": "По книгам",
+  "statisticsByDay": "По дням",
+  "statisticsEmpty": "Пока нет данных о чтении — статистика появится, как только вы начнёте читать.",
+  "statisticsNote": "Быстрая перелистывание и пролистывание не засчитывается — считается только время, проведённое за реальным чтением страницы.",
+  "syncTranslationTooltip": "Синхронный перевод (экспериментально)",
+  "syncTranslationSectionTitle": "Синхронный перевод (эксперимент)",
+  "syncTranslationDescription": "Экран делится пополам: сверху оригинал, снизу — перевод текста, который сейчас в фокусе. Пока экспериментальная функция — доступна только в адаптивном режиме.",
+  "syncTranslationTranslating": "Переводим видимый текст...",
+  "durationHoursMinutes": "{hours} ч {minutes} мин",
+  "@durationHoursMinutes": {
+    "placeholders": { "hours": {"type": "int"}, "minutes": {"type": "int"} }
+  },
+  "durationMinutes": "{minutes} мин",
+  "@durationMinutes": {
+    "placeholders": { "minutes": {"type": "int"} }
+  },
+  "durationSeconds": "{seconds} с",
+  "@durationSeconds": {
+    "placeholders": { "seconds": {"type": "int"} }
+  },
+  "statisticsPagesShort": "{pages} стр.",
+  "@statisticsPagesShort": {
+    "placeholders": { "pages": {"type": "int"} }
+  }
+}

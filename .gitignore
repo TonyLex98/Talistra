@@ -44,3 +44,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/local.properties
+
+# Release signing secrets — never commit your real keystore or its
+# passwords. See docs/PUBLISHING.md for how these are generated and used.
+/android/key.properties
+/android/app/upload-keystore.jks
+*.jks
+*.keystore

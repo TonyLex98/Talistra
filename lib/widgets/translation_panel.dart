@@ -3,10 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/app_language.dart';
 import '../services/model_download_service.dart';
+import '../services/settings_service.dart';
 import '../services/translation_service.dart';
+import '../utils/script_check.dart';
 import '../utils/sentence_finder.dart';
+import 'language_picker_sheet.dart';
 
 /// Bottom panel shown when the reader selects a word: translates the word
 /// itself and, if it was found inside a sentence on the page, the whole
@@ -121,75 +125,113 @@ class _TranslationPanelState extends State<TranslationPanel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // A compact floating card anchored near the selection (see callers'
+    // Positioned wrapper), rather than a full-width bottom sheet — a big
+    // bar covering a third of the screen for one word felt heavy-handed.
     return Material(
       color: scheme.surfaceContainerHighest,
       elevation: 10,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.5,
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 10, 12, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: scheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.word,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 320,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 10, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.word,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: widget.onClose,
-                    ),
-                  ],
-                ),
-                _buildBody(context, scheme),
-              ],
-            ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onClose,
+                  ),
+                ],
+              ),
+              if (_wrongLanguage) _buildWrongLanguageNotice(context, scheme),
+              _buildBody(context, scheme),
+            ],
           ),
         ),
       ),
     );
   }
 
+  /// True when the text being translated clearly isn't in the language the
+  /// reader picked as the original — the difference between "the translator
+  /// is broken" and "the translator is pointed at the wrong language".
+  bool get _wrongLanguage {
+    final sample = widget.sentenceMatch?.sentence ?? widget.word;
+    return looksLikeWrongSourceLanguage(sample, widget.source);
+  }
+
+  Widget _buildWrongLanguageNotice(BuildContext context, ColorScheme scheme) {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8, right: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.wrongSourceLanguage(AppLanguage.byLanguage(widget.source).displayName),
+            style: TextStyle(fontSize: 12, color: scheme.onErrorContainer),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => _pickSourceLanguage(l10n),
+              child: Text(l10n.changeSourceLanguage),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickSourceLanguage(AppLocalizations l10n) async {
+    final settings = context.read<SettingsService>();
+    final picked = await showLanguagePicker(
+      context: context,
+      current: widget.source,
+      title: l10n.fromLanguagePickerTitle,
+    );
+    if (picked != null) await settings.setSourceLanguage(picked);
+  }
+
   Widget _buildBody(BuildContext context, ColorScheme scheme) {
+    final l10n = AppLocalizations.of(context);
     switch (_status) {
       case _Status.loading:
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
           child: Row(
             children: [
-              SizedBox(
+              const SizedBox(
                 height: 18,
                 width: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              SizedBox(width: 12),
-              Text('Переводим...'),
+              const SizedBox(width: 12),
+              Text(l10n.translating),
             ],
           ),
         );
@@ -202,8 +244,8 @@ class _TranslationPanelState extends State<TranslationPanel> {
             children: [
               Icon(Icons.error_outline, size: 18, color: scheme.error),
               const SizedBox(width: 6),
-              const Expanded(child: Text('Не удалось перевести')),
-              TextButton(onPressed: _load, child: const Text('Повторить')),
+              Expanded(child: Text(l10n.translationFailed)),
+              TextButton(onPressed: _load, child: Text(l10n.retry)),
             ],
           ),
         );
@@ -213,6 +255,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
   }
 
   Widget _buildNeedsDownload(BuildContext context, ColorScheme scheme) {
+    final l10n = AppLocalizations.of(context);
     final names = _missing.map((l) => AppLanguage.byLanguage(l).displayName).join(', ');
     final downloadService = context.watch<ModelDownloadService>();
     final relevantDownload = _missing.contains(downloadService.activeLanguage);
@@ -223,7 +266,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Нужна языковая модель: $names.\nОна скачивается один раз и работает офлайн.',
+            l10n.needsModelBody(names),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 10),
@@ -236,14 +279,14 @@ class _TranslationPanelState extends State<TranslationPanel> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 const SizedBox(width: 10),
-                Text('Загрузка... ${downloadService.elapsedSeconds} с'),
+                Text(l10n.downloadingProgress(downloadService.elapsedSeconds)),
               ],
             )
           else
             FilledButton.tonalIcon(
               onPressed: downloadService.isDownloading ? null : _downloadMissing,
               icon: const Icon(Icons.download, size: 18),
-              label: const Text('Скачать'),
+              label: Text(l10n.download),
             ),
         ],
       ),
@@ -273,7 +316,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
             IconButton(
               icon: const Icon(Icons.copy_outlined, size: 18),
               visualDensity: VisualDensity.compact,
-              tooltip: 'Копировать перевод',
+              tooltip: AppLocalizations.of(context).copyTranslationTooltip,
               onPressed: () {
                 if (_wordTranslation == null) return;
                 Clipboard.setData(ClipboardData(text: _wordTranslation!));
@@ -287,7 +330,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
             child: Divider(height: 1),
           ),
           Text(
-            'Перевод предложения',
+            AppLocalizations.of(context).sentenceTranslationLabel,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,

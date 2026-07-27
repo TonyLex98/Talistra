@@ -21,8 +21,23 @@ class LibraryService extends ChangeNotifier {
   final SharedPreferences _prefs;
   final List<LibraryDocument> _documents;
 
+  /// Starred documents are pinned above everything else. Within a group
+  /// (starred / not starred), anything the reader has manually dragged
+  /// keeps that explicit order; documents that were never touched or
+  /// starred fall back to the library's original recency sort, and sort
+  /// after every manually-ordered document in their group.
   List<LibraryDocument> get documents => List.unmodifiable(
-    _documents..sort((a, b) => b.lastOpenedAt.compareTo(a.lastOpenedAt)),
+    _documents..sort((a, b) {
+      if (a.starred != b.starred) return a.starred ? -1 : 1;
+      final aOrder = a.manualOrder;
+      final bOrder = b.manualOrder;
+      if (aOrder != null || bOrder != null) {
+        if (aOrder == null) return 1;
+        if (bOrder == null) return -1;
+        return aOrder.compareTo(bOrder);
+      }
+      return b.lastOpenedAt.compareTo(a.lastOpenedAt);
+    }),
   );
 
   static Future<LibraryService> load(SharedPreferences prefs) async {
@@ -53,6 +68,21 @@ class LibraryService extends ChangeNotifier {
   Future<LibraryDocument> importPdf({
     required String sourcePath,
     required String title,
+  }) => _importFile(sourcePath: sourcePath, title: title, format: 'pdf');
+
+  /// Same as [importPdf], for the text formats (txt, epub, fb2, rtf,
+  /// docx) — [format] is the file's extension, which is what the reader
+  /// uses later to decide how to pull the text out of it.
+  Future<LibraryDocument> importText({
+    required String sourcePath,
+    required String title,
+    required String format,
+  }) => _importFile(sourcePath: sourcePath, title: title, format: format);
+
+  Future<LibraryDocument> _importFile({
+    required String sourcePath,
+    required String title,
+    required String format,
   }) async {
     final sourceFile = File(sourcePath);
     final fingerprint = '${p.basename(sourcePath)}_${await sourceFile.length()}';
@@ -65,11 +95,11 @@ class LibraryService extends ChangeNotifier {
     }
 
     final docsDir = await getApplicationDocumentsDirectory();
-    final pdfsDir = Directory(p.join(docsDir.path, 'pdfs'));
-    if (!await pdfsDir.exists()) await pdfsDir.create(recursive: true);
+    final filesDir = Directory(p.join(docsDir.path, 'pdfs'));
+    if (!await filesDir.exists()) await filesDir.create(recursive: true);
 
     final id = '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
-    final destPath = p.join(pdfsDir.path, '$id.pdf');
+    final destPath = p.join(filesDir.path, '$id.$format');
     await sourceFile.copy(destPath);
 
     final document = LibraryDocument(
@@ -78,6 +108,35 @@ class LibraryService extends ChangeNotifier {
       filePath: destPath,
       addedAt: DateTime.now(),
       sourceFingerprint: fingerprint,
+      format: format,
+    );
+    _documents.add(document);
+    await _persist();
+    notifyListeners();
+    return document;
+  }
+
+  /// Adds a document from raw bytes rather than a picked file — used to
+  /// seed the bundled first-install instructions PDF, which ships as an
+  /// asset rather than something the reader picked themselves.
+  Future<LibraryDocument> importBytes({
+    required Uint8List bytes,
+    required String title,
+  }) async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final pdfsDir = Directory(p.join(docsDir.path, 'pdfs'));
+    if (!await pdfsDir.exists()) await pdfsDir.create(recursive: true);
+
+    final id = '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
+    final destPath = p.join(pdfsDir.path, '$id.pdf');
+    await File(destPath).writeAsBytes(bytes);
+
+    final document = LibraryDocument(
+      id: id,
+      title: title,
+      filePath: destPath,
+      addedAt: DateTime.now(),
+      sourceFingerprint: 'bundled_$id',
     );
     _documents.add(document);
     await _persist();
@@ -89,14 +148,48 @@ class LibraryService extends ChangeNotifier {
     String id, {
     required int lastPage,
     required int pageCount,
+    bool? reflowMode,
+    double? pdfZoom,
+    double? pdfScrollFraction,
+    double? pdfScrollFractionX,
+    double? reflowFontSize,
   }) async {
     final index = _documents.indexWhere((d) => d.id == id);
     if (index == -1) return;
     _documents[index] = _documents[index].copyWith(
       lastPage: lastPage,
       pageCount: pageCount,
+      reflowMode: reflowMode,
+      pdfZoom: pdfZoom,
+      pdfScrollFraction: pdfScrollFraction,
+      pdfScrollFractionX: pdfScrollFractionX,
+      reflowFontSize: reflowFontSize,
       lastOpenedAt: DateTime.now(),
     );
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Records the reader's own drag-to-reorder of the library list:
+  /// [orderedIds] is the full, currently-displayed list in its new order.
+  /// Assigning every one of them an explicit position (rather than just
+  /// the one that moved) keeps the whole arrangement stable — otherwise
+  /// an untouched document sorting by recency could jump back in front
+  /// of ones the reader deliberately placed around it.
+  Future<void> reorder(List<String> orderedIds) async {
+    for (var i = 0; i < orderedIds.length; i++) {
+      final index = _documents.indexWhere((d) => d.id == orderedIds[i]);
+      if (index == -1) continue;
+      _documents[index] = _documents[index].copyWith(manualOrder: i);
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> toggleStarred(String id) async {
+    final index = _documents.indexWhere((d) => d.id == id);
+    if (index == -1) return;
+    _documents[index] = _documents[index].copyWith(starred: !_documents[index].starred);
     await _persist();
     notifyListeners();
   }

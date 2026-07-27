@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/app_language.dart';
 import '../services/model_download_service.dart';
 
@@ -40,6 +41,7 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
   @override
   Widget build(BuildContext context) {
     if (_dismissed) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final names = widget.languages.map((l) => AppLanguage.byLanguage(l).displayName).join(', ');
     final downloadService = context.watch<ModelDownloadService>();
@@ -60,7 +62,7 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Скачать словарь для перевода?',
+                    l10n.suggestDownloadTitle,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: scheme.onSecondaryContainer,
                       fontWeight: FontWeight.w700,
@@ -69,9 +71,11 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                   const SizedBox(height: 4),
                   Text(
                     isDownloading
-                        ? 'Загружаем «${AppLanguage.byLanguage(downloadService.activeLanguage!).displayName}»... '
-                              '${downloadService.elapsedSeconds} с'
-                        : 'Языки: $names. Нужно скачать один раз, дальше перевод работает офлайн.',
+                        ? l10n.downloadingNamed(
+                            AppLanguage.byLanguage(downloadService.activeLanguage!).displayName,
+                            downloadService.elapsedSeconds,
+                          )
+                        : l10n.suggestDownloadBody(names),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSecondaryContainer,
                     ),
@@ -89,7 +93,7 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                   else
                     FilledButton.tonal(
                       onPressed: downloadService.isDownloading ? null : _download,
-                      child: const Text('Скачать'),
+                      child: Text(l10n.download),
                     ),
                 ],
               ),
