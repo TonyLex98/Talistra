@@ -745,6 +745,48 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'{pages} стр.'**
   String statisticsPagesShort(int pages);
+
+  /// No description provided for @readingDisplaySection.
+  ///
+  /// In ru, this message translates to:
+  /// **'Экран при чтении'**
+  String get readingDisplaySection;
+
+  /// No description provided for @readingBrightnessLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Яркость'**
+  String get readingBrightnessLabel;
+
+  /// No description provided for @readingBrightnessSystem.
+  ///
+  /// In ru, this message translates to:
+  /// **'Использовать системную яркость'**
+  String get readingBrightnessSystem;
+
+  /// No description provided for @readingBrightnessSystemValue.
+  ///
+  /// In ru, this message translates to:
+  /// **'Системная'**
+  String get readingBrightnessSystemValue;
+
+  /// No description provided for @keepScreenOnTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не гасить экран при чтении'**
+  String get keepScreenOnTitle;
+
+  /// No description provided for @keepScreenOnSubtitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ниже запаса заряда используется системный тайм-аут.'**
+  String get keepScreenOnSubtitle;
+
+  /// No description provided for @keepScreenOnBatteryLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не гасить экран выше {percent}% заряда'**
+  String keepScreenOnBatteryLabel(Object percent);
 }
 
 class _AppLocalizationsDelegate

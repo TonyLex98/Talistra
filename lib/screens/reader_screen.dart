@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -10,6 +11,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/library_service.dart';
 import '../services/page_image_cache.dart';
+import '../services/reading_display_service.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
@@ -97,6 +99,11 @@ class _ReaderScreenState extends State<ReaderScreen>
     _reflowFontSize = _document.reflowFontSize;
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);
+    unawaited(
+      context.read<ReadingDisplayService>().enter(
+        context.read<SettingsService>(),
+      ),
+    );
     _loadPreview();
     _loadDocument();
   }
@@ -141,6 +148,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     // The reader may have hidden the system bars for full-screen reading;
     // the rest of the app expects them back.
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(context.read<ReadingDisplayService>().exit());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _flushDwellTime();
     _pdfDocument?.dispose();

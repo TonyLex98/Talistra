@@ -45,6 +45,9 @@ class SettingsScreen extends StatelessWidget {
           _SectionHeader(l10n.sectionAppearance),
           const _ReadingThemeSection(),
           const SizedBox(height: 20),
+          _SectionHeader(l10n.readingDisplaySection),
+          const _ReadingDisplaySection(),
+          const SizedBox(height: 20),
           _SectionHeader(l10n.readingTypographySection),
           const _ReadingTypographySection(),
           if (settings.translatorEnabled) ...[
@@ -315,6 +318,86 @@ class _ReadingThemeSection extends StatelessWidget {
               );
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadingDisplaySection extends StatelessWidget {
+  const _ReadingDisplaySection();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final settings = context.watch<SettingsService>();
+    final brightness = settings.readingBrightness;
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.brightness_6_outlined),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  l10n.readingBrightnessLabel,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              Text(
+                brightness == null
+                    ? l10n.readingBrightnessSystemValue
+                    : '${(brightness * 100).round()}%',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.readingBrightnessSystem),
+            value: brightness == null,
+            onChanged: (useSystem) =>
+                settings.setReadingBrightness(useSystem ? null : 0.65),
+          ),
+          Slider(
+            value: brightness ?? 0.65,
+            min: 0.05,
+            max: 1,
+            divisions: 19,
+            label: '${((brightness ?? 0.65) * 100).round()}%',
+            onChanged: brightness == null
+                ? null
+                : settings.setReadingBrightness,
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.screen_lock_portrait_outlined),
+            title: Text(l10n.keepScreenOnTitle),
+            subtitle: Text(l10n.keepScreenOnSubtitle),
+            value: settings.keepScreenOnWhileReading,
+            onChanged: settings.setKeepScreenOnWhileReading,
+          ),
+          if (settings.keepScreenOnWhileReading) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.keepScreenOnBatteryLabel(settings.keepScreenOnAboveBattery),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            Slider(
+              value: settings.keepScreenOnAboveBattery.toDouble(),
+              min: 1,
+              max: 100,
+              divisions: 99,
+              label: '${settings.keepScreenOnAboveBattery}%',
+              onChanged: (value) =>
+                  settings.setKeepScreenOnAboveBattery(value.round()),
+            ),
+          ],
         ],
       ),
     );

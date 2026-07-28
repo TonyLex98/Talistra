@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/library_service.dart';
+import '../services/reading_display_service.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
@@ -60,6 +62,11 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     _pageEnteredAt = DateTime.now();
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);
+    unawaited(
+      context.read<ReadingDisplayService>().enter(
+        context.read<SettingsService>(),
+      ),
+    );
     _load();
   }
 
@@ -94,6 +101,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(context.read<ReadingDisplayService>().exit());
     _flushDwellTime();
     super.dispose();
   }

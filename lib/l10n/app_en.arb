@@ -122,4 +122,11 @@
   "durationMinutes": "{minutes}m",
   "durationSeconds": "{seconds}s",
   "statisticsPagesShort": "{pages} pages"
+  ,"readingDisplaySection": "Reading display"
+  ,"readingBrightnessLabel": "Brightness"
+  ,"readingBrightnessSystem": "Use system brightness"
+  ,"readingBrightnessSystemValue": "System"
+  ,"keepScreenOnTitle": "Keep screen on while reading"
+  ,"keepScreenOnSubtitle": "Below the battery reserve, the system timeout is used."
+  ,"keepScreenOnBatteryLabel": "Keep awake above {percent}% battery"
 }

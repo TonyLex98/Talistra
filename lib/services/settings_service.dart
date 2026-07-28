@@ -288,6 +288,9 @@ class SettingsService extends ChangeNotifier {
     this._readingFont,
     this._readingWeight,
     this._readingContrast,
+    this._readingBrightness,
+    this._keepScreenOnWhileReading,
+    this._keepScreenOnAboveBattery,
   );
 
   static const _sourceKey = 'source_language';
@@ -298,10 +301,13 @@ class SettingsService extends ChangeNotifier {
   static const _appLocaleKey = 'app_locale';
   static const _translatorEnabledKey = 'translator_enabled';
   static const _syncTranslationKey = 'sync_translation_experimental';
-  static const _instructionsSeededKey = 'instructions_seeded_v1';
+  static const _instructionsSeededKey = 'instructions_seeded_v2';
   static const _readingFontKey = 'reading_font';
   static const _readingWeightKey = 'reading_weight';
   static const _readingContrastKey = 'reading_contrast';
+  static const _readingBrightnessKey = 'reading_brightness';
+  static const _keepScreenOnKey = 'keep_screen_on_while_reading';
+  static const _keepScreenOnBatteryKey = 'keep_screen_on_above_battery';
 
   final SharedPreferences _prefs;
   TranslateLanguage _sourceLanguage;
@@ -316,6 +322,9 @@ class SettingsService extends ChangeNotifier {
   ReadingFont _readingFont;
   int _readingWeight;
   double _readingContrast;
+  double? _readingBrightness;
+  bool _keepScreenOnWhileReading;
+  int _keepScreenOnAboveBattery;
 
   /// Reading typography, applied wherever the app sets the text itself
   /// (compact mode, plain text) and, for contrast, to the PDF page image.
@@ -326,6 +335,14 @@ class SettingsService extends ChangeNotifier {
 
   /// 0..1 — extra contrast on top of the reading theme's defaults.
   double get readingContrast => _readingContrast;
+
+  /// Per-reader window brightness. Null means to use the system setting.
+  double? get readingBrightness => _readingBrightness;
+
+  /// Keeps the display awake only while reading and only above the chosen
+  /// battery reserve; below it Android's normal screen timeout takes over.
+  bool get keepScreenOnWhileReading => _keepScreenOnWhileReading;
+  int get keepScreenOnAboveBattery => _keepScreenOnAboveBattery;
 
   TranslateLanguage get sourceLanguage => _sourceLanguage;
   TranslateLanguage get targetLanguage => _targetLanguage;
@@ -373,7 +390,7 @@ class SettingsService extends ChangeNotifier {
       ),
       ReadingTheme.values.firstWhere(
         (t) => t.name == readingThemeName,
-        orElse: () => ReadingTheme.white,
+        orElse: () => ReadingTheme.sepia,
       ),
       prefs.getString(_lastDocumentKey),
       Locale(prefs.getString(_appLocaleKey) ?? 'ru'),
@@ -384,8 +401,11 @@ class SettingsService extends ChangeNotifier {
         (f) => f.name == prefs.getString(_readingFontKey),
         orElse: () => ReadingFont.literata,
       ),
-      prefs.getInt(_readingWeightKey) ?? 425,
+      prefs.getInt(_readingWeightKey) ?? 550,
       prefs.getDouble(_readingContrastKey) ?? 1.0,
+      prefs.getDouble(_readingBrightnessKey) ?? 0.65,
+      prefs.getBool(_keepScreenOnKey) ?? false,
+      prefs.getInt(_keepScreenOnBatteryKey) ?? 20,
     );
   }
 
@@ -453,6 +473,33 @@ class SettingsService extends ChangeNotifier {
     if (clamped == _readingContrast) return;
     _readingContrast = clamped;
     await _prefs.setDouble(_readingContrastKey, clamped);
+    notifyListeners();
+  }
+
+  Future<void> setReadingBrightness(double? brightness) async {
+    final clamped = brightness?.clamp(0.05, 1.0).toDouble();
+    if (clamped == _readingBrightness) return;
+    _readingBrightness = clamped;
+    if (clamped == null) {
+      await _prefs.remove(_readingBrightnessKey);
+    } else {
+      await _prefs.setDouble(_readingBrightnessKey, clamped);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setKeepScreenOnWhileReading(bool enabled) async {
+    if (enabled == _keepScreenOnWhileReading) return;
+    _keepScreenOnWhileReading = enabled;
+    await _prefs.setBool(_keepScreenOnKey, enabled);
+    notifyListeners();
+  }
+
+  Future<void> setKeepScreenOnAboveBattery(int percent) async {
+    final clamped = percent.clamp(1, 100).toInt();
+    if (clamped == _keepScreenOnAboveBattery) return;
+    _keepScreenOnAboveBattery = clamped;
+    await _prefs.setInt(_keepScreenOnBatteryKey, clamped);
     notifyListeners();
   }
 

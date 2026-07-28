@@ -376,4 +376,28 @@ class AppLocalizationsRu extends AppLocalizations {
   String statisticsPagesShort(int pages) {
     return '$pages стр.';
   }
+
+  @override
+  String get readingDisplaySection => 'Экран при чтении';
+
+  @override
+  String get readingBrightnessLabel => 'Яркость';
+
+  @override
+  String get readingBrightnessSystem => 'Использовать системную яркость';
+
+  @override
+  String get readingBrightnessSystemValue => 'Системная';
+
+  @override
+  String get keepScreenOnTitle => 'Не гасить экран при чтении';
+
+  @override
+  String get keepScreenOnSubtitle =>
+      'Ниже запаса заряда используется системный тайм-аут.';
+
+  @override
+  String keepScreenOnBatteryLabel(Object percent) {
+    return 'Не гасить экран выше $percent% заряда';
+  }
 }

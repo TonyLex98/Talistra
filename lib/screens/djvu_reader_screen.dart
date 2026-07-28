@@ -10,6 +10,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/djvu_service.dart';
 import '../services/library_service.dart';
+import '../services/reading_display_service.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
@@ -88,6 +89,11 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     _pageEnteredAt = DateTime.now();
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);
+    unawaited(
+      context.read<ReadingDisplayService>().enter(
+        context.read<SettingsService>(),
+      ),
+    );
     _open();
   }
 
@@ -179,6 +185,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(context.read<ReadingDisplayService>().exit());
     _flushDwellTime();
     final document = _djvu;
     if (document != null) unawaited(document.close());

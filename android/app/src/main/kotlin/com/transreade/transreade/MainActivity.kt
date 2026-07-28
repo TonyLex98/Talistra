@@ -1,11 +1,14 @@
 package com.transreade.transreade
 
 import android.content.Intent
+import android.content.Context
+import android.os.BatteryManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -27,6 +30,7 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val INCOMING_CHANNEL = "transread/incoming_file"
         const val DJVU_CHANNEL = "litra/djvu"
+        const val READING_DISPLAY_CHANNEL = "litra/reading_display"
     }
 
     private var channel: MethodChannel? = null
@@ -110,6 +114,32 @@ class MainActivity : FlutterActivity() {
                                 null
                             }
                         }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, READING_DISPLAY_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setBrightness" -> {
+                        val brightness = (call.argument<Number>("brightness"))?.toFloat()
+                        val params = window.attributes
+                        params.screenBrightness = brightness?.coerceIn(0.05f, 1.0f)
+                            ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        window.attributes = params
+                        result.success(null)
+                    }
+                    "setKeepScreenOn" -> {
+                        if (call.argument<Boolean>("enabled") == true) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                        result.success(null)
+                    }
+                    "batteryPercent" -> {
+                        val manager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+                        result.success(manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY))
                     }
                     else -> result.notImplemented()
                 }

@@ -161,4 +161,11 @@
   "@statisticsPagesShort": {
     "placeholders": { "pages": {"type": "int"} }
   }
+  ,"readingDisplaySection": "Экран при чтении"
+  ,"readingBrightnessLabel": "Яркость"
+  ,"readingBrightnessSystem": "Использовать системную яркость"
+  ,"readingBrightnessSystemValue": "Системная"
+  ,"keepScreenOnTitle": "Не гасить экран при чтении"
+  ,"keepScreenOnSubtitle": "Ниже запаса заряда используется системный тайм-аут."
+  ,"keepScreenOnBatteryLabel": "Не гасить экран выше {percent}% заряда"
 }

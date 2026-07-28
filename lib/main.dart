@@ -9,6 +9,7 @@ import 'screens/home_screen.dart';
 import 'services/library_service.dart';
 import 'services/model_download_service.dart';
 import 'services/page_image_cache.dart';
+import 'services/reading_display_service.dart';
 import 'services/settings_service.dart';
 import 'services/statistics_service.dart';
 import 'services/translation_service.dart';
@@ -28,6 +29,7 @@ void main() async {
   final thumbnailCache = await ThumbnailCache.create();
   final previewCache = await PagePreviewCache.create();
   final statistics = await StatisticsService.load(prefs);
+  final readingDisplay = ReadingDisplayService();
 
   if (!settings.instructionsSeeded) {
     await _seedInstructionsPdf(settings, library);
@@ -40,16 +42,15 @@ void main() async {
       thumbnailCache: thumbnailCache,
       previewCache: previewCache,
       statistics: statistics,
+      readingDisplay: readingDisplay,
     ),
   );
 }
 
-// Adds the bundled user-guide PDF to the library exactly once, right after
-// a fresh install — never again after that, even across later app updates
-// or if the reader deletes it. Failure here (e.g. the asset is somehow
-// missing) must never block app startup, so it's swallowed silently; the
-// flag is only marked seeded on success, so a failed attempt can still be
-// retried on the next cold start.
+// Adds the bundled user-guide PDF once for each guide version. A later guide
+// migration replaces only the older bundled copy, never a reader-imported
+// document. Failure here must never block startup; the flag is marked only
+// after success so a failed attempt is retried on the next cold start.
 Future<void> _seedInstructionsPdf(
   SettingsService settings,
   LibraryService library,
@@ -65,7 +66,19 @@ Future<void> _seedInstructionsPdf(
     final title = settings.appLocale.languageCode == 'ru'
         ? 'Инструкция — как пользоваться Litra'
         : 'Litra — User Guide';
-    await library.importBytes(bytes: bytes, title: title);
+    // Replace only a previous bundled guide after an app update. A document
+    // imported by the reader is never removed here.
+    for (final document in library.documents) {
+      if (document.sourceFingerprint.startsWith('bundled_') &&
+          document.title.contains('Litra')) {
+        await library.remove(document.id);
+      }
+    }
+    await library.importBytes(
+      bytes: bytes,
+      title: title,
+      sourceFingerprint: 'bundled_litra_guide_v2',
+    );
     await settings.markInstructionsSeeded();
   } catch (error, stack) {
     debugPrint('Failed to seed instructions PDF: $error\n$stack');
@@ -80,6 +93,7 @@ class TransReadeApp extends StatelessWidget {
     required this.thumbnailCache,
     required this.previewCache,
     required this.statistics,
+    required this.readingDisplay,
   });
 
   final SettingsService settings;
@@ -87,6 +101,7 @@ class TransReadeApp extends StatelessWidget {
   final ThumbnailCache thumbnailCache;
   final PagePreviewCache previewCache;
   final StatisticsService statistics;
+  final ReadingDisplayService readingDisplay;
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +112,10 @@ class TransReadeApp extends StatelessWidget {
         Provider<ThumbnailCache>.value(value: thumbnailCache),
         Provider<PagePreviewCache>.value(value: previewCache),
         ChangeNotifierProvider<StatisticsService>.value(value: statistics),
+        Provider<ReadingDisplayService>(
+          create: (_) => readingDisplay,
+          dispose: (_, service) => service.dispose(),
+        ),
         Provider<TranslationService>(
           create: (_) => TranslationService(),
           dispose: (_, service) => service.dispose(),

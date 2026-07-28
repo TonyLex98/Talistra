@@ -373,4 +373,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String statisticsPagesShort(int pages) {
     return '$pages pages';
   }
+
+  @override
+  String get readingDisplaySection => 'Reading display';
+
+  @override
+  String get readingBrightnessLabel => 'Brightness';
+
+  @override
+  String get readingBrightnessSystem => 'Use system brightness';
+
+  @override
+  String get readingBrightnessSystemValue => 'System';
+
+  @override
+  String get keepScreenOnTitle => 'Keep screen on while reading';
+
+  @override
+  String get keepScreenOnSubtitle =>
+      'Below the battery reserve, the system timeout is used.';
+
+  @override
+  String keepScreenOnBatteryLabel(Object percent) {
+    return 'Keep awake above $percent% battery';
+  }
 }

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transreade/main.dart';
 import 'package:transreade/services/library_service.dart';
 import 'package:transreade/services/page_image_cache.dart';
+import 'package:transreade/services/reading_display_service.dart';
 import 'package:transreade/services/settings_service.dart';
 import 'package:transreade/services/statistics_service.dart';
 
@@ -62,6 +63,7 @@ void main() {
         thumbnailCache: thumbnailCache,
         previewCache: previewCache,
         statistics: statistics,
+        readingDisplay: ReadingDisplayService(),
       ),
     );
     await tester.pumpAndSettle();
