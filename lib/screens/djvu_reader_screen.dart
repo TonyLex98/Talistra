@@ -16,6 +16,7 @@ import '../services/translation_service.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/sentence_finder.dart';
 import '../widgets/language_picker_sheet.dart';
+import '../widgets/djvu_page_stack_view.dart';
 import '../widgets/translation_panel.dart';
 import '../widgets/txt_page_view.dart';
 
@@ -59,9 +60,8 @@ class DjvuReaderScreen extends StatefulWidget {
 class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     with WidgetsBindingObserver {
   late final LibraryDocument _document;
-  late final PageController _pageController;
   final _textPageViewKey = GlobalKey<TxtPageViewState>();
-  final Map<int, GlobalKey<_DjvuPageState>> _originalPageKeys = {};
+  final _originalStackKey = GlobalKey<DjvuPageStackViewState>();
 
   DjvuDocument? _djvu;
   String? _error;
@@ -70,7 +70,6 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   double _fontSize = 17;
   bool _textLoading = false;
   List<List<ReflowBlock>>? _textPages;
-  bool _originalZoomed = false;
   String? _selectedWord;
   SentenceMatch? _selectedSentence;
   DateTime? _pageEnteredAt;
@@ -86,7 +85,6 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     );
     _currentPage = math.max(1, _document.lastPage);
     _fontSize = _document.reflowFontSize;
-    _pageController = PageController(initialPage: _currentPage - 1);
     _pageEnteredAt = DateTime.now();
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);
@@ -107,10 +105,6 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
         _currentPage = restoredPage;
         _textLoading = true;
       });
-      if (_pageController.hasClients &&
-          _pageController.page?.round() != restoredPage - 1) {
-        _pageController.jumpToPage(restoredPage - 1);
-      }
       unawaited(
         context.read<LibraryService>().updateProgress(
           widget.documentId,
@@ -186,7 +180,6 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _flushDwellTime();
-    _pageController.dispose();
     final document = _djvu;
     if (document != null) unawaited(document.close());
     super.dispose();
@@ -236,41 +229,8 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     );
   }
 
-  void _turnOriginalPage(int direction) {
-    final document = _djvu;
-    if (document == null || !_pageController.hasClients) return;
-    final target = (_currentPage - 1 + direction).clamp(
-      0,
-      document.pageCount - 1,
-    );
-    if (target == _currentPage - 1) return;
-    unawaited(
-      _pageController.animateToPage(
-        target,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-      ),
-    );
-  }
-
   void _changeOriginalZoom(double delta) {
-    _originalPageKeys[_currentPage - 1]?.currentState?.changeZoom(delta);
-  }
-
-  void _onOriginalWordSelected(DjvuWord word) {
-    final pages = _textPages;
-    final pageText = pages != null && _currentPage - 1 < pages.length
-        ? pages[_currentPage - 1]
-              .map((block) => block.text)
-              .where((text) => text.isNotEmpty)
-              .join(' ')
-        : '';
-    setState(() {
-      _selectedWord = word.text;
-      _selectedSentence = pageText.isEmpty
-          ? null
-          : findSentenceInText(pageText, word.text);
-    });
+    _originalStackKey.currentState?.changeZoom(delta);
   }
 
   Future<void> _jumpToPage() async {
@@ -309,11 +269,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
       _textPageViewKey.currentState?.jumpToPage(target);
       _onPageChanged(target - 1);
     } else {
-      await _pageController.animateToPage(
-        target - 1,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-      );
+      _originalStackKey.currentState?.jumpToPage(target);
     }
   }
 
@@ -342,15 +298,9 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
         _selectedWord = null;
         _selectedSentence = null;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_pageController.hasClients) {
-          _pageController.jumpToPage(_currentPage - 1);
-        }
-      });
     } else if (pages != null && pages.any((page) => page.isNotEmpty)) {
       setState(() {
         _reflowMode = true;
-        _originalZoomed = false;
         _selectedWord = null;
         _selectedSentence = null;
       });
@@ -548,36 +498,17 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
         onPageChanged: (page) => _onPageChanged(page - 1),
       );
     }
-    return PageView.builder(
-      controller: _pageController,
-      itemCount: document.pageCount,
-      allowImplicitScrolling: true,
-      // Page turns are driven by the page child after it knows whether the
-      // image is zoomed. This prevents the parent PageView from stealing a
-      // horizontal pan that should move a magnified scan.
-      physics: const NeverScrollableScrollPhysics(),
-      onPageChanged: _onPageChanged,
-      itemBuilder: (context, index) => _DjvuPage(
-        key: _originalPageKeys.putIfAbsent(
-          index,
-          () => GlobalKey<_DjvuPageState>(),
-        ),
-        document: document,
-        pageIndex: index,
-        background: settings.readingTheme.background,
-        imageFilter: settings.readingTheme.pageImageFilter(
-          contrast: settings.readingContrast,
-          weight: settings.readingWeight,
-        ),
-        translatorEnabled: settings.translatorEnabled,
-        onWordSelected: _onOriginalWordSelected,
-        onPageTurn: _turnOriginalPage,
-        onZoomChanged: (zoomed) {
-          if (_originalZoomed != zoomed && mounted) {
-            setState(() => _originalZoomed = zoomed);
-          }
-        },
+    return DjvuPageStackView(
+      key: _originalStackKey,
+      document: document,
+      initialPage: _currentPage,
+      background: settings.readingTheme.background,
+      imageFilter: settings.readingTheme.pageImageFilter(
+        contrast: settings.readingContrast,
+        weight: settings.readingWeight,
       ),
+      onPageChanged: (page) => _onPageChanged(page - 1),
+      onZoomChanged: (_) {},
     );
   }
 
@@ -757,8 +688,8 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   }
 }
 
-class _DjvuPage extends StatefulWidget {
-  const _DjvuPage({
+class DjvuPageLegacy extends StatefulWidget {
+  const DjvuPageLegacy({
     super.key,
     required this.document,
     required this.pageIndex,
@@ -780,10 +711,10 @@ class _DjvuPage extends StatefulWidget {
   final ValueChanged<bool> onZoomChanged;
 
   @override
-  State<_DjvuPage> createState() => _DjvuPageState();
+  State<DjvuPageLegacy> createState() => _DjvuPageState();
 }
 
-class _DjvuPageState extends State<_DjvuPage> {
+class _DjvuPageState extends State<DjvuPageLegacy> {
   late final Future<DjvuPageInfo> _info = widget.document.pageInfo(
     widget.pageIndex,
   );
