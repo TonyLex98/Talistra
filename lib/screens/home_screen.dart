@@ -127,21 +127,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _missingModels = missing);
   }
 
-  /// Formats offered in the picker. PDF keeps its page-image reader; the
-  /// rest are reflowable text formats and open in the paginated text
-  /// reader (see [extractEbookParagraphs]).
-  ///
-  static const _supportedExtensions = [
-    'pdf',
-    'txt',
-    'epub',
-    'fb2',
-    'rtf',
-    'docx',
-    'djvu',
-    'djv',
-    'zip',
-  ];
+  /// PDF keeps its page-image reader; the rest are reflowable text formats
+  /// and open in the paginated text reader (see [extractEbookParagraphs]).
   static const _bookExtensions = {
     'pdf',
     'txt',
@@ -155,8 +142,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _importFile() async {
     final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: _supportedExtensions,
+      // Android's document picker maps custom extensions to MIME types.
+      // DjVu/DJV are missing from that mapping on some devices, so valid
+      // books disappear from the picker. Keep the picker permissive and let
+      // our signature-aware importer validate the selected document instead.
+      type: FileType.any,
       withData: false,
     );
     final picked = result?.files.single;

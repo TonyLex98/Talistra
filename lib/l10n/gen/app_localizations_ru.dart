@@ -110,6 +110,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get originalPdf => 'Оригинал PDF';
 
   @override
+  String get originalDocument => 'Оригинал';
+
+  @override
+  String get zoomOut => 'Уменьшить';
+
+  @override
+  String get zoomIn => 'Увеличить';
+
+  @override
   String get adaptToPhone => 'Адаптировать под телефон';
 
   @override

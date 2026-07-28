@@ -93,6 +93,11 @@ class MainActivity : FlutterActivity() {
                             DjvuNative.pageText(handle, page)
                         }
                     }
+                    "pageWords" -> withDjvuPageArguments(call.arguments, result) {
+                        handle, page -> runDjvu(result) {
+                            DjvuNative.pageWords(handle, page)
+                        }
+                    }
                     "close" -> {
                         @Suppress("UNCHECKED_CAST")
                         val args = call.arguments as? Map<String, Any?>

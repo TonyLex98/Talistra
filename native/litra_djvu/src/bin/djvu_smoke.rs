@@ -1,6 +1,12 @@
 use std::path::Path;
 
 use djvu_rs::Document;
+use djvu_rs::text::{TextZone, TextZoneKind};
+
+fn count_words(zone: &TextZone) -> usize {
+    usize::from(zone.kind == TextZoneKind::Word && !zone.text.trim().is_empty())
+        + zone.children.iter().map(count_words).sum::<usize>()
+}
 
 fn main() {
     let paths: Vec<_> = std::env::args_os().skip(1).collect();
@@ -8,6 +14,7 @@ fn main() {
     for path in paths {
         let document = Document::open(&path).expect("open DjVu");
         assert!(document.page_count() > 0, "DjVu must contain pages");
+        let mut word_count = 0;
         let indices = [0, document.page_count() - 1];
         for index in indices {
             let page = document.page(index).expect("read page");
@@ -26,12 +33,15 @@ fn main() {
                 (width * height * 4) as usize,
                 "RGBA buffer size",
             );
-            let _ = page.text().expect("decode optional text layer");
+            if let Some(layer) = page.text_layer().expect("decode optional text layer") {
+                word_count += layer.zones.iter().map(count_words).sum::<usize>();
+            }
         }
         println!(
-            "{}: {} pages, first and last rendered",
+            "{}: {} pages, first and last rendered, {} positioned words",
             Path::new(&path).display(),
             document.page_count(),
+            word_count,
         );
     }
 }

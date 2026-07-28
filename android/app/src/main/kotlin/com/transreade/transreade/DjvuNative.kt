@@ -21,5 +21,6 @@ object DjvuNative {
         height: Int,
     ): ByteArray
     external fun pageText(handle: Long, pageIndex: Int): String?
+    external fun pageWords(handle: Long, pageIndex: Int): String
     external fun close(handle: Long)
 }

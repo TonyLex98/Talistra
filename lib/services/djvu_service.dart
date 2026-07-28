@@ -14,6 +14,13 @@ class DjvuPageInfo {
   double get aspectRatio => width <= 0 || height <= 0 ? 1 : width / height;
 }
 
+class DjvuWord {
+  const DjvuWord({required this.text, required this.bounds});
+
+  final String text;
+  final Rect bounds;
+}
+
 /// Thin asynchronous client for Litra's native MIT DjVu codec.
 ///
 /// The Android side performs parsing and rendering on worker threads. Keeping
@@ -87,6 +94,29 @@ class DjvuDocument {
       'handle': _handle,
       'page': pageIndex,
     });
+  }
+
+  Future<List<DjvuWord>> pageWords(int pageIndex) async {
+    _ensureOpen();
+    final encoded =
+        await _channel.invokeMethod<String>('pageWords', {
+          'handle': _handle,
+          'page': pageIndex,
+        }) ??
+        '';
+    if (encoded.isEmpty) return const [];
+    return [
+      for (final record in encoded.split('\u001e'))
+        if (record.split('\u001f') case final fields when fields.length >= 5)
+          if (double.tryParse(fields[0]) case final x?)
+            if (double.tryParse(fields[1]) case final y?)
+              if (double.tryParse(fields[2]) case final width?)
+                if (double.tryParse(fields[3]) case final height?)
+                  DjvuWord(
+                    text: fields.sublist(4).join('\u001f'),
+                    bounds: Rect.fromLTWH(x, y, width, height),
+                  ),
+    ];
   }
 
   Future<void> close() async {

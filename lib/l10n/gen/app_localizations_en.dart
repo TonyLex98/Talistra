@@ -109,6 +109,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get originalPdf => 'Original PDF';
 
   @override
+  String get originalDocument => 'Original';
+
+  @override
+  String get zoomOut => 'Zoom out';
+
+  @override
+  String get zoomIn => 'Zoom in';
+
+  @override
   String get adaptToPhone => 'Adapt for phone';
 
   @override

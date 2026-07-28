@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 
+use djvu_rs::text::{TextZone, TextZoneKind};
 use djvu_rs::{Document, Pixmap};
+use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jbyteArray, jint, jintArray, jlong, jlongArray, jstring};
-use jni::JNIEnv;
 
 static NEXT_HANDLE: AtomicI64 = AtomicI64::new(1);
 static DOCUMENTS: LazyLock<Mutex<HashMap<i64, Arc<Document>>>> =
@@ -50,6 +51,41 @@ fn encode_png(pixmap: Pixmap) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
+fn append_word_zones(zone: &TextZone, output: &mut String) {
+    if zone.kind == TextZoneKind::Word && !zone.text.trim().is_empty() {
+        let clean_text: String = zone
+            .text
+            .chars()
+            .map(|character| {
+                if character.is_control() {
+                    ' '
+                } else {
+                    character
+                }
+            })
+            .collect::<String>()
+            .trim()
+            .to_owned();
+        if !clean_text.is_empty() {
+            if !output.is_empty() {
+                output.push('\u{001e}');
+            }
+            output.push_str(&zone.rect.x.to_string());
+            output.push('\u{001f}');
+            output.push_str(&zone.rect.y.to_string());
+            output.push('\u{001f}');
+            output.push_str(&zone.rect.width.to_string());
+            output.push('\u{001f}');
+            output.push_str(&zone.rect.height.to_string());
+            output.push('\u{001f}');
+            output.push_str(&clean_text);
+        }
+    }
+    for child in &zone.children {
+        append_word_zones(child, output);
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_transreade_transreade_DjvuNative_open(
     mut env: JNIEnv,
@@ -57,10 +93,7 @@ pub extern "system" fn Java_com_transreade_transreade_DjvuNative_open(
     path: JString,
 ) -> jlongArray {
     let result = guarded(|| -> Result<[jlong; 2], String> {
-        let path: String = env
-            .get_string(&path)
-            .map_err(|e| e.to_string())?
-            .into();
+        let path: String = env.get_string(&path).map_err(|e| e.to_string())?.into();
         let document = Arc::new(Document::open(path).map_err(|e| e.to_string())?);
         let pages = document.page_count();
         if pages == 0 {
@@ -197,6 +230,43 @@ pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageText(
             }
         },
         Ok(None) => std::ptr::null_mut(),
+        Err(error) => {
+            throw(&mut env, error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageWords(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    page_index: jint,
+) -> jstring {
+    let result = guarded(|| -> Result<String, String> {
+        let document = document(handle)?;
+        let page = document
+            .page(page_index.max(0) as usize)
+            .map_err(|e| e.to_string())?;
+        let Some(layer) = page.text_layer().map_err(|e| e.to_string())? else {
+            return Ok(String::new());
+        };
+        let mut output = String::new();
+        for zone in &layer.zones {
+            append_word_zones(zone, &mut output);
+        }
+        Ok(output)
+    });
+
+    match result {
+        Ok(words) => match env.new_string(words) {
+            Ok(value) => value.into_raw(),
+            Err(error) => {
+                throw(&mut env, error);
+                std::ptr::null_mut()
+            }
+        },
         Err(error) => {
             throw(&mut env, error);
             std::ptr::null_mut()

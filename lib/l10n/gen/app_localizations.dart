@@ -272,6 +272,24 @@ abstract class AppLocalizations {
   /// **'Оригинал PDF'**
   String get originalPdf;
 
+  /// No description provided for @originalDocument.
+  ///
+  /// In ru, this message translates to:
+  /// **'Оригинал'**
+  String get originalDocument;
+
+  /// No description provided for @zoomOut.
+  ///
+  /// In ru, this message translates to:
+  /// **'Уменьшить'**
+  String get zoomOut;
+
+  /// No description provided for @zoomIn.
+  ///
+  /// In ru, this message translates to:
+  /// **'Увеличить'**
+  String get zoomIn;
+
   /// No description provided for @adaptToPhone.
   ///
   /// In ru, this message translates to:
