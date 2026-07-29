@@ -98,7 +98,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def send_file(self, path):
+    def send_file(self, path, include_body=True):
         try:
             data = path.read_bytes()
         except FileNotFoundError:
@@ -110,7 +110,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "public, max-age=86400" if "/assets/" in str(path) else "no-cache")
         self.end_headers()
-        self.wfile.write(data)
+        if include_body:
+            self.wfile.write(data)
 
     def origin_allowed(self):
         origin = self.headers.get("Origin")
@@ -155,6 +156,29 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         self.send_file(target)
+
+    def do_HEAD(self):
+        path = unquote(urlparse(self.path).path)
+        if path == "/api/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", "16")
+            self.end_headers()
+            return
+        if path == ADMIN_PATH:
+            self.send_file(ROOT / "admin.html", include_body=False)
+            return
+        if path == ADMIN_PATH + "admin.js":
+            self.send_file(ROOT / "admin.js", include_body=False)
+            return
+        relative = path.lstrip("/") or "index.html"
+        if relative.endswith("/"):
+            relative += "index.html"
+        target = (PUBLIC / relative).resolve()
+        if PUBLIC not in target.parents and target != PUBLIC:
+            self.send_error(403)
+            return
+        self.send_file(target, include_body=False)
 
     def do_POST(self):
         path = unquote(urlparse(self.path).path)
