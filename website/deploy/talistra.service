@@ -1,0 +1,21 @@
+[Unit]
+Description=Talistra website and feedback service
+After=network.target
+
+[Service]
+Type=simple
+User=talistra
+Group=talistra
+WorkingDirectory=/opt/talistra
+EnvironmentFile=/etc/talistra.env
+ExecStart=/usr/bin/python3 /opt/talistra/server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/talistra
+
+[Install]
+WantedBy=multi-user.target

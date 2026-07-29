@@ -338,6 +338,114 @@ abstract class AppLocalizations {
   /// **'Настройки'**
   String get settingsScreenTitle;
 
+  /// No description provided for @supportSectionTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Связь и поддержка'**
+  String get supportSectionTitle;
+
+  /// No description provided for @feedbackTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Обратная связь'**
+  String get feedbackTitle;
+
+  /// No description provided for @feedbackTileSubtitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Предложить идею или рассказать о проблеме'**
+  String get feedbackTileSubtitle;
+
+  /// No description provided for @websiteTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сайт Talistra'**
+  String get websiteTitle;
+
+  /// No description provided for @feedbackIntro.
+  ///
+  /// In ru, this message translates to:
+  /// **'Расскажите, что можно сделать удобнее. Сообщение попадёт напрямую команде Talistra.'**
+  String get feedbackIntro;
+
+  /// No description provided for @feedbackNameLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Как к вам обращаться'**
+  String get feedbackNameLabel;
+
+  /// No description provided for @feedbackOptionalHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Необязательно'**
+  String get feedbackOptionalHint;
+
+  /// No description provided for @feedbackContactLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Контакт для ответа'**
+  String get feedbackContactLabel;
+
+  /// No description provided for @feedbackContactHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Email или Telegram, необязательно'**
+  String get feedbackContactHint;
+
+  /// No description provided for @feedbackMessageLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ваше сообщение'**
+  String get feedbackMessageLabel;
+
+  /// No description provided for @feedbackMessageHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Например: добавьте закладки с заметками…'**
+  String get feedbackMessageHint;
+
+  /// No description provided for @feedbackMessageValidation.
+  ///
+  /// In ru, this message translates to:
+  /// **'Напишите хотя бы 10 символов'**
+  String get feedbackMessageValidation;
+
+  /// No description provided for @feedbackPrivacyNote.
+  ///
+  /// In ru, this message translates to:
+  /// **'Имя и контакт необязательны. Сообщение отправляется только после нажатия кнопки и используется для ответа и развития Talistra.'**
+  String get feedbackPrivacyNote;
+
+  /// No description provided for @feedbackSend.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отправить сообщение'**
+  String get feedbackSend;
+
+  /// No description provided for @feedbackSending.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отправляем…'**
+  String get feedbackSending;
+
+  /// No description provided for @feedbackSent.
+  ///
+  /// In ru, this message translates to:
+  /// **'Спасибо! Сообщение отправлено.'**
+  String get feedbackSent;
+
+  /// No description provided for @feedbackNoConnection.
+  ///
+  /// In ru, this message translates to:
+  /// **'Нет соединения с сервером Talistra'**
+  String get feedbackNoConnection;
+
+  /// No description provided for @feedbackSendError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось отправить сообщение'**
+  String get feedbackSendError;
+
   /// No description provided for @sectionTranslation.
   ///
   /// In ru, this message translates to:

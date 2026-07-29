@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/app_language.dart';
@@ -9,6 +10,7 @@ import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../utils/reading_text_style.dart';
 import '../widgets/language_picker_sheet.dart';
+import 'feedback_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -55,6 +57,9 @@ class SettingsScreen extends StatelessWidget {
             _SectionHeader(l10n.syncTranslationSectionTitle),
             const _SyncTranslationSection(),
           ],
+          const Divider(height: 32),
+          _SectionHeader(l10n.supportSectionTitle),
+          const _SupportSection(),
           const Divider(height: 32),
           _SectionHeader(l10n.sectionAbout),
           const _AboutSection(),
@@ -550,6 +555,39 @@ class _AboutSection extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Text(AppLocalizations.of(context).aboutText),
+    );
+  }
+}
+
+class _SupportSection extends StatelessWidget {
+  const _SupportSection();
+
+  static final _site = Uri.https('talistra.ru');
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+          leading: const Icon(Icons.forum_outlined),
+          title: Text(l10n.feedbackTitle),
+          subtitle: Text(l10n.feedbackTileSubtitle),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const FeedbackScreen())),
+        ),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+          leading: const Icon(Icons.language),
+          title: Text(l10n.websiteTitle),
+          subtitle: const Text('talistra.ru'),
+          trailing: const Icon(Icons.open_in_new, size: 20),
+          onTap: () => launchUrl(_site, mode: LaunchMode.externalApplication),
+        ),
+      ],
     );
   }
 }

@@ -142,6 +142,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsScreenTitle => 'Settings';
 
   @override
+  String get supportSectionTitle => 'Help and support';
+
+  @override
+  String get feedbackTitle => 'Feedback';
+
+  @override
+  String get feedbackTileSubtitle => 'Share an idea or report a problem';
+
+  @override
+  String get websiteTitle => 'Talistra website';
+
+  @override
+  String get feedbackIntro =>
+      'Tell us what could work better. Your message goes directly to the Talistra team.';
+
+  @override
+  String get feedbackNameLabel => 'Your name';
+
+  @override
+  String get feedbackOptionalHint => 'Optional';
+
+  @override
+  String get feedbackContactLabel => 'Contact for a reply';
+
+  @override
+  String get feedbackContactHint => 'Email or Telegram, optional';
+
+  @override
+  String get feedbackMessageLabel => 'Your message';
+
+  @override
+  String get feedbackMessageHint =>
+      'For example: please add bookmarks with notes…';
+
+  @override
+  String get feedbackMessageValidation => 'Please enter at least 10 characters';
+
+  @override
+  String get feedbackPrivacyNote =>
+      'Your name and contact are optional. The message is sent only when you tap the button and is used to reply and improve Talistra.';
+
+  @override
+  String get feedbackSend => 'Send message';
+
+  @override
+  String get feedbackSending => 'Sending…';
+
+  @override
+  String get feedbackSent => 'Thank you! Your message has been sent.';
+
+  @override
+  String get feedbackNoConnection => 'Cannot connect to the Talistra server';
+
+  @override
+  String get feedbackSendError => 'Could not send the message';
+
+  @override
   String get sectionTranslation => 'Translation';
 
   @override

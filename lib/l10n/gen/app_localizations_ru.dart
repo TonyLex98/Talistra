@@ -143,6 +143,63 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsScreenTitle => 'Настройки';
 
   @override
+  String get supportSectionTitle => 'Связь и поддержка';
+
+  @override
+  String get feedbackTitle => 'Обратная связь';
+
+  @override
+  String get feedbackTileSubtitle =>
+      'Предложить идею или рассказать о проблеме';
+
+  @override
+  String get websiteTitle => 'Сайт Talistra';
+
+  @override
+  String get feedbackIntro =>
+      'Расскажите, что можно сделать удобнее. Сообщение попадёт напрямую команде Talistra.';
+
+  @override
+  String get feedbackNameLabel => 'Как к вам обращаться';
+
+  @override
+  String get feedbackOptionalHint => 'Необязательно';
+
+  @override
+  String get feedbackContactLabel => 'Контакт для ответа';
+
+  @override
+  String get feedbackContactHint => 'Email или Telegram, необязательно';
+
+  @override
+  String get feedbackMessageLabel => 'Ваше сообщение';
+
+  @override
+  String get feedbackMessageHint => 'Например: добавьте закладки с заметками…';
+
+  @override
+  String get feedbackMessageValidation => 'Напишите хотя бы 10 символов';
+
+  @override
+  String get feedbackPrivacyNote =>
+      'Имя и контакт необязательны. Сообщение отправляется только после нажатия кнопки и используется для ответа и развития Talistra.';
+
+  @override
+  String get feedbackSend => 'Отправить сообщение';
+
+  @override
+  String get feedbackSending => 'Отправляем…';
+
+  @override
+  String get feedbackSent => 'Спасибо! Сообщение отправлено.';
+
+  @override
+  String get feedbackNoConnection => 'Нет соединения с сервером Talistra';
+
+  @override
+  String get feedbackSendError => 'Не удалось отправить сообщение';
+
+  @override
   String get sectionTranslation => 'Перевод';
 
   @override
