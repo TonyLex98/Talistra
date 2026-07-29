@@ -45,7 +45,6 @@ dependencies:
   path: ^1.9.1
   syncfusion_flutter_pdf: ^33.2.13
   pdfx: ^2.9.2
-  google_mobile_ads: ^5.3.1
   # EPUB and DOCX are zip containers; FB2/DOCX/EPUB metadata is XML.
   archive: ^3.6.1
   xml: ^6.5.0

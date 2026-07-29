@@ -12,7 +12,6 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
-import '../services/ads_service.dart';
 import '../services/djvu_service.dart';
 import '../services/incoming_file_service.dart';
 import '../services/library_service.dart';
@@ -376,7 +375,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       // Shown only here on the library screen — never inside the reader —
       // so reading itself always stays uninterrupted by ads.
-      bottomNavigationBar: const LibraryBannerAd(),
     );
   }
 
