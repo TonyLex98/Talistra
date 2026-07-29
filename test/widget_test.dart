@@ -57,7 +57,7 @@ void main() {
     });
 
     await tester.pumpWidget(
-      TransReadeApp(
+      TalistraApp(
         settings: settings,
         library: library,
         thumbnailCache: thumbnailCache,
@@ -68,7 +68,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Litra'), findsOneWidget);
+    expect(find.text('Talistra'), findsOneWidget);
     expect(find.text('Ваша библиотека пуста'), findsOneWidget);
   });
 }

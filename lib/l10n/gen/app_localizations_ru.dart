@@ -16,7 +16,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Litra сама выберет подходящий режим чтения.';
+      'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Talistra сама выберет подходящий режим чтения.';
 
   @override
   String get importingLabel => 'Добавление...';
@@ -32,7 +32,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get unsupportedDocumentFormat =>
-      'Litra не смогла распознать или открыть формат этого файла.';
+      'Talistra не смогла распознать или открыть формат этого файла.';
 
   @override
   String pageProgress(int page, int total) {
@@ -218,7 +218,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get aboutText =>
-      'Litra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.';
+      'Talistra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.';
 
   @override
   String get suggestDownloadTitle => 'Скачать словарь для перевода?';

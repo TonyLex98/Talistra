@@ -3,12 +3,12 @@
 
   "settingsTooltip": "Settings",
   "emptyLibraryTitle": "Your library is empty",
-  "emptyLibrarySubtitle": "Add PDF, DjVu, EPUB, FB2, DOCX, RTF or TXT — Litra will open it in the right reading mode.",
+  "emptyLibrarySubtitle": "Add PDF, DjVu, EPUB, FB2, DOCX, RTF or TXT — Talistra will open it in the right reading mode.",
   "importingLabel": "Adding...",
   "addPdfLabel": "Add book",
   "archiveChooseBook": "Choose a book from the archive",
   "archiveNoBooks": "No supported books were found in the archive.",
-  "unsupportedDocumentFormat": "Litra can’t recognise or open this file format.",
+  "unsupportedDocumentFormat": "Talistra can’t recognise or open this file format.",
 
   "pageProgress": "Page {page} of {total}",
   "neverOpened": "Not opened yet",
@@ -70,7 +70,7 @@
   "readingThemeNight": "Night",
   "readingThemeDark": "Dark",
   "appLanguageSection": "App language",
-  "aboutText": "Litra is a reader for PDF, DjVu and popular e-book formats with built-in on-device word translation.",
+  "aboutText": "Talistra is a reader for PDF, DjVu and popular e-book formats with built-in on-device word translation.",
 
   "suggestDownloadTitle": "Download the translation dictionary?",
   "downloadingNamed": "Downloading \"{language}\"... {seconds}s",

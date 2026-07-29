@@ -21,7 +21,7 @@ class DjvuWord {
   final Rect bounds;
 }
 
-/// Thin asynchronous client for Litra's native MIT DjVu codec.
+/// Thin asynchronous client for Talistra's native MIT DjVu codec.
 ///
 /// The Android side performs parsing and rendering on worker threads. Keeping
 /// that contract here is important: a damaged or unusually complex scan must

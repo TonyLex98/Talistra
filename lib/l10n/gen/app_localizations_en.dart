@@ -16,7 +16,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF or TXT — Litra will open it in the right reading mode.';
+      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF or TXT — Talistra will open it in the right reading mode.';
 
   @override
   String get importingLabel => 'Adding...';
@@ -32,7 +32,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unsupportedDocumentFormat =>
-      'Litra can’t recognise or open this file format.';
+      'Talistra can’t recognise or open this file format.';
 
   @override
   String pageProgress(int page, int total) {
@@ -218,7 +218,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutText =>
-      'Litra is a reader for PDF, DjVu and popular e-book formats with built-in on-device word translation.';
+      'Talistra is a reader for PDF, DjVu and popular e-book formats with built-in on-device word translation.';
 
   @override
   String get suggestDownloadTitle => 'Download the translation dictionary?';

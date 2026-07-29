@@ -1,6 +1,6 @@
-# Publishing Litra to RuStore
+# Publishing Talistra to RuStore
 
-Litra is distributed without advertising. Do not add an advertising SDK,
+Talistra is distributed without advertising. Do not add an advertising SDK,
 advertising identifier, or advertising declaration to a release unless that
 product decision changes.
 
@@ -41,7 +41,7 @@ at `build/app/outputs/flutter-apk/app-release.apk`.
 
 ## RuStore release checklist
 
-- Create the application in RuStore Console with the name **Litra**.
+- Create the application in RuStore Console with the name **Talistra**.
 - Use category **Books**; choose a second category only when it is relevant.
 - Add a Russian short description, full description, icon, and phone
   screenshots that show the library, reading, DjVu/PDF, translation, and
@@ -54,8 +54,8 @@ at `build/app/outputs/flutter-apk/app-release.apk`.
 
 ## Privacy-policy baseline
 
-Litra stores documents, progress, and settings locally on the device. The
+Talistra stores documents, progress, and settings locally on the device. The
 optional translation models are downloaded once from the model provider and
-then operate offline. Litra has no advertising SDK and does not sell or share
+then operate offline. Talistra has no advertising SDK and does not sell or share
 reader data. Add the developer contact email and publication date before
 hosting the policy.

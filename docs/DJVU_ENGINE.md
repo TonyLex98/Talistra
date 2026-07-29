@@ -1,6 +1,6 @@
-# Litra DjVu engine
+# Talistra DjVu engine
 
-Litra renders DjVu through its own JNI bridge in `native/litra_djvu`. The
+Talistra renders DjVu through its own JNI bridge in `native/litra_djvu`. The
 bridge and its public API are MIT licensed. Its codec dependency is the
 clean-room, MIT-licensed `djvu-rs`; no DjVuLibre or GPL binary is linked into
 the application.
@@ -16,7 +16,7 @@ cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -P 24 `
 ```
 
 `djvu-rs` also declares a `cdylib`, so `cargo-ndk` may copy hashed
-`libdjvu_rs-*.so` files beside `liblitra_djvu.so`. Litra statically links the
+`libdjvu_rs-*.so` files beside `liblitra_djvu.so`. Talistra statically links the
 Rust dependency and only needs `liblitra_djvu.so`; remove the hashed duplicate
 libraries before packaging.
 

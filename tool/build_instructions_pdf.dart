@@ -1,4 +1,4 @@
-// Regenerates the bundled first-run guide for Litra.
+// Regenerates the bundled first-run guide for Talistra.
 // Run: dart run tool/build_instructions_pdf.dart
 
 import 'dart:io';
@@ -23,14 +23,13 @@ class _Section {
 const _sections = <_Section>[
   _Section(
     'Библиотека и импорт',
-    'Нажмите «Добавить книгу» и выберите файл. Litra определяет формат по расширению и содержимому файла, добавляет книгу в библиотеку и запоминает место чтения.',
+    'Нажмите «Добавить книгу» и выберите файл. Talistra определяет формат по расширению и содержимому файла, добавляет книгу в библиотеку и запоминает место чтения.',
     bullets: [
       'Поддерживаются PDF, DjVu и DJV, EPUB, FB2, DOCX, RTF и TXT.',
-      'ZIP-архив открывается как контейнер: Litra предложит выбрать книгу внутри.',
-      'Файлы можно открыть из проводника Android через «Открыть с помощью Litra».',
+      'ZIP-архив открывается как контейнер: Talistra предложит выбрать книгу внутри.',
+      'Файлы можно открыть из проводника Android через «Открыть с помощью Talistra».',
       'Долгое нажатие на книгу позволяет закрепить ее сверху или удалить из библиотеки.',
     ],
-    image: 'library_tecno',
   ),
   _Section(
     'Чтение PDF и DjVu',
@@ -69,7 +68,7 @@ const _sections = <_Section>[
     'В настройках есть отдельный блок для комфортного чтения. Его параметры применяются только пока открыта книга и не меняют привычное поведение телефона в остальных приложениях.',
     bullets: [
       'Яркость: выключите «Использовать системную яркость» и выберите значение от 5% до 100%. После выхода из книги вернется системная яркость.',
-      'Не гасить экран при чтении: Litra удерживает экран включенным, пока заряд выше выбранного резерва.',
+      'Не гасить экран при чтении: Talistra удерживает экран включенным, пока заряд выше выбранного резерва.',
       'По умолчанию резерв равен 20%. Если заряд ниже порога, или функция выключена, работает обычный системный тайм-аут экрана.',
     ],
     image: 'settings_brightness_tecno',
@@ -105,9 +104,15 @@ Future<void> main() async {
   final boldPath = Platform.isWindows
       ? r'C:\Windows\Fonts\arialbd.ttf'
       : regularPath;
-  final regular = pw.Font.ttf(File(regularPath).readAsBytesSync().buffer.asByteData());
-  final bold = pw.Font.ttf(File(boldPath).readAsBytesSync().buffer.asByteData());
-  final doc = pw.Document(theme: pw.ThemeData.withFont(base: regular, bold: bold));
+  final regular = pw.Font.ttf(
+    File(regularPath).readAsBytesSync().buffer.asByteData(),
+  );
+  final bold = pw.Font.ttf(
+    File(boldPath).readAsBytesSync().buffer.asByteData(),
+  );
+  final doc = pw.Document(
+    theme: pw.ThemeData.withFont(base: regular, bold: bold),
+  );
   final shots = Directory('tool/instructions_screenshots');
 
   final logo = File('assets/branding/litra-launcher.png');
@@ -135,7 +140,10 @@ Future<void> main() async {
                   ),
                 ),
               pw.SizedBox(height: 28),
-              pw.Text('Litra', style: pw.TextStyle(font: bold, fontSize: 42, color: _ink)),
+              pw.Text(
+                'Talistra',
+                style: pw.TextStyle(font: bold, fontSize: 42, color: _ink),
+              ),
               pw.SizedBox(height: 10),
               pw.Text(
                 'Читалка документов с адаптивным текстом и офлайн-переводом',
@@ -156,7 +164,9 @@ Future<void> main() async {
 
   for (var index = 0; index < _sections.length; index++) {
     final section = _sections[index];
-    final file = section.image == null ? null : File('${shots.path}/${section.image}.png');
+    final file = section.image == null
+        ? null
+        : File('${shots.path}/${section.image}.png');
     final image = file != null && file.existsSync()
         ? pw.MemoryImage(file.readAsBytesSync())
         : null;
@@ -167,25 +177,57 @@ Future<void> main() async {
         build: (_) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Row(children: [
-              pw.Container(width: 36, height: 5, color: _brand),
-              pw.SizedBox(width: 10),
-              pw.Text('Litra', style: pw.TextStyle(color: _muted, fontSize: 10)),
-              pw.Spacer(),
-              pw.Text('${index + 1}/${_sections.length}', style: pw.TextStyle(color: _muted, fontSize: 10)),
-            ]),
+            pw.Row(
+              children: [
+                pw.Container(width: 36, height: 5, color: _brand),
+                pw.SizedBox(width: 10),
+                pw.Text(
+                  'Talistra',
+                  style: pw.TextStyle(color: _muted, fontSize: 10),
+                ),
+                pw.Spacer(),
+                pw.Text(
+                  '${index + 1}/${_sections.length}',
+                  style: pw.TextStyle(color: _muted, fontSize: 10),
+                ),
+              ],
+            ),
             pw.SizedBox(height: 16),
-            pw.Text(section.title, style: pw.TextStyle(font: bold, fontSize: 24, color: _ink)),
+            pw.Text(
+              section.title,
+              style: pw.TextStyle(font: bold, fontSize: 24, color: _ink),
+            ),
             pw.SizedBox(height: 12),
-            pw.Text(section.body, style: pw.TextStyle(fontSize: 12.5, color: _ink, lineSpacing: 3)),
+            pw.Text(
+              section.body,
+              style: pw.TextStyle(fontSize: 12.5, color: _ink, lineSpacing: 3),
+            ),
             pw.SizedBox(height: 12),
             for (final item in section.bullets)
               pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 6),
-                child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                  pw.Text('• ', style: pw.TextStyle(font: bold, color: _brand, fontSize: 13)),
-                  pw.Expanded(child: pw.Text(item, style: const pw.TextStyle(fontSize: 11.5, lineSpacing: 2))),
-                ]),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      '• ',
+                      style: pw.TextStyle(
+                        font: bold,
+                        color: _brand,
+                        fontSize: 13,
+                      ),
+                    ),
+                    pw.Expanded(
+                      child: pw.Text(
+                        item,
+                        style: const pw.TextStyle(
+                          fontSize: 11.5,
+                          lineSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             if (image != null) ...[
               pw.SizedBox(height: 12),
@@ -213,7 +255,7 @@ Future<void> main() async {
     );
   }
 
-  final output = File('assets/instructions/transread_guide.pdf');
+  final output = File('assets/instructions/talistra_guide.pdf');
   output.parent.createSync(recursive: true);
   output.writeAsBytesSync(await doc.save());
   stdout.writeln('Wrote ${output.path}');

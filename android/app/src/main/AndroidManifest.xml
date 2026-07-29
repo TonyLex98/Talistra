@@ -2,7 +2,7 @@
     <!-- Needed once to download the on-device translation language models -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Litra"
+        android:label="Talistra"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher">
@@ -70,7 +70,7 @@
                 <data android:pathPattern=".*\\.djv"/>
             </intent-filter>
 
-            <!-- Share sheet: "Share > TransRead". -->
+            <!-- Share sheet: "Share > Talistra". -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>

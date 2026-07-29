@@ -313,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Litra'),
+        title: const Text('Talistra'),
         actions: [
           IconButton(
             icon: Icon(

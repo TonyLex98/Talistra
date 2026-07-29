@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyLibrarySubtitle.
   ///
   /// In ru, this message translates to:
-  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Litra сама выберет подходящий режим чтения.'**
+  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Talistra сама выберет подходящий режим чтения.'**
   String get emptyLibrarySubtitle;
 
   /// No description provided for @importingLabel.
@@ -143,7 +143,7 @@ abstract class AppLocalizations {
   /// No description provided for @unsupportedDocumentFormat.
   ///
   /// In ru, this message translates to:
-  /// **'Litra не смогла распознать или открыть формат этого файла.'**
+  /// **'Talistra не смогла распознать или открыть формат этого файла.'**
   String get unsupportedDocumentFormat;
 
   /// No description provided for @pageProgress.
@@ -479,7 +479,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutText.
   ///
   /// In ru, this message translates to:
-  /// **'Litra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.'**
+  /// **'Talistra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.'**
   String get aboutText;
 
   /// No description provided for @suggestDownloadTitle.

@@ -1,7 +1,7 @@
-package com.transreade.transreade
+package com.talistra.reader
 
 /**
- * JNI boundary for Litra's MIT DjVu engine.
+ * JNI boundary for Talistra's MIT DjVu engine.
  *
  * Flutter never calls this object on the Android main thread: MainActivity
  * dispatches every decode to a small worker pool and only posts the result

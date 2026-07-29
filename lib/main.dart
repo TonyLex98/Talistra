@@ -36,7 +36,7 @@ void main() async {
   }
 
   runApp(
-    TransReadeApp(
+    TalistraApp(
       settings: settings,
       library: library,
       thumbnailCache: thumbnailCache,
@@ -57,27 +57,28 @@ Future<void> _seedInstructionsPdf(
 ) async {
   try {
     final data = await rootBundle.load(
-      'assets/instructions/transread_guide.pdf',
+      'assets/instructions/talistra_guide.pdf',
     );
     final bytes = data.buffer.asUint8List(
       data.offsetInBytes,
       data.lengthInBytes,
     );
     final title = settings.appLocale.languageCode == 'ru'
-        ? 'Инструкция — как пользоваться Litra'
-        : 'Litra — User Guide';
+        ? 'Инструкция — как пользоваться Talistra'
+        : 'Talistra — User Guide';
     // Replace only a previous bundled guide after an app update. A document
     // imported by the reader is never removed here.
     for (final document in library.documents) {
       if (document.sourceFingerprint.startsWith('bundled_') &&
-          document.title.contains('Litra')) {
+          (document.title.contains('Litra') ||
+              document.title.contains('Talistra'))) {
         await library.remove(document.id);
       }
     }
     await library.importBytes(
       bytes: bytes,
       title: title,
-      sourceFingerprint: 'bundled_litra_guide_v2',
+      sourceFingerprint: 'bundled_talistra_guide_v3',
     );
     await settings.markInstructionsSeeded();
   } catch (error, stack) {
@@ -85,8 +86,8 @@ Future<void> _seedInstructionsPdf(
   }
 }
 
-class TransReadeApp extends StatelessWidget {
-  const TransReadeApp({
+class TalistraApp extends StatelessWidget {
+  const TalistraApp({
     super.key,
     required this.settings,
     required this.library,
@@ -130,7 +131,7 @@ class TransReadeApp extends StatelessWidget {
       child: Consumer<SettingsService>(
         builder: (context, settings, _) {
           return MaterialApp(
-            title: 'Litra',
+            title: 'Talistra',
             debugShowCheckedModeBanner: false,
             // One appearance for the whole app, built from the reading
             // settings (see [AppTheme.from]) — the library and settings

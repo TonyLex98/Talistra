@@ -2,7 +2,7 @@
 
 ## djvu-rs 0.27.0
 
-Litra's DjVu bridge uses the pure-Rust `djvu-rs` codec, a clean-room
+Talistra's DjVu bridge uses the pure-Rust `djvu-rs` codec, a clean-room
 implementation based on the public DjVu v3 specification. It contains no
 DjVuLibre or other GPL code.
 

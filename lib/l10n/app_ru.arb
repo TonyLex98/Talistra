@@ -3,12 +3,12 @@
 
   "settingsTooltip": "Настройки",
   "emptyLibraryTitle": "Ваша библиотека пуста",
-  "emptyLibrarySubtitle": "Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Litra сама выберет подходящий режим чтения.",
+  "emptyLibrarySubtitle": "Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Talistra сама выберет подходящий режим чтения.",
   "importingLabel": "Добавление...",
   "addPdfLabel": "Добавить книгу",
   "archiveChooseBook": "Выберите книгу из архива",
   "archiveNoBooks": "В архиве не нашлось поддерживаемых книг.",
-  "unsupportedDocumentFormat": "Litra не смогла распознать или открыть формат этого файла.",
+  "unsupportedDocumentFormat": "Talistra не смогла распознать или открыть формат этого файла.",
 
   "pageProgress": "Стр. {page} из {total}",
   "@pageProgress": {
@@ -88,7 +88,7 @@
   "readingThemeNight": "Ночная",
   "readingThemeDark": "Тёмная",
   "appLanguageSection": "Язык приложения",
-  "aboutText": "Litra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.",
+  "aboutText": "Talistra — читалка PDF, DjVu и популярных электронных форматов со встроенным переводом слов на устройстве.",
 
   "suggestDownloadTitle": "Скачать словарь для перевода?",
   "downloadingNamed": "Загружаем «{language}»... {seconds} с",

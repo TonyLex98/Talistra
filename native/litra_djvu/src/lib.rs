@@ -87,7 +87,7 @@ fn append_word_zones(zone: &TextZone, output: &mut String) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_transreade_transreade_DjvuNative_open(
+pub extern "system" fn Java_com_talistra_reader_DjvuNative_open(
     mut env: JNIEnv,
     _class: JClass,
     path: JString,
@@ -130,7 +130,7 @@ pub extern "system" fn Java_com_transreade_transreade_DjvuNative_open(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageInfo(
+pub extern "system" fn Java_com_talistra_reader_DjvuNative_pageInfo(
     mut env: JNIEnv,
     _class: JClass,
     handle: jlong,
@@ -171,7 +171,7 @@ pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageInfo(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_transreade_transreade_DjvuNative_renderPage(
+pub extern "system" fn Java_com_talistra_reader_DjvuNative_renderPage(
     mut env: JNIEnv,
     _class: JClass,
     handle: jlong,
@@ -206,7 +206,7 @@ pub extern "system" fn Java_com_transreade_transreade_DjvuNative_renderPage(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageText(
+pub extern "system" fn Java_com_talistra_reader_DjvuNative_pageText(
     mut env: JNIEnv,
     _class: JClass,
     handle: jlong,
@@ -238,7 +238,7 @@ pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageText(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageWords(
+pub extern "system" fn Java_com_talistra_reader_DjvuNative_pageWords(
     mut env: JNIEnv,
     _class: JClass,
     handle: jlong,
@@ -275,7 +275,7 @@ pub extern "system" fn Java_com_transreade_transreade_DjvuNative_pageWords(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_transreade_transreade_DjvuNative_close(
+pub extern "system" fn Java_com_talistra_reader_DjvuNative_close(
     mut env: JNIEnv,
     _class: JClass,
     handle: jlong,

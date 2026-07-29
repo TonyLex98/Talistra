@@ -64,7 +64,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   # Only used by tool/build_instructions_pdf.dart to regenerate the bundled
-  # user guide (assets/instructions/transread_guide.pdf) — never imported
+  # user guide (assets/instructions/talistra_guide.pdf) — never imported
   # from lib/, so it doesn't ship in the app itself.
   pdf: ^3.11.1
 
@@ -81,7 +81,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/instructions/transread_guide.pdf
+    - assets/instructions/talistra_guide.pdf
 
   # Reading fonts, offered in Settings (see ReadingFont). All three are
   # variable fonts with a weight axis, so the "boldness" setting can pick

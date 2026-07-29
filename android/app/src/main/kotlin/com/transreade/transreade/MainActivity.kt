@@ -1,4 +1,4 @@
-package com.transreade.transreade
+package com.talistra.reader
 
 import android.content.Intent
 import android.content.Context
