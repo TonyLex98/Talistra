@@ -386,11 +386,11 @@ class SettingsService extends ChangeNotifier {
       targetName != null ? _fromName(targetName) : TranslateLanguage.russian,
       ThemeMode.values.firstWhere(
         (m) => m.name == themeName,
-        orElse: () => ThemeMode.system,
+        orElse: () => ThemeMode.light,
       ),
       ReadingTheme.values.firstWhere(
         (t) => t.name == readingThemeName,
-        orElse: () => ReadingTheme.sepia,
+        orElse: () => ReadingTheme.white,
       ),
       prefs.getString(_lastDocumentKey),
       Locale(prefs.getString(_appLocaleKey) ?? 'ru'),
