@@ -138,12 +138,6 @@ h1 {
   line-height: 1.01;
 }
 
-h1 span {
-  display: block;
-  color: var(--teal);
-  font-weight: 600;
-}
-
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
