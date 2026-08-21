@@ -240,6 +240,30 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     _originalStackKey.currentState?.changeZoom(delta);
   }
 
+  /// The scan view settles (a gesture ends, a jump lands): persist the
+  /// zoom, the position within the page, and the horizontal pan, exactly
+  /// like the PDF reader does, so reopening this file lands the reader
+  /// where they left off.
+  void _onOriginalViewSettled(
+    double zoom,
+    double scrollFraction,
+    double scrollFractionX,
+  ) {
+    final document = _djvu;
+    if (document == null) return;
+    unawaited(
+      context.read<LibraryService>().updateProgress(
+        widget.documentId,
+        lastPage: _currentPage,
+        pageCount: document.pageCount,
+        reflowMode: _reflowMode,
+        pdfZoom: zoom,
+        pdfScrollFraction: scrollFraction,
+        pdfScrollFractionX: scrollFractionX,
+      ),
+    );
+  }
+
   Future<void> _jumpToPage() async {
     final document = _djvu;
     if (document == null) return;
@@ -509,6 +533,9 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
       key: _originalStackKey,
       document: document,
       initialPage: _currentPage,
+      initialZoom: _document.pdfZoom,
+      initialScrollFraction: _document.pdfScrollFraction,
+      initialScrollFractionX: _document.pdfScrollFractionX,
       background: settings.readingTheme.background,
       imageFilter: settings.readingTheme.pageImageFilter(
         contrast: settings.readingContrast,
@@ -516,6 +543,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
       ),
       onPageChanged: (page) => _onPageChanged(page - 1),
       onZoomChanged: (_) {},
+      onViewSettled: _onOriginalViewSettled,
     );
   }
 

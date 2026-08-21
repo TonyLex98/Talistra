@@ -41,12 +41,14 @@ class LibraryDocument {
   final bool reflowMode;
   final DateTime lastOpenedAt;
 
-  /// PDF-mode zoom, how far into [lastPage] the reader had scrolled
-  /// vertically (0..1), and how far they'd panned horizontally (0..1 of
-  /// the pan range at that zoom) — restored exactly across a PDF<->reflow
-  /// switch and across app restarts, specific to this file. Horizontal
-  /// pan is one setting for the whole book, same as zoom, so it isn't
-  /// reset just by moving between pages.
+  /// Fixed-layout (PDF and DjVu) page-view zoom, how far into [lastPage]
+  /// the reader had scrolled vertically (0..1), and how far they'd panned
+  /// horizontally (0..1 of the pan range at that zoom) — restored exactly
+  /// across a page-view<->reflow switch and across app restarts, specific
+  /// to this file. A document is either a PDF or a DjVu, never both, so
+  /// the two readers share these fields. Horizontal pan is one setting
+  /// for the whole book, same as zoom, so it isn't reset just by moving
+  /// between pages.
   final double pdfZoom;
   final double pdfScrollFraction;
   final double pdfScrollFractionX;
