@@ -24,6 +24,15 @@ const double _horizontalDeadZone = 56.0;
 /// reach for the thumb, short enough to leave reading undisturbed.
 const Duration _idleDelay = Duration(milliseconds: 3000);
 
+/// The narrowest and widest raster widths the native decoder will take
+/// (the Android side clamps requests to the same ceiling).
+const int _minRenderWidth = 480;
+const int _maxRenderWidth = 2400;
+
+/// How wide neighbour pages are prefetched at — they're only glimpsed
+/// while scrolling, so they don't pay full-resolution cost up front.
+const int _neighborWidthCap = 1400;
+
 /// The scan counterpart of the PDF reading surface: pages form one
 /// continuous vertical document, with a single pan-and-pinch gesture,
 /// fling momentum, and a page scrubber that fades away while reading.
@@ -474,6 +483,29 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
     );
   }
 
+  /// The raster width for the page the reader is actually looking at: the
+  /// scan's own pixel width, clamped to what the decoder takes. See the
+  /// comment in [build] about why a scanned page wants its native
+  /// resolution rather than a screen-fit one.
+  int _sharpWidthFor(int page) {
+    final native = _infos![page].width;
+    if (native <= 0) return 1200;
+    return native.clamp(_minRenderWidth, _maxRenderWidth).toInt();
+  }
+
+  /// Neighbour pages are only glimpsed while scrolling, so they queue up at
+  /// a reduced width — a fraction of the pixels, decoded in a fraction of
+  /// the time. The moment one of them becomes the page being looked at, it
+  /// is re-asked for at full resolution and quietly swapped in over the
+  /// cheap one.
+  int _neighborWidthFor(int page) {
+    final native = _infos![page].width;
+    if (native <= 0) return 900;
+    return math.min(native, _neighborWidthCap)
+        .clamp(_minRenderWidth, _maxRenderWidth)
+        .toInt();
+  }
+
   Future<Uint8List?> _render(int pageIndex, int width) async {
     final info = _infos![pageIndex];
     final aspect = info.aspectRatio.isFinite && info.aspectRatio > 0
@@ -618,17 +650,19 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
             hi = math.min(_pageHeights.length - 1, hi + 1);
             _pruneImageCache(lo, hi);
 
-            // Render a little above the device's own pixel density: matching
-            // it exactly looks slightly soft for body text, which benefits
-            // from some supersampling to read as crisp black rather than
-            // grey. Kept modest on purpose — rasterizing costs time
-            // proportional to the *square* of this factor, and every page
-            // of a big book pays it.
-            final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.5, 3.0);
-            const supersample = 1.25;
-            final sharpWidth =
-                (_contentWidth * dpr * supersample).round().clamp(720, 1800);
-            final previewWidth = _contentWidth.round().clamp(160, 900);
+            // A DjVu page is a photograph of paper: it has a fixed amount
+            // of detail in it, and the page's own pixel width (from
+            // [DjvuPageInfo.width]) is exactly how much. So the page being
+            // looked at is rasterized at its *native* resolution (capped by
+            // what the decoder will take) — never "just enough to fill the
+            // screen", which throws letterforms away before they reach the
+            // glass, and never more, which would only upscale the
+            // photograph. At native, every zoom level then samples the
+            // full-detail image: a clean downscale at zoom 1, near 1:1 at
+            // the top of the range. (This is the difference from a PDF:
+            // its text is vector and re-appears crisp at any resolution,
+            // while a scan only ever has the pixels it was born with.)
+            final previewWidth = (_contentWidth * 2).round().clamp(320, 1000);
 
             // Rasterizing is serialized in the native plugin, so the order
             // requests go in *is* the order they come back: the page being
@@ -646,14 +680,15 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
             if (!_scrubbing) {
               // Order is everything, since the plugin rasterizes one page at
               // a time: the page being looked at gets its quick preview
-              // first, then its sharp render, and only then do the
-              // neighbours queue up.
+              // first, then its full-resolution render, and only then do the
+              // neighbours queue up (at a reduced width — see
+              // [_neighborWidthFor]).
               _previewFor(visibleIndex, previewWidth);
-              _imageFor(visibleIndex, sharpWidth);
+              _imageFor(visibleIndex, _sharpWidthFor(visibleIndex));
               for (var i = lo; i <= hi; i++) {
                 if (i == visibleIndex) continue;
                 _previewFor(i, previewWidth);
-                _imageFor(i, sharpWidth);
+                _imageFor(i, _neighborWidthFor(i));
               }
             }
 
@@ -699,8 +734,16 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
                               height: _pageHeights[page],
                               child: _DjvuStackPageImage(
                                 key: ValueKey('img-$page'),
+                                // The page being looked at is drawn from
+                                // its full-resolution render; its
+                                // neighbours from the reduced-width one
+                                // (which they upgrade to the moment they
+                                // become the page being looked at).
                                 future: _imageFutures[
-                                    page * _keyStride + sharpWidth],
+                                    page * _keyStride +
+                                    (page == visibleIndex
+                                        ? _sharpWidthFor(page)
+                                        : _neighborWidthFor(page))],
                                 previewFuture: _previewFutures[
                                     page * _keyStride + previewWidth],
                                 filter: widget.imageFilter,
@@ -798,11 +841,11 @@ class _DjvuStackPageImageState extends State<_DjvuStackPageImage> {
         bytes,
         fit: BoxFit.fill,
         gaplessPlayback: true,
-        // Scaling a low-resolution stand-in up to page size looks better
-        // smoothed than blocky.
-        filterQuality: _sharp != null
-            ? FilterQuality.low
-            : FilterQuality.medium,
+        // Pages now arrive at (or above) display resolution, so sampling
+        // is a downscale; linear filtering keeps downsampled type smooth
+        // instead of stair-stepped (and the low-res stand-in still looks
+        // better smoothed than blocky while it lasts).
+        filterQuality: FilterQuality.medium,
       ),
     );
   }
