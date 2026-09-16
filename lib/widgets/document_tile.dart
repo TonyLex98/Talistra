@@ -496,7 +496,11 @@ class _DocumentTileState extends State<DocumentTile> {
         ],
       ),
     );
-    controller.dispose();
+    // The dialog's own exit transition is still animating the TextField for
+    // a frame or two after showDialog resolves — disposing the controller
+    // synchronously here fights that in-flight rebuild ("used after being
+    // disposed"). A post-frame callback waits for it to actually finish.
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
     final trimmed = newTitle?.trim();
     if (trimmed == null || trimmed.isEmpty) return;
     await library.rename(widget.document.id, trimmed);

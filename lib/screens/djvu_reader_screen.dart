@@ -81,9 +81,18 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   static const _minDwellSeconds = 3;
   static const _maxCountedDwellSeconds = 600;
 
+  // Looked up once, in initState, and reused in dispose() — a fresh
+  // context.read() there is unsafe (the element may already be deactivated
+  // by the time dispose runs, e.g. when a rename elsewhere in the tree
+  // triggers a rebuild that tears this route down).
+  late final ReadingDisplayService _readingDisplay;
+  late final StatisticsService _statistics;
+
   @override
   void initState() {
     super.initState();
+    _readingDisplay = context.read<ReadingDisplayService>();
+    _statistics = context.read<StatisticsService>();
     _document = context.read<LibraryService>().documents.firstWhere(
       (document) => document.id == widget.documentId,
     );
@@ -92,11 +101,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     _pageEnteredAt = DateTime.now();
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);
-    unawaited(
-      context.read<ReadingDisplayService>().enter(
-        context.read<SettingsService>(),
-      ),
-    );
+    unawaited(_readingDisplay.enter(context.read<SettingsService>()));
     _open();
   }
 
@@ -188,7 +193,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(context.read<ReadingDisplayService>().exit());
+    unawaited(_readingDisplay.exit());
     _flushDwellTime();
     final document = _djvu;
     if (document != null) unawaited(document.close());
@@ -210,7 +215,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     final elapsed = DateTime.now().difference(enteredAt).inSeconds;
     _pageEnteredAt = null;
     if (elapsed < _minDwellSeconds) return;
-    context.read<StatisticsService>().recordReading(
+    _statistics.recordReading(
       documentId: widget.documentId,
       seconds: elapsed.clamp(0, _maxCountedDwellSeconds),
       page: _currentPage,

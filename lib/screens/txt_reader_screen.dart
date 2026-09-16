@@ -54,9 +54,18 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
   static const _maxCountedDwellSeconds = 600;
   DateTime? _pageEnteredAt;
 
+  // Looked up once, in initState, and reused in dispose() — a fresh
+  // context.read() there is unsafe (the element may already be deactivated
+  // by the time dispose runs, e.g. when a rename elsewhere in the tree
+  // triggers a rebuild that tears this route down).
+  late final ReadingDisplayService _readingDisplay;
+  late final StatisticsService _statistics;
+
   @override
   void initState() {
     super.initState();
+    _readingDisplay = context.read<ReadingDisplayService>();
+    _statistics = context.read<StatisticsService>();
     _document = context.read<LibraryService>().documents.firstWhere(
       (d) => d.id == widget.documentId,
     );
@@ -65,11 +74,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     _pageEnteredAt = DateTime.now();
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);
-    unawaited(
-      context.read<ReadingDisplayService>().enter(
-        context.read<SettingsService>(),
-      ),
-    );
+    unawaited(_readingDisplay.enter(context.read<SettingsService>()));
     _load();
   }
 
@@ -104,7 +109,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(context.read<ReadingDisplayService>().exit());
+    unawaited(_readingDisplay.exit());
     _flushDwellTime();
     super.dispose();
   }
@@ -115,7 +120,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     final elapsed = DateTime.now().difference(enteredAt).inSeconds;
     _pageEnteredAt = null;
     if (elapsed < _minDwellSeconds) return;
-    context.read<StatisticsService>().recordReading(
+    _statistics.recordReading(
       documentId: widget.documentId,
       seconds: elapsed.clamp(0, _maxCountedDwellSeconds),
       page: _currentPage,
