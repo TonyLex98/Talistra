@@ -50,6 +50,10 @@ List<ReflowSubPage> paginateReflowBlocks({
   required double blockSpacing,
   required double imageSpacing,
   required TextScaler textScaler,
+  // Extra space every text slice takes up below itself, for callers that
+  // render a fixed bottom margin per slice rather than only a gap between
+  // blocks (see `blockSpacing`). Defaults to 0 for callers that don't.
+  double trailingSpacing = 0.0,
 }) {
   if (blocks.isEmpty || width <= 0 || height <= 0) return const [];
 
@@ -119,7 +123,10 @@ List<ReflowSubPage> paginateReflowBlocks({
           isFirstOfBlock: firstSlice,
         ),
       );
-      used += spacing + fits.height;
+      // Some callers (see [trailingSpacing]) render every slice with its own
+      // bottom margin, not just a gap before a new block starts — that has
+      // to be budgeted here too or the last line on a page runs past `height`.
+      used += spacing + fits.height + trailingSpacing;
       offset = end;
       firstSlice = false;
       if (offset < block.text.length) closePage();

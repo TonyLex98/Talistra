@@ -12,14 +12,17 @@ import '../models/library_document.dart';
 import '../services/library_service.dart';
 import '../services/page_image_cache.dart';
 import '../services/reading_display_service.dart';
+import '../services/search_index_cache.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
 import '../utils/pdf_region_renderer.dart';
 import '../utils/sentence_finder.dart';
+import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/pdf_page_stack_view.dart';
 import '../widgets/reflow_view.dart';
+import '../widgets/book_search_bar.dart';
 import '../widgets/translation_panel.dart';
 
 /// Height of the reader's floating top bar (excluding the status bar
@@ -66,6 +69,16 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   bool _reflowMode = false;
   double _reflowFontSize = 17;
+
+  // The whole-book text index: built ONCE in a background isolate (page by
+  // page) as soon as the document opens, and cached for the life of the
+  // reader. Every search — and every keystroke that re-types the query — is
+  // then a plain, instant substring scan over the cached block texts, so
+  // searching never re-extracts the book. [_searchOpen] is whether the inline
+  // search bar is showing.
+  late final PdfSearchIndex _pdfSearchIndex = PdfSearchIndex();
+  String _searchQuery = '';
+  bool _searchOpen = false;
 
   /// A long-press-and-drag text selection in the PDF view: the selected
   /// text, whether the drag has finished (only then are actions offered),
@@ -151,6 +164,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     unawaited(context.read<ReadingDisplayService>().exit());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _flushDwellTime();
+    unawaited(_pdfSearchIndex.cancel());
     _pdfDocument?.dispose();
     _renderer?.close();
     super.dispose();
@@ -224,6 +238,11 @@ class _ReaderScreenState extends State<ReaderScreen>
         lastPage: _currentPage.clamp(1, pageCount),
         pageCount: pageCount,
         reflowMode: _reflowMode,
+      );
+      _pdfSearchIndex.build(
+        _document.filePath,
+        documentId: widget.documentId,
+        cache: context.read<SearchIndexCache>(),
       );
       _cacheCurrentPagePreview();
     } catch (e) {
@@ -471,6 +490,89 @@ class _ReaderScreenState extends State<ReaderScreen>
     _updateCurrentPage(target);
   }
 
+  /// Opens the inline search bar in the top bar (in place of the title), so
+  /// the page stays visible below and a hit is highlighted right in the file.
+  /// The index build is idempotent, so this is a no-op if it already started
+  /// when the document opened.
+  void _openSearch() {
+    _clearSelection();
+    _pdfSearchIndex.build(
+      _document.filePath,
+      documentId: widget.documentId,
+      cache: context.read<SearchIndexCache>(),
+    );
+    setState(() => _searchOpen = true);
+  }
+
+  /// Closes the inline search bar: drops the highlight and restores the
+  /// normal bar. The index itself is kept (it is the expensive part and is
+  /// reused for the next search); only the active query is cleared.
+  void _closeSearch() {
+    _searchQuery = '';
+    _reflowKey.currentState?.clearSearchHighlight();
+    _pdfViewKey.currentState?.setSearchHighlight(null, null);
+    setState(() => _searchOpen = false);
+  }
+
+  /// The search the [SearchBar] runs: a plain substring scan over the cached
+  /// index. If the index is already built this is instant; if it is still
+  /// building, hits stream in page by page as more pages finish.
+  Future<void> _runSearch(
+    String query, {
+    required void Function(List<SearchMatch>) onBatch,
+    required void Function() onDone,
+  }) async {
+    _searchQuery = query;
+    _pdfSearchIndex.build(
+      _document.filePath,
+      documentId: widget.documentId,
+      cache: context.read<SearchIndexCache>(),
+    );
+    await _pdfSearchIndex.search(query, onBatch: onBatch, onDone: onDone);
+  }
+
+  void _onSearchSelect(SearchMatch match) {
+    if (_reflowMode) {
+      _reflowKey.currentState?.showSearchHighlight(
+        match.pageIndex + 1,
+        match.blockIndex,
+        match.matchStart,
+        match.matchEnd,
+      );
+    } else {
+      // The original (rasterized) view has no live text to style, so its
+      // highlight is a box in page-space; measure it on demand from the
+      // page's real word geometry (the isolate can't send dart:ui rects).
+      _ensurePdfBounds(match);
+      _pdfViewKey.currentState?.setSearchHighlight(
+        match.pageIndex,
+        match.pdfBounds,
+      );
+      _pdfViewKey.currentState?.jumpToPage(
+        match.pageIndex + 1,
+        resetZoom: false,
+      );
+    }
+    _updateCurrentPage(match.pageIndex + 1);
+  }
+
+  /// Fills in [match]'s page-space bounds for the original view's overlay, if
+  /// the isolate hasn't already — the page's lines are extracted on demand and
+  /// cached, so revisiting a hit is free.
+  void _ensurePdfBounds(SearchMatch match) {
+    if (match.pdfBounds != null) return;
+    final doc = _pdfDocument;
+    if (doc == null) return;
+    final lines = _pageLinesCache.putIfAbsent(
+      match.pageIndex,
+      () => extractPageLines(doc, match.pageIndex),
+    );
+    final size = match.pageIndex < _pageSizes.length
+        ? _pageSizes[match.pageIndex]
+        : Size.zero;
+    match.pdfBounds = findMatchPdfBounds(lines, _searchQuery, size);
+  }
+
   void _toggleReflow() {
     _clearSelection();
     setState(() => _reflowMode = !_reflowMode);
@@ -671,8 +773,18 @@ class _ReaderScreenState extends State<ReaderScreen>
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
-                Expanded(child: _buildBarTitle(scheme)),
-                ..._buildBarActions(l10n, settings, scheme),
+                if (_searchOpen) ...[
+                  Expanded(
+                    child: BookSearchBar(
+                      search: _runSearch,
+                      onSelect: _onSearchSelect,
+                      onClose: _closeSearch,
+                    ),
+                  ),
+                ] else ...[
+                  Expanded(child: _buildBarTitle(scheme)),
+                  ..._buildBarActions(l10n, settings, scheme),
+                ],
               ],
             ),
           ),
@@ -719,6 +831,12 @@ class _ReaderScreenState extends State<ReaderScreen>
     ColorScheme scheme,
   ) {
     return [
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.search, size: 22),
+        tooltip: l10n.searchTooltip,
+        onPressed: _pageCount == 0 ? null : _openSearch,
+      ),
       if (_reflowMode) ...[
         IconButton(
           visualDensity: VisualDensity.compact,

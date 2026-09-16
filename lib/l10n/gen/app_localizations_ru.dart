@@ -90,6 +90,32 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get searchTooltip => 'Поиск в книге';
+
+  @override
+  String get searchHint => 'Что искать';
+
+  @override
+  String get searchSearching => 'Ищем…';
+
+  @override
+  String searchResults(int count) {
+    return 'Совпадений: $count';
+  }
+
+  @override
+  String get searchNoResults => 'Ничего не найдено';
+
+  @override
+  String get searchResultsTitle => 'Совпадения';
+
+  @override
+  String get searchPrevious => 'Предыдущее';
+
+  @override
+  String get searchNext => 'Следующее';
+
+  @override
   String get goToPageTitle => 'Перейти на страницу';
 
   @override

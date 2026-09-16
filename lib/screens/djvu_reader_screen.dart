@@ -16,8 +16,10 @@ import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/sentence_finder.dart';
+import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/djvu_page_stack_view.dart';
+import '../widgets/book_search_bar.dart';
 import '../widgets/translation_panel.dart';
 import '../widgets/txt_page_view.dart';
 
@@ -71,6 +73,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   double _fontSize = 17;
   bool _textLoading = false;
   List<List<ReflowBlock>>? _textPages;
+  bool _searchOpen = false;
   String? _selectedWord;
   SentenceMatch? _selectedSentence;
   DateTime? _pageEnteredAt;
@@ -317,6 +320,56 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
         reflowFontSize: _fontSize,
       ),
     );
+  }
+
+  /// Opens the inline search bar in the top bar (in place of the title), so
+  /// the page stays visible below and a hit is highlighted right in the file.
+  void _openSearch() {
+    setState(() => _searchOpen = true);
+  }
+
+  /// Closes the inline search bar and drops the highlight.
+  void _closeSearch() {
+    _textPageViewKey.currentState?.clearSearchHighlight();
+    setState(() => _searchOpen = false);
+  }
+
+  /// The search the [BookSearchBar] runs. DjVu's text is already in memory
+  /// (no extraction), so a query is a plain substring scan delivered in one
+  /// batch — no isolate, no streaming.
+  Future<void> _runSearch(
+    String query, {
+    required void Function(List<SearchMatch>) onBatch,
+    required void Function() onDone,
+  }) async {
+    final pages = _textPages;
+    if (pages == null) {
+      onDone();
+      return;
+    }
+    final texts = [
+      for (final blocks in pages) [for (final b in blocks) b.text],
+    ];
+    final matches = searchInPages(texts, query);
+    if (matches.isNotEmpty) onBatch(matches);
+    onDone();
+  }
+
+  void _onSearchSelect(SearchMatch match) {
+    // A hit only ever comes from the OCR text, which the original scan view
+    // has no way to draw a highlight over (it has no live text, only the
+    // bitmap) — so land on the reflowed view to actually show it, the same
+    // way tapping the translate button while looking at the scan does.
+    _onPageChanged(match.pageIndex);
+    if (!_reflowMode) _toggleReflow();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _textPageViewKey.currentState?.showSearchHighlight(
+        match.pageIndex + 1,
+        match.blockIndex,
+        match.matchStart,
+        match.matchEnd,
+      );
+    });
   }
 
   void _toggleReflow() {
@@ -570,150 +623,167 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
-                Expanded(
-                  child: InkWell(
-                    onTap: document == null ? null : _jumpToPage,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 4,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            document == null
-                                ? _document.title
-                                : '$_currentPage / ${document.pageCount}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (document != null)
+                if (_searchOpen)
+                  Expanded(
+                    child: BookSearchBar(
+                      search: _runSearch,
+                      onSelect: _onSearchSelect,
+                      onClose: _closeSearch,
+                    ),
+                  )
+                else ...[
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 22,
+                    icon: const Icon(Icons.search),
+                    tooltip: l10n.searchTooltip,
+                    onPressed: _textPages == null ? null : _openSearch,
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: document == null ? null : _jumpToPage,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              _document.title,
+                              document == null
+                                  ? _document.title
+                                  : '$_currentPage / ${document.pageCount}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: scheme.onSurfaceVariant,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                        ],
+                            if (document != null)
+                              Text(
+                                _document.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                if (_reflowMode) ...[
+                  if (_reflowMode) ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.text_decrease),
+                      tooltip: l10n.smallerText,
+                      onPressed: () => _changeFontSize(-1),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.text_increase),
+                      tooltip: l10n.largerText,
+                      onPressed: () => _changeFontSize(1),
+                    ),
+                  ] else ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.zoom_out),
+                      tooltip: l10n.zoomOut,
+                      onPressed: () => _changeOriginalZoom(-0.5),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.zoom_in),
+                      tooltip: l10n.zoomIn,
+                      onPressed: () => _changeOriginalZoom(0.5),
+                    ),
+                  ],
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.text_decrease),
-                    tooltip: l10n.smallerText,
-                    onPressed: () => _changeFontSize(-1),
+                    iconSize: 21,
+                    icon: Icon(
+                      Icons.translate,
+                      color: settings.translatorEnabled
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant.withValues(alpha: 0.55),
+                    ),
+                    tooltip: settings.translatorEnabled
+                        ? l10n.translatorOnTooltip
+                        : l10n.translatorOffTooltip,
+                    onPressed: () {
+                      // Translation works on the real reflowed OCR text. When
+                      // the reader asks for it while looking at the scan,
+                      // switch to that text at the same source page instead of
+                      // leaving a seemingly enabled but unusable button over a
+                      // bitmap.
+                      if (!_reflowMode &&
+                          _textPages?.any((page) => page.isNotEmpty) == true) {
+                        if (!settings.translatorEnabled) {
+                          settings.setTranslatorEnabled(true);
+                        }
+                        _toggleReflow();
+                      } else {
+                        settings.setTranslatorEnabled(
+                          !settings.translatorEnabled,
+                        );
+                      }
+                    },
                   ),
+                  if (_reflowMode && settings.translatorEnabled)
+                    InkWell(
+                      onTap: _quickLanguageSwitch,
+                      borderRadius: BorderRadius.circular(9),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 3,
+                          vertical: 6,
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              settings.sourceAppLanguage.flag,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            Icon(
+                              Icons.arrow_right_alt,
+                              size: 15,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            Text(
+                              settings.targetAppLanguage.flag,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     iconSize: 22,
-                    icon: const Icon(Icons.text_increase),
-                    tooltip: l10n.largerText,
-                    onPressed: () => _changeFontSize(1),
-                  ),
-                ] else ...[
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.zoom_out),
-                    tooltip: l10n.zoomOut,
-                    onPressed: () => _changeOriginalZoom(-0.5),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.zoom_in),
-                    tooltip: l10n.zoomIn,
-                    onPressed: () => _changeOriginalZoom(0.5),
+                    icon: Icon(
+                      _reflowMode
+                          ? Icons.image_outlined
+                          : Icons.auto_stories_outlined,
+                    ),
+                    tooltip: _reflowMode
+                        ? l10n.originalDocument
+                        : l10n.adaptToPhone,
+                    onPressed: document == null || _textLoading
+                        ? null
+                        : _toggleReflow,
                   ),
                 ],
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 21,
-                  icon: Icon(
-                    Icons.translate,
-                    color: settings.translatorEnabled
-                        ? scheme.primary
-                        : scheme.onSurfaceVariant.withValues(alpha: 0.55),
-                  ),
-                  tooltip: settings.translatorEnabled
-                      ? l10n.translatorOnTooltip
-                      : l10n.translatorOffTooltip,
-                  onPressed: () {
-                    // Translation works on the real reflowed OCR text. When
-                    // the reader asks for it while looking at the scan,
-                    // switch to that text at the same source page instead of
-                    // leaving a seemingly enabled but unusable button over a
-                    // bitmap.
-                    if (!_reflowMode &&
-                        _textPages?.any((page) => page.isNotEmpty) == true) {
-                      if (!settings.translatorEnabled) {
-                        settings.setTranslatorEnabled(true);
-                      }
-                      _toggleReflow();
-                    } else {
-                      settings.setTranslatorEnabled(
-                        !settings.translatorEnabled,
-                      );
-                    }
-                  },
-                ),
-                if (_reflowMode && settings.translatorEnabled)
-                  InkWell(
-                    onTap: _quickLanguageSwitch,
-                    borderRadius: BorderRadius.circular(9),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 3,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            settings.sourceAppLanguage.flag,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                          Icon(
-                            Icons.arrow_right_alt,
-                            size: 15,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          Text(
-                            settings.targetAppLanguage.flag,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 22,
-                  icon: Icon(
-                    _reflowMode
-                        ? Icons.image_outlined
-                        : Icons.auto_stories_outlined,
-                  ),
-                  tooltip: _reflowMode
-                      ? l10n.originalDocument
-                      : l10n.adaptToPhone,
-                  onPressed: document == null || _textLoading
-                      ? null
-                      : _toggleReflow,
-                ),
               ],
             ),
           ),

@@ -89,6 +89,32 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get searchTooltip => 'Search in book';
+
+  @override
+  String get searchHint => 'What to search for';
+
+  @override
+  String get searchSearching => 'Searching…';
+
+  @override
+  String searchResults(int count) {
+    return '$count matches';
+  }
+
+  @override
+  String get searchNoResults => 'Nothing found';
+
+  @override
+  String get searchResultsTitle => 'Matches';
+
+  @override
+  String get searchPrevious => 'Previous match';
+
+  @override
+  String get searchNext => 'Next match';
+
+  @override
   String get goToPageTitle => 'Go to page';
 
   @override

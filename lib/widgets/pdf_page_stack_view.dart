@@ -152,6 +152,16 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
   final Map<int, Future<Uint8List?>> _imageFutures = {};
 
+  /// The quantized zoom level the images currently held in [_imageFutures]
+  /// were rasterized at. Zoom is applied with a [Transform] (a pure upscale
+  /// of whatever bitmap we hold), so a page rendered at fit-to-width goes
+  /// soft the moment the reader pinches out — thin lines in a diagram blur to
+  /// mush. To keep the page crisp the visible pages are re-rasterized at a
+  /// resolution that tracks the zoom (see [_renderScaleFor]); whenever the
+  /// quantized zoom moves past a tier, the stale lower-resolution bitmaps are
+  /// dropped so the pages re-render sharp (see [_pruneImageCache]).
+  double _renderedZoomTier = _minZoom;
+
   /// A cheap, low-resolution render of the same pages. Rasterizing a page
   /// at reading sharpness takes long enough to notice, so every page is
   /// asked for twice: this one first (a fraction of the pixels, so it lands
@@ -168,6 +178,25 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   int _activePointerCount = 0;
   Timer? _longPressTimer;
   bool _longPressFired = false;
+
+  // A search hit to wash over in the (picture-only) original view: which page
+  // and the page-space rect of the matched run of words. Set by the reader
+  // from the search sheet; null clears it.
+  int? _searchHighlightPage;
+  Rect? _searchHighlightRectPdf;
+
+  /// Marks a search hit to draw as a highlight rectangle in page-space, or
+  /// clears it when [pageIndex] is null.
+  void setSearchHighlight(int? pageIndex, Rect? pdfBounds) {
+    final page = pageIndex?.clamp(0, widget.pageSizes.length - 1);
+    if (page == _searchHighlightPage && pdfBounds == _searchHighlightRectPdf) {
+      return;
+    }
+    setState(() {
+      _searchHighlightPage = page;
+      _searchHighlightRectPdf = pdfBounds;
+    });
+  }
 
   late final AnimationController _flingController;
 
@@ -693,10 +722,35 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     });
   }
 
-  double _renderScaleFor(int pageIndex, double dpr, double supersample) {
+  double _renderScaleFor(
+    int pageIndex,
+    double dpr,
+    double supersample,
+    double zoomTier,
+  ) {
     final width = widget.pageSizes[pageIndex].width;
-    if (width <= 0) return dpr;
-    return (_contentWidth / width) * dpr * supersample;
+    if (width <= 0) return dpr * zoomTier;
+    return (_contentWidth / width) * dpr * supersample * zoomTier;
+  }
+
+  /// The zoom level a page's bitmap should be rasterized at, quantized into
+  /// a few tiers. Zoom is applied with a [Transform] (a pure upscale of the
+  /// bitmap we hold), so a page rendered at fit-to-width goes soft the moment
+  /// the reader pinches out — thin lines in a diagram blur to mush. Re-
+  /// rasterizing at a resolution that tracks the zoom keeps the page crisp.
+  ///
+  /// The tiers are deliberately coarse: a continuous scale would re-render on
+  /// every pinch frame (rasterizing is the most expensive step in the whole
+  /// view), so we only re-render when the zoom crosses a tier boundary. The
+  /// top tier matches the max zoom, so at full zoom the page is rendered at
+  /// exactly the pixels on screen — no upscale at all.
+  double _zoomRenderScale() {
+    const tiers = [1.0, 1.5, 2.0, 2.5, 3.0];
+    var tier = tiers.first;
+    for (final t in tiers) {
+      if (_zoom >= t - 0.01) tier = t;
+    }
+    return tier;
   }
 
   Future<Uint8List?> _previewFor(int pageIndex) {
@@ -736,7 +790,14 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     );
   }
 
-  void _pruneImageCache(int lo, int hi) {
+  void _pruneImageCache(int lo, int hi, double zoomTier) {
+    // A change of zoom tier means every cached bitmap was rasterized at the
+    // wrong resolution for the new zoom, so drop them all and let the pages
+    // re-render at the new scale (see [_zoomRenderScale]).
+    if (zoomTier != _renderedZoomTier) {
+      _renderedZoomTier = zoomTier;
+      _imageFutures.clear();
+    }
     _imageFutures.removeWhere((key, _) => key < lo - 2 || key > hi + 2);
     _previewFutures.removeWhere((key, _) => key < lo - 4 || key > hi + 4);
   }
@@ -875,6 +936,10 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         // appearing a second later.
         final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.5, 3.0);
         const supersample = 1.25;
+        // The sharp render resolution tracks the zoom tier, so zooming in
+        // re-rasterizes at higher resolution instead of just upscaling the
+        // fit-width bitmap (which is what made thin lines go soft).
+        final zoomTier = _zoomRenderScale();
 
         var lo = 0;
         for (var i = 0; i < _cumulativeY.length; i++) {
@@ -889,7 +954,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         }
         lo = math.max(0, lo - 1);
         hi = math.min(_pageHeights.length - 1, hi + 1);
-        _pruneImageCache(lo, hi);
+        _pruneImageCache(lo, hi, zoomTier);
 
         // Rasterizing is serialized in the native plugin, so the order
         // requests go in *is* the order they come back: the page being
@@ -912,15 +977,18 @@ class PdfPageStackViewState extends State<PdfPageStackView>
           _previewFor(visibleIndex);
           _imageFor(
             visibleIndex,
-            _renderScaleFor(visibleIndex, dpr, supersample),
+            _renderScaleFor(visibleIndex, dpr, supersample, zoomTier),
           );
           for (var i = lo; i <= hi; i++) {
             if (i == visibleIndex) continue;
             _previewFor(i);
-            _imageFor(i, _renderScaleFor(i, dpr, supersample));
+            _imageFor(i, _renderScaleFor(i, dpr, supersample, zoomTier));
           }
         }
 
+        final searchRect = _searchHighlightPage != null
+            ? _contentRectFor(_searchHighlightPage, _searchHighlightRectPdf)
+            : null;
         final wordRect = _contentRectFor(
           widget.selectedPageIndex,
           widget.selectedWordPdfBounds,
@@ -1019,6 +1087,12 @@ class PdfPageStackViewState extends State<PdfPageStackView>
                       if (wordRect != null)
                         _Highlight(
                           rect: wordRect,
+                          color: theme.wordHighlight,
+                          theme: theme,
+                        ),
+                      if (searchRect != null)
+                        _Highlight(
+                          rect: searchRect,
                           color: theme.wordHighlight,
                           theme: theme,
                         ),

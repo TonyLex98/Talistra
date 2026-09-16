@@ -14,7 +14,9 @@ import '../services/translation_service.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/ebook_text.dart';
 import '../utils/txt_paragraphs.dart';
+import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
+import '../widgets/book_search_bar.dart';
 import '../widgets/txt_page_view.dart';
 
 /// Reader for plain .txt files — deliberately much simpler than
@@ -46,6 +48,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
 
   int _currentPage = 1;
   double _fontSize = 17;
+  bool _searchOpen = false;
 
   static const _minDwellSeconds = 3;
   static const _maxCountedDwellSeconds = 600;
@@ -150,6 +153,41 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
       pageCount: _pages.length,
       reflowFontSize: _fontSize,
     );
+  }
+
+  /// Opens the inline search bar in the top bar (in place of the title).
+  void _openSearch() {
+    setState(() => _searchOpen = true);
+  }
+
+  /// Closes the inline search bar and drops the highlight.
+  void _closeSearch() {
+    _pageViewKey.currentState?.clearSearchHighlight();
+    setState(() => _searchOpen = false);
+  }
+
+  /// The search the [BookSearchBar] runs. Plain text has no extraction step:
+  /// the pages are already in memory, so a query is a substring scan
+  /// delivered in one batch.
+  Future<void> _runSearch(
+    String query, {
+    required void Function(List<SearchMatch>) onBatch,
+    required void Function() onDone,
+  }) async {
+    final pages = _pages.map((b) => b.map((x) => x.text).toList()).toList();
+    final matches = searchInPages(pages, query);
+    if (matches.isNotEmpty) onBatch(matches);
+    onDone();
+  }
+
+  void _onSearchSelect(SearchMatch match) {
+    _pageViewKey.currentState?.showSearchHighlight(
+      match.pageIndex + 1,
+      match.blockIndex,
+      match.matchStart,
+      match.matchEnd,
+    );
+    _updateCurrentPage(match.pageIndex + 1);
   }
 
   Future<void> _jumpToPage() async {
@@ -315,103 +353,120 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
-                Expanded(
-                  child: InkWell(
-                    onTap: _pages.isEmpty ? null : _jumpToPage,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 4,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _pages.isEmpty
-                                ? _document.title
-                                : '$_currentPage / ${_pages.length}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (_pages.isNotEmpty)
+                if (_searchOpen)
+                  Expanded(
+                    child: BookSearchBar(
+                      search: _runSearch,
+                      onSelect: _onSearchSelect,
+                      onClose: _closeSearch,
+                    ),
+                  )
+                else ...[
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 22,
+                    icon: const Icon(Icons.search),
+                    tooltip: l10n.searchTooltip,
+                    onPressed: _pages.isEmpty ? null : _openSearch,
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _pages.isEmpty ? null : _jumpToPage,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              _document.title,
+                              _pages.isEmpty
+                                  ? _document.title
+                                  : '$_currentPage / ${_pages.length}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: scheme.onSurfaceVariant,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                        ],
+                            if (_pages.isNotEmpty)
+                              Text(
+                                _document.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 22,
-                  icon: const Icon(Icons.text_decrease),
-                  tooltip: l10n.smallerText,
-                  onPressed: () => _changeFontSize(-1),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 22,
-                  icon: const Icon(Icons.text_increase),
-                  tooltip: l10n.largerText,
-                  onPressed: () => _changeFontSize(1),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 21,
-                  icon: Icon(
-                    Icons.translate,
-                    color: settings.translatorEnabled
-                        ? scheme.primary
-                        : scheme.onSurfaceVariant.withValues(alpha: 0.55),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 22,
+                    icon: const Icon(Icons.text_decrease),
+                    tooltip: l10n.smallerText,
+                    onPressed: () => _changeFontSize(-1),
                   ),
-                  tooltip: settings.translatorEnabled
-                      ? l10n.translatorOnTooltip
-                      : l10n.translatorOffTooltip,
-                  onPressed: () => settings.setTranslatorEnabled(
-                    !settings.translatorEnabled,
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 22,
+                    icon: const Icon(Icons.text_increase),
+                    tooltip: l10n.largerText,
+                    onPressed: () => _changeFontSize(1),
                   ),
-                ),
-                if (settings.translatorEnabled)
-                  InkWell(
-                    onTap: _quickLanguageSwitch,
-                    borderRadius: BorderRadius.circular(9),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 3,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            settings.sourceAppLanguage.flag,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                          Icon(
-                            Icons.arrow_right_alt,
-                            size: 15,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          Text(
-                            settings.targetAppLanguage.flag,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ],
-                      ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 21,
+                    icon: Icon(
+                      Icons.translate,
+                      color: settings.translatorEnabled
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant.withValues(alpha: 0.55),
+                    ),
+                    tooltip: settings.translatorEnabled
+                        ? l10n.translatorOnTooltip
+                        : l10n.translatorOffTooltip,
+                    onPressed: () => settings.setTranslatorEnabled(
+                      !settings.translatorEnabled,
                     ),
                   ),
+                  if (settings.translatorEnabled)
+                    InkWell(
+                      onTap: _quickLanguageSwitch,
+                      borderRadius: BorderRadius.circular(9),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 3,
+                          vertical: 6,
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              settings.sourceAppLanguage.flag,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            Icon(
+                              Icons.arrow_right_alt,
+                              size: 15,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            Text(
+                              settings.targetAppLanguage.flag,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ],
             ),
           ),

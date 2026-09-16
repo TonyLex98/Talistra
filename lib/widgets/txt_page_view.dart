@@ -55,6 +55,14 @@ class TxtPageViewState extends State<TxtPageView> {
   List<_TextSubPage> _subPages = const [];
   bool _initialPositionApplied = false;
 
+  // The search hit the reader is looking at, in source-page / block /
+  // [start, end) coordinates. Only the sub-page that actually holds the block
+  // is told to wash its accent over that range.
+  int _hlSourcePage = -1;
+  int? _hlBlockIndex;
+  int? _hlStart;
+  int? _hlEnd;
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +72,51 @@ class TxtPageViewState extends State<TxtPageView> {
   void jumpToPage(int page) {
     final index = _subPages.indexWhere((item) => item.sourcePage == page - 1);
     if (index >= 0) _pageController.jumpToPage(index);
+  }
+
+  /// Highlights a search hit: jumps to the sub-page that shows [matchStart]
+  /// of [blockIndex] on [page] (1-based) and marks the [matchStart, matchEnd)
+  /// range of its text.
+  void showSearchHighlight(
+    int page,
+    int blockIndex,
+    int matchStart,
+    int matchEnd,
+  ) {
+    setState(() {
+      _hlSourcePage = page - 1;
+      _hlBlockIndex = blockIndex;
+      _hlStart = matchStart;
+      _hlEnd = matchEnd;
+    });
+    _jumpToHighlight();
+  }
+
+  void clearSearchHighlight() {
+    setState(() {
+      _hlSourcePage = -1;
+      _hlBlockIndex = null;
+      _hlStart = null;
+      _hlEnd = null;
+    });
+  }
+
+  void _jumpToHighlight() {
+    if (_hlSourcePage < 0 || _subPages.isEmpty) return;
+    final index = _highlightSubPageIndex();
+    if (index >= 0) _pageController.jumpToPage(index);
+  }
+
+  int _highlightSubPageIndex() {
+    for (var i = 0; i < _subPages.length; i++) {
+      if (_subPages[i].sourcePage != _hlSourcePage) continue;
+      for (final slice in _subPages[i].slices) {
+        if (slice.blockIndex != _hlBlockIndex) continue;
+        if (slice.start == slice.end) return i;
+        if (_hlStart! >= slice.start && _hlStart! < slice.end) return i;
+      }
+    }
+    return _subPages.indexWhere((p) => p.sourcePage == _hlSourcePage);
   }
 
   @override
@@ -97,6 +150,8 @@ class TxtPageViewState extends State<TxtPageView> {
                 widget.onPageChanged(_subPages[index].sourcePage + 1),
             itemBuilder: (context, index) {
               final page = _subPages[index];
+              final isHl =
+                  index == _highlightSubPageIndex() && _hlBlockIndex != null;
               return _TxtPage(
                 key: ValueKey(index),
                 blocks: page.blocks,
@@ -108,6 +163,9 @@ class TxtPageViewState extends State<TxtPageView> {
                 readingTheme: widget.readingTheme,
                 settings: widget.settings,
                 translatorEnabled: widget.translatorEnabled,
+                highlight: isHl
+                    ? (block: _hlBlockIndex, start: _hlStart, end: _hlEnd)
+                    : null,
               );
             },
           );
@@ -142,6 +200,7 @@ class TxtPageViewState extends State<TxtPageView> {
         blockSpacing: 16,
         imageSpacing: 16,
         textScaler: MediaQuery.textScalerOf(context),
+        trailingSpacing: 16,
       );
       for (final slicePage in slices) {
         pages.add(
@@ -180,6 +239,7 @@ class _TxtPage extends StatefulWidget {
     required this.readingTheme,
     required this.settings,
     required this.translatorEnabled,
+    this.highlight,
   });
 
   final List<ReflowBlock> blocks;
@@ -191,6 +251,10 @@ class _TxtPage extends StatefulWidget {
   final ReadingTheme readingTheme;
   final SettingsService settings;
   final bool translatorEnabled;
+
+  /// Which block's [start, end) range of text this sub-page should wash over
+  /// with the search accent, or null if this sub-page holds no match.
+  final ({int? block, int? start, int? end})? highlight;
 
   @override
   State<_TxtPage> createState() => _TxtPageState();
@@ -233,14 +297,30 @@ class _TxtPageState extends State<_TxtPage> {
       settings: widget.settings,
       fontSize: widget.fontSize,
     );
+    final hl = widget.highlight;
+    final hotStart = hl?.start;
+    final hotEnd = hl?.end;
 
-    TextStyle styleAt({required bool selected}) {
-      if (!selected) return baseStyle;
-      return baseStyle.copyWith(
-        fontWeight: FontWeight.w700,
-        color: widget.readingTheme.accent,
-        backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.16),
-      );
+    TextStyle styleAt({required bool selected, bool hot = false}) {
+      if (selected) {
+        return baseStyle.copyWith(
+          fontWeight: FontWeight.w700,
+          color: widget.readingTheme.accent,
+          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.16),
+        );
+      }
+      if (hot) {
+        return baseStyle.copyWith(
+          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.32),
+        );
+      }
+      return baseStyle;
+    }
+
+    bool isHot(int start, int end) {
+      if (hotStart == null || hotEnd == null || hl == null) return false;
+      if (hl.block != blockIndex) return false;
+      return start < hotEnd && end > hotStart;
     }
 
     final spans = <InlineSpan>[];
@@ -252,7 +332,10 @@ class _TxtPageState extends State<_TxtPage> {
       final end = slice.start + match.end;
       if (start > last) {
         spans.add(
-          TextSpan(text: text.substring(last, start), style: baseStyle),
+          TextSpan(
+            text: text.substring(last, start),
+            style: styleAt(selected: false, hot: isHot(last, start)),
+          ),
         );
       }
       final word = match.group(0)!;
@@ -263,7 +346,7 @@ class _TxtPageState extends State<_TxtPage> {
       spans.add(
         TextSpan(
           text: word,
-          style: styleAt(selected: isSelected),
+          style: styleAt(selected: isSelected, hot: isHot(start, end)),
           recognizer: widget.translatorEnabled
               ? (TapGestureRecognizer()
                   ..onTap = () => _onWordTap(blockIndex, start, end, word))
@@ -274,7 +357,10 @@ class _TxtPageState extends State<_TxtPage> {
     }
     if (last < slice.end) {
       spans.add(
-        TextSpan(text: text.substring(last, slice.end), style: baseStyle),
+        TextSpan(
+          text: text.substring(last, slice.end),
+          style: styleAt(selected: false, hot: isHot(last, slice.end)),
+        ),
       );
     }
     return Text.rich(TextSpan(children: spans));

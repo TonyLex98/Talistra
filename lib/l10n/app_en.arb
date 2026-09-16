@@ -45,6 +45,17 @@
   "toLanguage": "To language",
   "toLanguagePickerTitle": "Translate to which language",
   "swapLanguagesTooltip": "Swap languages",
+  "searchTooltip": "Search in book",
+  "searchHint": "What to search for",
+  "searchSearching": "Searching…",
+  "searchResults": "{count} matches",
+  "@searchResults": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "searchNoResults": "Nothing found",
+  "searchResultsTitle": "Matches",
+  "searchPrevious": "Previous match",
+  "searchNext": "Next match",
 
   "settingsScreenTitle": "Settings",
   "supportSectionTitle": "Help and support",

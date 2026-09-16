@@ -10,6 +10,7 @@ import 'services/library_service.dart';
 import 'services/model_download_service.dart';
 import 'services/page_image_cache.dart';
 import 'services/reading_display_service.dart';
+import 'services/search_index_cache.dart';
 import 'services/settings_service.dart';
 import 'services/statistics_service.dart';
 import 'services/translation_service.dart';
@@ -28,6 +29,7 @@ void main() async {
   final library = await LibraryService.load(prefs);
   final thumbnailCache = await ThumbnailCache.create();
   final previewCache = await PagePreviewCache.create();
+  final searchIndexCache = await SearchIndexCache.open();
   final statistics = await StatisticsService.load(prefs);
   final readingDisplay = ReadingDisplayService();
 
@@ -41,6 +43,7 @@ void main() async {
       library: library,
       thumbnailCache: thumbnailCache,
       previewCache: previewCache,
+      searchIndexCache: searchIndexCache,
       statistics: statistics,
       readingDisplay: readingDisplay,
     ),
@@ -93,6 +96,7 @@ class TalistraApp extends StatelessWidget {
     required this.library,
     required this.thumbnailCache,
     required this.previewCache,
+    required this.searchIndexCache,
     required this.statistics,
     required this.readingDisplay,
   });
@@ -101,6 +105,7 @@ class TalistraApp extends StatelessWidget {
   final LibraryService library;
   final ThumbnailCache thumbnailCache;
   final PagePreviewCache previewCache;
+  final SearchIndexCache searchIndexCache;
   final StatisticsService statistics;
   final ReadingDisplayService readingDisplay;
 
@@ -112,6 +117,7 @@ class TalistraApp extends StatelessWidget {
         ChangeNotifierProvider<LibraryService>.value(value: library),
         Provider<ThumbnailCache>.value(value: thumbnailCache),
         Provider<PagePreviewCache>.value(value: previewCache),
+        Provider<SearchIndexCache>.value(value: searchIndexCache),
         ChangeNotifierProvider<StatisticsService>.value(value: statistics),
         Provider<ReadingDisplayService>(
           create: (_) => readingDisplay,

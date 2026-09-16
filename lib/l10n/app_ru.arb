@@ -38,6 +38,17 @@
   "@djvuPageFailed": {
     "placeholders": { "error": {"type": "String"} }
   },
+  "searchTooltip": "Поиск в книге",
+  "searchHint": "Что искать",
+  "searchSearching": "Ищем…",
+  "searchResults": "Совпадений: {count}",
+  "@searchResults": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "searchNoResults": "Ничего не найдено",
+  "searchResultsTitle": "Совпадения",
+  "searchPrevious": "Предыдущее",
+  "searchNext": "Следующее",
   "goToPageTitle": "Перейти на страницу",
   "goToPageHint": "1 – {max}",
   "@goToPageHint": {

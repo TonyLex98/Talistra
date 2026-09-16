@@ -236,6 +236,54 @@ abstract class AppLocalizations {
   /// **'Не удалось отрисовать страницу DjVu: {error}'**
   String djvuPageFailed(String error);
 
+  /// No description provided for @searchTooltip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Поиск в книге'**
+  String get searchTooltip;
+
+  /// No description provided for @searchHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Что искать'**
+  String get searchHint;
+
+  /// No description provided for @searchSearching.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ищем…'**
+  String get searchSearching;
+
+  /// No description provided for @searchResults.
+  ///
+  /// In ru, this message translates to:
+  /// **'Совпадений: {count}'**
+  String searchResults(int count);
+
+  /// No description provided for @searchNoResults.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ничего не найдено'**
+  String get searchNoResults;
+
+  /// No description provided for @searchResultsTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Совпадения'**
+  String get searchResultsTitle;
+
+  /// No description provided for @searchPrevious.
+  ///
+  /// In ru, this message translates to:
+  /// **'Предыдущее'**
+  String get searchPrevious;
+
+  /// No description provided for @searchNext.
+  ///
+  /// In ru, this message translates to:
+  /// **'Следующее'**
+  String get searchNext;
+
   /// No description provided for @goToPageTitle.
   ///
   /// In ru, this message translates to:

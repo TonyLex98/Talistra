@@ -9,6 +9,7 @@ import 'package:transreade/main.dart';
 import 'package:transreade/services/library_service.dart';
 import 'package:transreade/services/page_image_cache.dart';
 import 'package:transreade/services/reading_display_service.dart';
+import 'package:transreade/services/search_index_cache.dart';
 import 'package:transreade/services/settings_service.dart';
 import 'package:transreade/services/statistics_service.dart';
 
@@ -46,6 +47,7 @@ void main() {
     late final LibraryService library;
     late final ThumbnailCache thumbnailCache;
     late final PagePreviewCache previewCache;
+    late final SearchIndexCache searchIndexCache;
     late final StatisticsService statistics;
     await tester.runAsync(() async {
       final prefs = await SharedPreferences.getInstance();
@@ -53,6 +55,7 @@ void main() {
       library = await LibraryService.load(prefs);
       thumbnailCache = await ThumbnailCache.create();
       previewCache = await PagePreviewCache.create();
+      searchIndexCache = await SearchIndexCache.open();
       statistics = await StatisticsService.load(prefs);
     });
 
@@ -62,6 +65,7 @@ void main() {
         library: library,
         thumbnailCache: thumbnailCache,
         previewCache: previewCache,
+        searchIndexCache: searchIndexCache,
         statistics: statistics,
         readingDisplay: ReadingDisplayService(),
       ),

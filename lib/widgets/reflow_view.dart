@@ -118,6 +118,21 @@ class ReflowPdfViewState extends State<ReflowPdfView>
   String? _selectedWord;
   SentenceMatch? _selectedSentence;
 
+  // The search hit the reader is looking at: which page and block it sits in,
+  // and the [start, end) range inside that block's text to wash over. Stored
+  // in the view's own coordinates (page + block + offsets) so it survives
+  // sub-page turns — the block is the stable unit, and a match spanning a
+  // sub-page boundary keeps its highlight on whichever slice is showing.
+  int _hlPage = -1;
+  int? _hlBlockIndex;
+  int? _hlStart;
+  int? _hlEnd;
+
+  // The last content box the build laid out, kept so a search hit can be
+  // mapped onto a sub-page index (which only exists once pagination has a
+  // size to work with) without having to re-run a layout to find it.
+  Size _lastContentSize = Size.zero;
+
   // Experimental sync translation: the translation of the sub-page being
   // read right now.
   Timer? _translateDebounce;
@@ -169,6 +184,54 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       _clearSelection();
     });
     _scheduleTranslation();
+  }
+
+  /// Highlights a search hit: jumps to its page and marks the [matchStart,
+  /// matchEnd) range of [blockIndex]'s text. The reader calls this from the
+  /// search sheet whenever the reader lands on a match.
+  void showSearchHighlight(
+    int page,
+    int blockIndex,
+    int matchStart,
+    int matchEnd,
+  ) {
+    final index = (page - 1).clamp(0, widget.pageCount - 1);
+    final subPage = _subPageForBlock(index, blockIndex, matchStart);
+    setState(() {
+      _pageIndex = index;
+      _subPageIndex = subPage;
+      _hlPage = index;
+      _hlBlockIndex = blockIndex;
+      _hlStart = matchStart;
+      _hlEnd = matchEnd;
+      _clearSelection();
+    });
+    _scheduleTranslation();
+  }
+
+  /// The sub-page that shows [matchStart] of [blockIndex], so a jump lands
+  /// on the line the match actually sits on rather than the top of the page.
+  int _subPageForBlock(int pageIndex, int blockIndex, int matchStart) {
+    if (_lastContentSize.width <= 0 || _lastContentSize.height <= 0) return 0;
+    final subPages = _subPagesFor(pageIndex, _lastContentSize);
+    for (var i = 0; i < subPages.length; i++) {
+      for (final slice in subPages[i]) {
+        if (slice.blockIndex != blockIndex) continue;
+        if (slice.start == slice.end) return i; // image block: whole thing
+        if (matchStart >= slice.start && matchStart < slice.end) return i;
+      }
+    }
+    return 0;
+  }
+
+  void clearSearchHighlight() {
+    if (_hlPage < 0) return;
+    setState(() {
+      _hlPage = -1;
+      _hlBlockIndex = null;
+      _hlStart = null;
+      _hlEnd = null;
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -487,6 +550,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
             return const SizedBox.shrink();
           }
           _warmNeighbourPages(contentSize);
+          _lastContentSize = contentSize;
 
           final reader = _buildTurnableArea(
             context,
@@ -735,7 +799,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
         // the top; a new one gets its usual space above it.
         top: isFirst || !slice.isFirstOfBlock ? 0 : (block.isHeading ? 14 : 16),
       ),
-      child: _buildParagraph(slice.blockIndex, block, slice),
+      child: _buildParagraph(pageIndex, slice.blockIndex, block, slice),
     );
   }
 
@@ -886,10 +950,20 @@ class ReflowPdfViewState extends State<ReflowPdfView>
   /// which part is drawn), so a tapped word is looked up in the whole
   /// paragraph — the sentence it belongs to doesn't get cut off just
   /// because the sub-page boundary fell in the middle of it.
-  Widget _buildParagraph(int blockIndex, ReflowBlock block, ReflowSlice slice) {
+  Widget _buildParagraph(
+    int pageIndex,
+    int blockIndex,
+    ReflowBlock block,
+    ReflowSlice slice,
+  ) {
     final baseStyle = _styleFor(block);
+    final highlighted =
+        blockIndex == _hlBlockIndex &&
+        pageIndex == _hlPage &&
+        _hlStart != null &&
+        _hlEnd != null;
 
-    TextStyle styleAt(int pos, {required bool selected}) {
+    TextStyle styleAt(int pos, {required bool selected, bool hot = false}) {
       var style = baseStyle;
       for (final run in block.formatRuns) {
         if (pos >= run.start && pos < run.end) {
@@ -900,6 +974,11 @@ class ReflowPdfViewState extends State<ReflowPdfView>
           break;
         }
       }
+      if (hot) {
+        style = style.copyWith(
+          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.32),
+        );
+      }
       if (selected) {
         style = style.copyWith(
           fontWeight: FontWeight.w700,
@@ -909,6 +988,9 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       }
       return style;
     }
+
+    bool isHot(int start, int end) =>
+        highlighted && start < _hlEnd! && end > _hlStart!;
 
     final text = block.text;
     final spans = <InlineSpan>[];
@@ -922,7 +1004,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
         spans.add(
           TextSpan(
             text: text.substring(last, start),
-            style: styleAt(last, selected: false),
+            style: styleAt(last, selected: false, hot: isHot(last, start)),
           ),
         );
       }
@@ -934,7 +1016,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       spans.add(
         TextSpan(
           text: word,
-          style: styleAt(start, selected: isSelected),
+          style: styleAt(start, selected: isSelected, hot: isHot(start, end)),
           recognizer: widget.translatorEnabled
               ? (TapGestureRecognizer()
                   ..onTap = () =>
@@ -948,7 +1030,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       spans.add(
         TextSpan(
           text: text.substring(last, slice.end),
-          style: styleAt(last, selected: false),
+          style: styleAt(last, selected: false, hot: isHot(last, slice.end)),
         ),
       );
     }
