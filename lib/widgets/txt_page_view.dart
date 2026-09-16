@@ -200,7 +200,7 @@ class TxtPageViewState extends State<TxtPageView> {
         blockSpacing: 16,
         imageSpacing: 16,
         textScaler: MediaQuery.textScalerOf(context),
-        trailingSpacing: 16,
+        trailingSpacing: 24,
       );
       for (final slicePage in slices) {
         pages.add(
