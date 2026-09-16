@@ -66,6 +66,28 @@ class AppLocalizationsRu extends AppLocalizations {
   String get delete => 'Удалить';
 
   @override
+  String get renameBook => 'Переименовать';
+
+  @override
+  String get renameDocumentTitle => 'Переименовать книгу';
+
+  @override
+  String get renameDocumentHint => 'Название книги';
+
+  @override
+  String get save => 'Сохранить';
+
+  @override
+  String documentDetailsPageSize(int width, int height) {
+    return '$width × $height мм';
+  }
+
+  @override
+  String documentDetailsScanResolution(int width, int height, int dpi) {
+    return '$width × $height px · $dpi DPI';
+  }
+
+  @override
   String openFailed(String error) {
     return 'Не удалось открыть книгу: $error';
   }

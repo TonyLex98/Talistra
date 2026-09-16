@@ -192,6 +192,21 @@ class LibraryService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Renames a document. Only the library entry's own [LibraryDocument.title]
+  /// changes — the underlying file on disk keeps its internal `<id>.<format>`
+  /// name, so nothing else (thumbnail cache key, statistics, file path) needs
+  /// to move.
+  Future<void> rename(String id, String title) async {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return;
+    final index = _documents.indexWhere((d) => d.id == id);
+    if (index == -1) return;
+    if (_documents[index].title == trimmed) return;
+    _documents[index] = _documents[index].copyWith(title: trimmed);
+    await _persist();
+    notifyListeners();
+  }
+
   Future<void> toggleStarred(String id) async {
     final index = _documents.indexWhere((d) => d.id == id);
     if (index == -1) return;

@@ -72,6 +72,7 @@ class LibraryDocument {
   double get progress => pageCount <= 1 ? 0 : (lastPage - 1) / (pageCount - 1);
 
   LibraryDocument copyWith({
+    String? title,
     int? pageCount,
     int? lastPage,
     bool? reflowMode,
@@ -85,7 +86,7 @@ class LibraryDocument {
   }) {
     return LibraryDocument(
       id: id,
-      title: title,
+      title: title ?? this.title,
       filePath: filePath,
       addedAt: addedAt,
       sourceFingerprint: sourceFingerprint,

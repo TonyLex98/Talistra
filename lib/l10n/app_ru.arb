@@ -25,6 +25,22 @@
   },
   "cancel": "Отмена",
   "delete": "Удалить",
+  "renameBook": "Переименовать",
+  "renameDocumentTitle": "Переименовать книгу",
+  "renameDocumentHint": "Название книги",
+  "save": "Сохранить",
+  "documentDetailsPageSize": "{width} × {height} мм",
+  "@documentDetailsPageSize": {
+    "placeholders": { "width": {"type": "int"}, "height": {"type": "int"} }
+  },
+  "documentDetailsScanResolution": "{width} × {height} px · {dpi} DPI",
+  "@documentDetailsScanResolution": {
+    "placeholders": {
+      "width": {"type": "int"},
+      "height": {"type": "int"},
+      "dpi": {"type": "int"}
+    }
+  },
 
   "openFailed": "Не удалось открыть книгу: {error}",
   "@openFailed": {

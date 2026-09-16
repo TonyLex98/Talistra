@@ -200,6 +200,42 @@ abstract class AppLocalizations {
   /// **'Удалить'**
   String get delete;
 
+  /// No description provided for @renameBook.
+  ///
+  /// In ru, this message translates to:
+  /// **'Переименовать'**
+  String get renameBook;
+
+  /// No description provided for @renameDocumentTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Переименовать книгу'**
+  String get renameDocumentTitle;
+
+  /// No description provided for @renameDocumentHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Название книги'**
+  String get renameDocumentHint;
+
+  /// No description provided for @save.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сохранить'**
+  String get save;
+
+  /// No description provided for @documentDetailsPageSize.
+  ///
+  /// In ru, this message translates to:
+  /// **'{width} × {height} мм'**
+  String documentDetailsPageSize(int width, int height);
+
+  /// No description provided for @documentDetailsScanResolution.
+  ///
+  /// In ru, this message translates to:
+  /// **'{width} × {height} px · {dpi} DPI'**
+  String documentDetailsScanResolution(int width, int height, int dpi);
+
   /// No description provided for @openFailed.
   ///
   /// In ru, this message translates to:

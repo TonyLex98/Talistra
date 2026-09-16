@@ -19,6 +19,22 @@
   "deleteDocumentBody": "\"{title}\" will be removed from the library along with your reading progress.",
   "cancel": "Cancel",
   "delete": "Delete",
+  "renameBook": "Rename",
+  "renameDocumentTitle": "Rename book",
+  "renameDocumentHint": "Book title",
+  "save": "Save",
+  "documentDetailsPageSize": "{width} × {height} mm",
+  "@documentDetailsPageSize": {
+    "placeholders": { "width": {"type": "int"}, "height": {"type": "int"} }
+  },
+  "documentDetailsScanResolution": "{width} × {height} px · {dpi} DPI",
+  "@documentDetailsScanResolution": {
+    "placeholders": {
+      "width": {"type": "int"},
+      "height": {"type": "int"},
+      "dpi": {"type": "int"}
+    }
+  },
 
   "openFailed": "Couldn't open the book: {error}",
   "djvuOpening": "Opening DjVu…",

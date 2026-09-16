@@ -66,6 +66,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get delete => 'Delete';
 
   @override
+  String get renameBook => 'Rename';
+
+  @override
+  String get renameDocumentTitle => 'Rename book';
+
+  @override
+  String get renameDocumentHint => 'Book title';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String documentDetailsPageSize(int width, int height) {
+    return '$width × $height mm';
+  }
+
+  @override
+  String documentDetailsScanResolution(int width, int height, int dpi) {
+    return '$width × $height px · $dpi DPI';
+  }
+
+  @override
   String openFailed(String error) {
     return 'Couldn\'t open the book: $error';
   }
