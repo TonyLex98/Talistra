@@ -176,24 +176,34 @@ List<String> _pageBlockTexts(PdfDocument document, int index) {
 // highlight rect is measured on the main isolate afterwards.
 // ---------------------------------------------------------------------------
 
-/// The whole-book text index for one PDF, built once in a background isolate
-/// and cached. See the note above for why it exists.
+/// The whole-book text index for one PDF, built once in one or two
+/// background isolates and cached. See the note above for why it exists.
+///
+/// A book with enough pages to be worth it is split into two halves and
+/// extracted by two isolates in parallel — the dominant cost is per-page PDF
+/// text extraction, which is embarrassingly parallel (one page's extraction
+/// never depends on another's), so two isolates roughly halve the wall-clock
+/// time on any device with more than one usable core.
 class PdfSearchIndex {
-  /// Block texts for every page, filled in as the isolate works. `null`
-  /// until a build has started; entries are filled in page order.
+  /// Block texts for every page, filled in (possibly out of order, by
+  /// whichever worker gets there first) as the isolates work. `null` until a
+  /// build has started.
   List<List<String>>? _pages;
 
-  /// How many pages have been indexed so far (a prefix of [_pages]).
-  int _indexed = 0;
+  /// Parallel to [_pages]: whether that page has actually been written yet
+  /// (an unfilled page's `List<String>` slot isn't otherwise distinguishable
+  /// from a real, empty page).
+  List<bool> _filled = const [];
+  int _filledCount = 0;
+  int _totalPages = 0;
 
-  /// Whether the total page count has been reported by the isolate. Until it
-  /// has, [_pages] is empty and `_indexed == 0`, which would otherwise make
-  /// [_isSearchComplete] read `0 >= 0` as "done" — so a search typed in the
-  /// first couple seconds would finish instantly with zero results.
+  /// Whether [_totalPages] is known yet. Until it is, `isReady` must not
+  /// read as true just because nothing has been filled in.
   bool _countKnown = false;
 
-  Isolate? _isolate;
-  ReceivePort? _port;
+  final List<Isolate> _isolates = [];
+  final List<ReceivePort> _ports = [];
+  int _pendingWorkers = 0;
   bool _building = false;
 
   /// The active search, if any: the query being reported and the batch + done
@@ -201,9 +211,10 @@ class PdfSearchIndex {
   String? _activeQuery;
   void Function(List<SearchMatch> batch)? _activeOnBatch;
   VoidCallback? _activeOnDone;
+  final Set<int> _reportedPages = {};
 
   /// True once every page has been indexed.
-  bool get isReady => _pages != null && _indexed == _pages!.length;
+  bool get isReady => _countKnown && _filledCount == _totalPages;
 
   /// Starts building the index for [filePath] if it isn't already. Idempotent:
   /// calling it again while a build runs (or after it finished) is a no-op, so
@@ -224,7 +235,9 @@ class PdfSearchIndex {
       final cached = await cache.read(documentId);
       if (cached != null) {
         _pages = cached;
-        _indexed = cached.length;
+        _totalPages = cached.length;
+        _filled = List<bool>.filled(cached.length, true);
+        _filledCount = cached.length;
         _countKnown = true;
         _building = false;
         _reportNewPages();
@@ -232,57 +245,72 @@ class PdfSearchIndex {
         return;
       }
     }
-    _pages = <List<String>>[];
-    _port = ReceivePort();
-    final sendPort = _port!.sendPort;
-    _port!.listen((message) {
-      if (message is int) {
-        _pages!.length = message;
-        _countKnown = true;
-      } else if (message is Map) {
-        final page = message['page'] as int;
-        final blocks = (message['blocks'] as List).cast<String>();
-        if (page < _pages!.length) _pages![page] = blocks;
-        _indexed = page + 1;
-        _reportNewPages();
-      } else if (message == 'done') {
-        _building = false;
-        _isolate = null;
-        _port?.close();
-        _port = null;
-        _reportNewPages();
-        _finishActiveSearch();
-        if (documentId != null && cache != null && _pages != null) {
-          unawaited(cache.write(documentId, _pages!));
+    final total = await Isolate.run(() => _pageCount(filePath));
+    if (!_building) return; // cancelled while the count was in flight
+    _totalPages = total;
+    _countKnown = true;
+    _pages = List<List<String>>.generate(total, (_) => const []);
+    _filled = List<bool>.filled(total, false);
+    if (total == 0) {
+      _building = false;
+      _finishActiveSearch();
+      return;
+    }
+    // Not worth splitting a short book — one isolate's spin-up cost would
+    // eat the saving.
+    final ranges = total >= 40
+        ? [(0, total ~/ 2), (total ~/ 2, total)]
+        : [(0, total)];
+    _pendingWorkers = ranges.length;
+    for (final (start, end) in ranges) {
+      final port = ReceivePort();
+      _ports.add(port);
+      port.listen((message) {
+        if (message is Map) {
+          final page = message['page'] as int;
+          final blocks = (message['blocks'] as List).cast<String>();
+          if (page < _pages!.length && !_filled[page]) {
+            _pages![page] = blocks;
+            _filled[page] = true;
+            _filledCount++;
+          }
+          _reportNewPages();
+        } else if (message == 'done') {
+          port.close();
+          _pendingWorkers--;
+          if (_pendingWorkers <= 0) {
+            _building = false;
+            _isolates.clear();
+            _ports.clear();
+            _reportNewPages();
+            _finishActiveSearch();
+            if (documentId != null && cache != null && _pages != null) {
+              unawaited(cache.write(documentId, _pages!));
+            }
+          }
         }
-      }
-    });
-    _isolate = await Isolate.spawn(_worker, [filePath, sendPort]);
+      });
+      _isolates.add(
+        await Isolate.spawn(_worker, [filePath, port.sendPort, start, end]),
+      );
+    }
   }
 
-  /// Scans the pages that have become newly indexed since the last report for
+  /// Scans pages that have become newly indexed since the last report for
   /// the active query, streaming any hits. No-op if no search is active.
   void _reportNewPages() {
     final query = _activeQuery;
-    if (query == null || _pages == null) return;
-    final pages = _pages!;
-    final to = _indexed;
-    if (to == 0) return;
-    final from = _reportedUpTo;
-    if (to <= from) return;
+    final pages = _pages;
+    if (query == null || pages == null) return;
     final batch = <SearchMatch>[];
-    for (var i = from; i < to && i < pages.length; i++) {
+    for (var i = 0; i < _filled.length; i++) {
+      if (!_filled[i] || _reportedPages.contains(i)) continue;
+      _reportedPages.add(i);
       batch.addAll(_searchPageBlocks(pages[i], query, i));
     }
-    _reportedUpTo = to;
     if (batch.isNotEmpty) _activeOnBatch?.call(batch);
-    if (_isSearchComplete()) _finishActiveSearch();
+    if (isReady) _finishActiveSearch();
   }
-
-  int _reportedUpTo = 0;
-
-  bool _isSearchComplete() =>
-      _pages != null && _countKnown && _indexed >= _pages!.length;
 
   void _finishActiveSearch() {
     final onDone = _activeOnDone;
@@ -305,40 +333,58 @@ class PdfSearchIndex {
     _activeQuery = query;
     _activeOnBatch = onBatch;
     _activeOnDone = onDone;
-    _reportedUpTo = 0;
+    _reportedPages.clear();
     _reportNewPages();
-    if (_isSearchComplete()) _finishActiveSearch();
+    if (isReady) _finishActiveSearch();
   }
 
   /// Cancels any in-flight build and drops the cached index. The reader calls
-  /// this in dispose so the isolate and its memory are released.
+  /// this in dispose so the isolates and their memory are released.
   Future<void> cancel() async {
-    final isolate = _isolate;
-    final port = _port;
-    _isolate = null;
-    _port = null;
+    final isolates = _isolates.toList();
+    final ports = _ports.toList();
+    _isolates.clear();
+    _ports.clear();
     _building = false;
     _activeOnDone = null;
     _activeQuery = null;
     _activeOnBatch = null;
+    _reportedPages.clear();
     _pages = null;
-    _indexed = 0;
-    if (isolate != null) isolate.kill(priority: Isolate.immediate);
-    port?.close();
+    _filled = const [];
+    _filledCount = 0;
+    _totalPages = 0;
+    _countKnown = false;
+    for (final isolate in isolates) {
+      isolate.kill(priority: Isolate.immediate);
+    }
+    for (final port in ports) {
+      port.close();
+    }
   }
 
-  /// The isolate body: extract every page's block texts and send them back one
-  /// page at a time (the page index first, so the receiver can pre-allocate).
-  /// Runs entirely off the UI isolate; it only ever sends plain values.
-  static Future<void> _worker(List args) async {
-    final filePath = args[0] as String;
-    final sendPort = args[1] as SendPort;
+  static Future<int> _pageCount(String filePath) async {
     final bytes = await File(filePath).readAsBytes();
     final document = PdfDocument(inputBytes: bytes);
     try {
-      final total = document.pages.count;
-      sendPort.send(total);
-      for (var i = 0; i < total; i++) {
+      return document.pages.count;
+    } finally {
+      document.dispose();
+    }
+  }
+
+  /// The isolate body: extract the block texts of pages `[start, end)` and
+  /// send them back one page at a time. Runs entirely off the UI isolate; it
+  /// only ever sends plain values.
+  static Future<void> _worker(List args) async {
+    final filePath = args[0] as String;
+    final sendPort = args[1] as SendPort;
+    final start = args[2] as int;
+    final end = args[3] as int;
+    final bytes = await File(filePath).readAsBytes();
+    final document = PdfDocument(inputBytes: bytes);
+    try {
+      for (var i = start; i < end; i++) {
         sendPort.send({'page': i, 'blocks': _pageBlockTexts(document, i)});
       }
     } finally {
