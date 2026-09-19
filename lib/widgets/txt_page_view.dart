@@ -200,7 +200,14 @@ class TxtPageViewState extends State<TxtPageView> {
         blockSpacing: 16,
         imageSpacing: 16,
         textScaler: MediaQuery.textScalerOf(context),
-        trailingSpacing: 24,
+        // The renderer gives every slice a fixed 16px bottom margin (see the
+        // per-slice Padding below), plus a little more that scales with font
+        // size: each wrapped line's real painted height drifts from the
+        // paginator's per-line measurement by a sub-pixel amount, and a
+        // paragraph with enough wrapped lines can accumulate that into
+        // several visible pixels — more of a problem the bigger the font
+        // (and so the fewer characters, the more lines, per paragraph).
+        trailingSpacing: 16 + widget.fontSize,
       );
       for (final slicePage in slices) {
         pages.add(
