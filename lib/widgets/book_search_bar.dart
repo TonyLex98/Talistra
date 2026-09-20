@@ -33,9 +33,12 @@ class BookSearchBar extends StatefulWidget {
   })
   search;
 
-  /// Called with the match the reader has landed on; the reader jumps to its
-  /// page and highlights it in the file.
-  final ValueChanged<SearchMatch> onSelect;
+  /// Called with the match the reader has landed on, and every match found
+  /// so far — the reader jumps to the landed-on match's page and highlights
+  /// it, and also washes over that page's other matches (from the full
+  /// list) more faintly, so their positions are visible at a glance too.
+  final void Function(SearchMatch match, List<SearchMatch> allMatches)
+  onSelect;
 
   final VoidCallback onClose;
 
@@ -102,7 +105,7 @@ class _BookSearchBarState extends State<BookSearchBar> {
                 if (_current < 0) _current = 0;
               });
               if (_current == 0 && _matches.isNotEmpty) {
-                widget.onSelect(_matches.first);
+                widget.onSelect(_matches.first, _matches);
               }
             },
             onDone: () {
@@ -125,7 +128,7 @@ class _BookSearchBarState extends State<BookSearchBar> {
     final wrapped = _wrap(index);
     if (wrapped < 0) return;
     setState(() => _current = wrapped);
-    widget.onSelect(_matches[wrapped]);
+    widget.onSelect(_matches[wrapped], _matches);
   }
 
   @override

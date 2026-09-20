@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, TextLine;
 
@@ -181,20 +182,32 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
   // A search hit to wash over in the (picture-only) original view: which page
   // and the page-space rect of the matched run of words. Set by the reader
-  // from the search sheet; null clears it.
+  // from the search sheet; null clears it. [_searchHighlightOtherRectsPdf]
+  // are every other match that also falls on this page — drawn fainter, so
+  // the reader can see at a glance where the rest of this page's hits are
+  // without losing track of which one next/previous is currently on.
   int? _searchHighlightPage;
   Rect? _searchHighlightRectPdf;
+  List<Rect> _searchHighlightOtherRectsPdf = const [];
 
   /// Marks a search hit to draw as a highlight rectangle in page-space, or
-  /// clears it when [pageIndex] is null.
-  void setSearchHighlight(int? pageIndex, Rect? pdfBounds) {
+  /// clears it when [pageIndex] is null. [otherPdfBounds] are this page's
+  /// other matches, drawn as a fainter wash alongside the current one.
+  void setSearchHighlight(
+    int? pageIndex,
+    Rect? pdfBounds, {
+    List<Rect> otherPdfBounds = const [],
+  }) {
     final page = pageIndex?.clamp(0, widget.pageSizes.length - 1);
-    if (page == _searchHighlightPage && pdfBounds == _searchHighlightRectPdf) {
+    if (page == _searchHighlightPage &&
+        pdfBounds == _searchHighlightRectPdf &&
+        listEquals(otherPdfBounds, _searchHighlightOtherRectsPdf)) {
       return;
     }
     setState(() {
       _searchHighlightPage = page;
       _searchHighlightRectPdf = pdfBounds;
+      _searchHighlightOtherRectsPdf = otherPdfBounds;
     });
   }
 
@@ -989,6 +1002,12 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         final searchRect = _searchHighlightPage != null
             ? _contentRectFor(_searchHighlightPage, _searchHighlightRectPdf)
             : null;
+        final searchOtherRects = <Rect>[
+          if (_searchHighlightPage != null)
+            for (final r in _searchHighlightOtherRectsPdf)
+              if (_contentRectFor(_searchHighlightPage, r) case final rect?)
+                rect,
+        ];
         final wordRect = _contentRectFor(
           widget.selectedPageIndex,
           widget.selectedWordPdfBounds,
@@ -1088,6 +1107,15 @@ class PdfPageStackViewState extends State<PdfPageStackView>
                         _Highlight(
                           rect: wordRect,
                           color: theme.wordHighlight,
+                          theme: theme,
+                        ),
+                      // The page's other matches, faint, go down first so
+                      // the current one (full strength, right below) always
+                      // reads as the stronger mark if they ever overlap.
+                      for (final rect in searchOtherRects)
+                        _Highlight(
+                          rect: rect,
+                          color: theme.wordHighlight.withValues(alpha: 0.35),
                           theme: theme,
                         ),
                       if (searchRect != null)

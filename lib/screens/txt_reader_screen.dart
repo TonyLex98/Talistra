@@ -185,12 +185,17 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     onDone();
   }
 
-  void _onSearchSelect(SearchMatch match) {
+  void _onSearchSelect(SearchMatch match, List<SearchMatch> allMatches) {
     _pageViewKey.currentState?.showSearchHighlight(
       match.pageIndex + 1,
       match.blockIndex,
       match.matchStart,
       match.matchEnd,
+      others: [
+        for (final m in allMatches)
+          if (m.pageIndex == match.pageIndex && m != match)
+            (blockIndex: m.blockIndex, start: m.matchStart, end: m.matchEnd),
+      ],
     );
     _updateCurrentPage(match.pageIndex + 1);
   }

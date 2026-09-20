@@ -35,6 +35,7 @@ class SearchMatch {
     required this.matchStart,
     required this.matchEnd,
     required this.snippet,
+    required this.pageOccurrenceIndex,
     this.pdfBounds,
   });
 
@@ -50,6 +51,17 @@ class SearchMatch {
 
   /// A short context line centred on the match, for the results list.
   final String snippet;
+
+  /// This match's position among every match of the same query on this
+  /// page (0 = the first one), counted in reading order across blocks.
+  ///
+  /// The reflow view never needs this — it already has [blockIndex] and
+  /// [matchStart]/[matchEnd] to highlight the exact spot. The *original*
+  /// PDF view has no such precise reference (it re-locates the query from
+  /// scratch in the page's raw word geometry, a different text extraction
+  /// entirely), so this is how it tells two matches on the same page apart:
+  /// "highlight the Nth occurrence", not just "the first one" every time.
+  final int pageOccurrenceIndex;
 
   /// The match in PDF page-space, for the original view's overlay (null for
   /// text-only formats, and until the reader measures it).
@@ -73,6 +85,7 @@ List<SearchMatch> _searchPageBlocks(
   final needle = normalizeQuery(query).toLowerCase();
   if (needle.isEmpty) return const [];
   final matches = <SearchMatch>[];
+  var occurrenceIndex = 0;
   for (var block = 0; block < blocks.length; block++) {
     final text = blocks[block];
     if (text.isEmpty) continue;
@@ -89,8 +102,10 @@ List<SearchMatch> _searchPageBlocks(
           matchStart: index,
           matchEnd: end,
           snippet: _snippet(text, index, end),
+          pageOccurrenceIndex: occurrenceIndex,
         ),
       );
+      occurrenceIndex++;
       from = end;
       if (end == index) break;
     }
@@ -394,15 +409,24 @@ class PdfSearchIndex {
   }
 }
 
-/// Locates [query] in a single PDF page's extracted words and returns the
-/// page-space bounding box of the first matching run of words, or null.
+/// Locates the [occurrenceIndex]-th occurrence (0 = first) of [query] in a
+/// single PDF page's extracted words and returns its page-space bounding
+/// box, or null.
 ///
 /// This exists so the *original* (rasterized) PDF view can drop a highlight
 /// rectangle over a search hit: a picture has no live text to style, so the
 /// only thing to draw is a box, and the box has to come from the page's real
-/// word geometry rather than the reflowed text.
-Rect? findMatchPdfBounds(List<TextLine> lines, String query, Size pageSize) {
-  final needle = normalizeQuery(query);
+/// word geometry rather than the reflowed text. [occurrenceIndex] matters
+/// whenever a page has more than one hit — without it, every match on the
+/// same page would resolve to the same (first) box, and pressing
+/// next/previous through them would look like nothing happened.
+Rect? findMatchPdfBounds(
+  List<TextLine> lines,
+  String query,
+  Size pageSize,
+  int occurrenceIndex,
+) {
+  final needle = normalizeQuery(query).toLowerCase();
   if (needle.isEmpty) return null;
 
   final words = buildPageWords(lines);
@@ -420,8 +444,14 @@ Rect? findMatchPdfBounds(List<TextLine> lines, String query, Size pageSize) {
     wordSpans.add((start, buffer.length));
   }
   final haystack = buffer.toString().toLowerCase();
-  final index = haystack.indexOf(needle.toLowerCase());
-  if (index == -1) return null;
+
+  var index = -1;
+  var from = 0;
+  for (var occ = 0; occ <= occurrenceIndex; occ++) {
+    index = haystack.indexOf(needle, from);
+    if (index == -1) return null;
+    from = index + needle.length;
+  }
   final end = index + needle.length;
 
   var bounds = Rect.zero;

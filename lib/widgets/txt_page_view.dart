@@ -63,6 +63,10 @@ class TxtPageViewState extends State<TxtPageView> {
   int? _hlStart;
   int? _hlEnd;
 
+  // Every other match that also falls on [_hlSourcePage] — washed over
+  // fainter than the current hit, on whichever sub-page each one lands on.
+  List<({int blockIndex, int start, int end})> _hlOthers = const [];
+
   @override
   void initState() {
     super.initState();
@@ -81,13 +85,15 @@ class TxtPageViewState extends State<TxtPageView> {
     int page,
     int blockIndex,
     int matchStart,
-    int matchEnd,
-  ) {
+    int matchEnd, {
+    List<({int blockIndex, int start, int end})> others = const [],
+  }) {
     setState(() {
       _hlSourcePage = page - 1;
       _hlBlockIndex = blockIndex;
       _hlStart = matchStart;
       _hlEnd = matchEnd;
+      _hlOthers = others;
     });
     _jumpToHighlight();
   }
@@ -98,6 +104,7 @@ class TxtPageViewState extends State<TxtPageView> {
       _hlBlockIndex = null;
       _hlStart = null;
       _hlEnd = null;
+      _hlOthers = const [];
     });
   }
 
@@ -166,6 +173,9 @@ class TxtPageViewState extends State<TxtPageView> {
                 highlight: isHl
                     ? (block: _hlBlockIndex, start: _hlStart, end: _hlEnd)
                     : null,
+                otherHighlights: page.sourcePage == _hlSourcePage
+                    ? _hlOthers
+                    : const [],
               );
             },
           );
@@ -247,6 +257,7 @@ class _TxtPage extends StatefulWidget {
     required this.settings,
     required this.translatorEnabled,
     this.highlight,
+    this.otherHighlights = const [],
   });
 
   final List<ReflowBlock> blocks;
@@ -262,6 +273,10 @@ class _TxtPage extends StatefulWidget {
   /// Which block's [start, end) range of text this sub-page should wash over
   /// with the search accent, or null if this sub-page holds no match.
   final ({int? block, int? start, int? end})? highlight;
+
+  /// This sub-page's other matches (same source page, different block or
+  /// range from [highlight]) — washed over fainter than the current one.
+  final List<({int blockIndex, int start, int end})> otherHighlights;
 
   @override
   State<_TxtPage> createState() => _TxtPageState();
@@ -307,8 +322,15 @@ class _TxtPageState extends State<_TxtPage> {
     final hl = widget.highlight;
     final hotStart = hl?.start;
     final hotEnd = hl?.end;
+    final otherRanges = widget.otherHighlights
+        .where((o) => o.blockIndex == blockIndex)
+        .toList();
 
-    TextStyle styleAt({required bool selected, bool hot = false}) {
+    TextStyle styleAt({
+      required bool selected,
+      bool hot = false,
+      bool otherHot = false,
+    }) {
       if (selected) {
         return baseStyle.copyWith(
           fontWeight: FontWeight.w700,
@@ -321,6 +343,11 @@ class _TxtPageState extends State<_TxtPage> {
           backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.32),
         );
       }
+      if (otherHot) {
+        return baseStyle.copyWith(
+          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.14),
+        );
+      }
       return baseStyle;
     }
 
@@ -328,6 +355,13 @@ class _TxtPageState extends State<_TxtPage> {
       if (hotStart == null || hotEnd == null || hl == null) return false;
       if (hl.block != blockIndex) return false;
       return start < hotEnd && end > hotStart;
+    }
+
+    bool isOtherHot(int start, int end) {
+      for (final o in otherRanges) {
+        if (start < o.end && end > o.start) return true;
+      }
+      return false;
     }
 
     final spans = <InlineSpan>[];
@@ -341,7 +375,11 @@ class _TxtPageState extends State<_TxtPage> {
         spans.add(
           TextSpan(
             text: text.substring(last, start),
-            style: styleAt(selected: false, hot: isHot(last, start)),
+            style: styleAt(
+              selected: false,
+              hot: isHot(last, start),
+              otherHot: isOtherHot(last, start),
+            ),
           ),
         );
       }
@@ -353,7 +391,11 @@ class _TxtPageState extends State<_TxtPage> {
       spans.add(
         TextSpan(
           text: word,
-          style: styleAt(selected: isSelected, hot: isHot(start, end)),
+          style: styleAt(
+            selected: isSelected,
+            hot: isHot(start, end),
+            otherHot: isOtherHot(start, end),
+          ),
           recognizer: widget.translatorEnabled
               ? (TapGestureRecognizer()
                   ..onTap = () => _onWordTap(blockIndex, start, end, word))
@@ -366,7 +408,11 @@ class _TxtPageState extends State<_TxtPage> {
       spans.add(
         TextSpan(
           text: text.substring(last, slice.end),
-          style: styleAt(selected: false, hot: isHot(last, slice.end)),
+          style: styleAt(
+            selected: false,
+            hot: isHot(last, slice.end),
+            otherHot: isOtherHot(last, slice.end),
+          ),
         ),
       );
     }

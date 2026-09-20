@@ -360,19 +360,25 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     onDone();
   }
 
-  void _onSearchSelect(SearchMatch match) {
+  void _onSearchSelect(SearchMatch match, List<SearchMatch> allMatches) {
     // A hit only ever comes from the OCR text, which the original scan view
     // has no way to draw a highlight over (it has no live text, only the
     // bitmap) — so land on the reflowed view to actually show it, the same
     // way tapping the translate button while looking at the scan does.
     _onPageChanged(match.pageIndex);
     if (!_reflowMode) _toggleReflow();
+    final others = [
+      for (final m in allMatches)
+        if (m.pageIndex == match.pageIndex && m != match)
+          (blockIndex: m.blockIndex, start: m.matchStart, end: m.matchEnd),
+    ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _textPageViewKey.currentState?.showSearchHighlight(
         match.pageIndex + 1,
         match.blockIndex,
         match.matchStart,
         match.matchEnd,
+        others: others,
       );
     });
   }

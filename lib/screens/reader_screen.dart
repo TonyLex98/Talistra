@@ -536,22 +536,39 @@ class _ReaderScreenState extends State<ReaderScreen>
     await _pdfSearchIndex.search(query, onBatch: onBatch, onDone: onDone);
   }
 
-  void _onSearchSelect(SearchMatch match) {
+  void _onSearchSelect(SearchMatch match, List<SearchMatch> allMatches) {
+    // Every other match on the same page as the one just landed on — washed
+    // over fainter alongside it, so the reader can see at a glance where
+    // this page's other hits are without losing track of the current one.
+    final others = allMatches.where(
+      (m) => m.pageIndex == match.pageIndex && m != match,
+    );
     if (_reflowMode) {
       _reflowKey.currentState?.showSearchHighlight(
         match.pageIndex + 1,
         match.blockIndex,
         match.matchStart,
         match.matchEnd,
+        others: [
+          for (final m in others)
+            (blockIndex: m.blockIndex, start: m.matchStart, end: m.matchEnd),
+        ],
       );
     } else {
       // The original (rasterized) view has no live text to style, so its
       // highlight is a box in page-space; measure it on demand from the
       // page's real word geometry (the isolate can't send dart:ui rects).
       _ensurePdfBounds(match);
+      for (final m in others) {
+        _ensurePdfBounds(m);
+      }
       _pdfViewKey.currentState?.setSearchHighlight(
         match.pageIndex,
         match.pdfBounds,
+        otherPdfBounds: [
+          for (final m in others)
+            if (m.pdfBounds case final rect?) rect,
+        ],
       );
       _pdfViewKey.currentState?.jumpToPage(
         match.pageIndex + 1,
@@ -575,7 +592,12 @@ class _ReaderScreenState extends State<ReaderScreen>
     final size = match.pageIndex < _pageSizes.length
         ? _pageSizes[match.pageIndex]
         : Size.zero;
-    match.pdfBounds = findMatchPdfBounds(lines, _searchQuery, size);
+    match.pdfBounds = findMatchPdfBounds(
+      lines,
+      _searchQuery,
+      size,
+      match.pageOccurrenceIndex,
+    );
   }
 
   void _toggleReflow() {

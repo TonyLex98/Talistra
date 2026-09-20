@@ -128,6 +128,12 @@ class ReflowPdfViewState extends State<ReflowPdfView>
   int? _hlStart;
   int? _hlEnd;
 
+  // Every other match that also falls on [_hlPage], keyed by block index —
+  // washed over fainter than the current hit, so the reader can see at a
+  // glance where this page's other matches are without losing track of
+  // which one next/previous is currently on.
+  Map<int, List<(int start, int end)>> _hlOthers = const {};
+
   // The last content box the build laid out, kept so a search hit can be
   // mapped onto a sub-page index (which only exists once pagination has a
   // size to work with) without having to re-run a layout to find it.
@@ -193,10 +199,15 @@ class ReflowPdfViewState extends State<ReflowPdfView>
     int page,
     int blockIndex,
     int matchStart,
-    int matchEnd,
-  ) {
+    int matchEnd, {
+    List<({int blockIndex, int start, int end})> others = const [],
+  }) {
     final index = (page - 1).clamp(0, widget.pageCount - 1);
     final subPage = _subPageForBlock(index, blockIndex, matchStart);
+    final othersByBlock = <int, List<(int, int)>>{};
+    for (final o in others) {
+      (othersByBlock[o.blockIndex] ??= []).add((o.start, o.end));
+    }
     setState(() {
       _pageIndex = index;
       _subPageIndex = subPage;
@@ -204,6 +215,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       _hlBlockIndex = blockIndex;
       _hlStart = matchStart;
       _hlEnd = matchEnd;
+      _hlOthers = othersByBlock;
       _clearSelection();
     });
     _scheduleTranslation();
@@ -231,6 +243,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       _hlBlockIndex = null;
       _hlStart = null;
       _hlEnd = null;
+      _hlOthers = const {};
     });
   }
 
@@ -962,8 +975,16 @@ class ReflowPdfViewState extends State<ReflowPdfView>
         pageIndex == _hlPage &&
         _hlStart != null &&
         _hlEnd != null;
+    final otherRanges = pageIndex == _hlPage
+        ? (_hlOthers[blockIndex] ?? const <(int, int)>[])
+        : const <(int, int)>[];
 
-    TextStyle styleAt(int pos, {required bool selected, bool hot = false}) {
+    TextStyle styleAt(
+      int pos, {
+      required bool selected,
+      bool hot = false,
+      bool otherHot = false,
+    }) {
       var style = baseStyle;
       for (final run in block.formatRuns) {
         if (pos >= run.start && pos < run.end) {
@@ -973,6 +994,11 @@ class ReflowPdfViewState extends State<ReflowPdfView>
           );
           break;
         }
+      }
+      if (otherHot) {
+        style = style.copyWith(
+          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.14),
+        );
       }
       if (hot) {
         style = style.copyWith(
@@ -992,6 +1018,13 @@ class ReflowPdfViewState extends State<ReflowPdfView>
     bool isHot(int start, int end) =>
         highlighted && start < _hlEnd! && end > _hlStart!;
 
+    bool isOtherHot(int start, int end) {
+      for (final (s, e) in otherRanges) {
+        if (start < e && end > s) return true;
+      }
+      return false;
+    }
+
     final text = block.text;
     final spans = <InlineSpan>[];
     var last = slice.start;
@@ -1004,7 +1037,12 @@ class ReflowPdfViewState extends State<ReflowPdfView>
         spans.add(
           TextSpan(
             text: text.substring(last, start),
-            style: styleAt(last, selected: false, hot: isHot(last, start)),
+            style: styleAt(
+              last,
+              selected: false,
+              hot: isHot(last, start),
+              otherHot: isOtherHot(last, start),
+            ),
           ),
         );
       }
@@ -1016,7 +1054,12 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       spans.add(
         TextSpan(
           text: word,
-          style: styleAt(start, selected: isSelected, hot: isHot(start, end)),
+          style: styleAt(
+            start,
+            selected: isSelected,
+            hot: isHot(start, end),
+            otherHot: isOtherHot(start, end),
+          ),
           recognizer: widget.translatorEnabled
               ? (TapGestureRecognizer()
                   ..onTap = () =>
@@ -1030,7 +1073,12 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       spans.add(
         TextSpan(
           text: text.substring(last, slice.end),
-          style: styleAt(last, selected: false, hot: isHot(last, slice.end)),
+          style: styleAt(
+            last,
+            selected: false,
+            hot: isHot(last, slice.end),
+            otherHot: isOtherHot(last, slice.end),
+          ),
         ),
       );
     }
