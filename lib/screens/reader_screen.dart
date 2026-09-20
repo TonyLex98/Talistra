@@ -858,12 +858,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     ColorScheme scheme,
   ) {
     return [
-      IconButton(
-        visualDensity: VisualDensity.compact,
-        icon: const Icon(Icons.search, size: 22),
-        tooltip: l10n.searchTooltip,
-        onPressed: _pageCount == 0 ? null : _openSearch,
-      ),
       if (_reflowMode) ...[
         IconButton(
           visualDensity: VisualDensity.compact,
@@ -960,6 +954,12 @@ class _ReaderScreenState extends State<ReaderScreen>
             !settings.syncTranslationExperimental,
           ),
         ),
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.search, size: 22),
+        tooltip: l10n.searchTooltip,
+        onPressed: _pageCount == 0 ? null : _openSearch,
+      ),
     ];
   }
 

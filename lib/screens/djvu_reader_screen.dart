@@ -643,13 +643,6 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                     ),
                   )
                 else ...[
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.search),
-                    tooltip: l10n.searchTooltip,
-                    onPressed: _textPages == null ? null : _openSearch,
-                  ),
                   Expanded(
                     child: InkWell(
                       onTap: document == null ? null : _jumpToPage,
@@ -793,6 +786,13 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                     onPressed: document == null || _textLoading
                         ? null
                         : _toggleReflow,
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 22,
+                    icon: const Icon(Icons.search),
+                    tooltip: l10n.searchTooltip,
+                    onPressed: _textPages == null ? null : _openSearch,
                   ),
                 ],
               ],

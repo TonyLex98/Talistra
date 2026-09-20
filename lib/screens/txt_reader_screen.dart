@@ -372,13 +372,6 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                     ),
                   )
                 else ...[
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.search),
-                    tooltip: l10n.searchTooltip,
-                    onPressed: _pages.isEmpty ? null : _openSearch,
-                  ),
                   Expanded(
                     child: InkWell(
                       onTap: _pages.isEmpty ? null : _jumpToPage,
@@ -476,6 +469,13 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                         ),
                       ),
                     ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 22,
+                    icon: const Icon(Icons.search),
+                    tooltip: l10n.searchTooltip,
+                    onPressed: _pages.isEmpty ? null : _openSearch,
+                  ),
                 ],
               ],
             ),
