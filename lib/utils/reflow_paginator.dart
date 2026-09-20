@@ -96,7 +96,14 @@ List<ReflowSubPage> paginateReflowBlocks({
     var firstSlice = true;
     while (offset < block.text.length) {
       final spacing = firstSlice && used > 0 ? blockSpacing : 0.0;
-      final available = height - used - spacing;
+      // Room for this slice's own trailing margin is reserved up front, not
+      // just added to the bookkeeping after the fact — otherwise a slice
+      // greedily packed right up to the page edge, with its margin tacked
+      // on afterwards, runs past `height` by about `trailingSpacing` (a real
+      // bug: widening the margin alone never fixed the overflow it was
+      // meant to guard against, because it never shrank how much text
+      // [_charactersThatFit] was allowed to select in the first place).
+      final available = height - used - spacing - trailingSpacing;
       // Not even one line fits in what's left: start a fresh sub-page.
       // (Unless the sub-page is already empty, in which case the line has
       // to go somewhere and this one is as good as any.)
