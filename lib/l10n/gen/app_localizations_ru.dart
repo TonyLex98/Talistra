@@ -16,7 +16,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Talistra сама выберет подходящий режим чтения.';
+      'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT или XLSX — Talistra сама выберет подходящий режим чтения.';
 
   @override
   String get importingLabel => 'Добавление...';
@@ -364,6 +364,9 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get noTextOnPage =>
       'На этой странице не нашлось текста для адаптации.';
+
+  @override
+  String get spreadsheetEmpty => 'В этой книге нет данных ни на одном листе.';
 
   @override
   String get selectionCopy => 'Копировать';

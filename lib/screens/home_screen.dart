@@ -27,6 +27,7 @@ import 'reader_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'txt_reader_screen.dart';
+import 'xlsx_reader_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -102,6 +103,9 @@ class _HomeScreenState extends State<HomeScreen> {
         if (document.isDjvu) {
           return DjvuReaderScreen(documentId: documentId);
         }
+        if (document.isXlsx) {
+          return XlsxReaderScreen(documentId: documentId);
+        }
         if (document.isTextDocument) {
           return TxtReaderScreen(documentId: documentId);
         }
@@ -137,6 +141,8 @@ class _HomeScreenState extends State<HomeScreen> {
     'docx',
     'djvu',
     'djv',
+    'xlsx',
+    'xls',
   };
 
   Future<void> _importFile() async {
@@ -381,7 +387,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildList(List<LibraryDocument> documents) {
     return ReorderableListView.builder(
       padding: const EdgeInsets.only(top: 8, bottom: 96),
-      buildDefaultDragHandles: false,
+      // No dedicated handle icon (touch platforms drag the whole tile via
+      // long-press instead) — the handle icon this default only adds is for
+      // mouse-driven platforms, which this app doesn't target.
       itemCount: documents.length,
       onReorder: (oldIndex, newIndex) {
         final ids = documents.map((d) => d.id).toList();
@@ -395,7 +403,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return DocumentTile(
           key: ValueKey(doc.id),
           document: doc,
-          index: index,
           onTap: () => _openDocument(doc.id),
           onDelete: () => _deleteDocument(doc.id),
           onToggleStar: () =>

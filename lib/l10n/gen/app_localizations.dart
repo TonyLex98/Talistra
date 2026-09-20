@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyLibrarySubtitle.
   ///
   /// In ru, this message translates to:
-  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF или TXT — Talistra сама выберет подходящий режим чтения.'**
+  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT или XLSX — Talistra сама выберет подходящий режим чтения.'**
   String get emptyLibrarySubtitle;
 
   /// No description provided for @importingLabel.
@@ -739,6 +739,12 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'На этой странице не нашлось текста для адаптации.'**
   String get noTextOnPage;
+
+  /// No description provided for @spreadsheetEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'В этой книге нет данных ни на одном листе.'**
+  String get spreadsheetEmpty;
 
   /// No description provided for @selectionCopy.
   ///

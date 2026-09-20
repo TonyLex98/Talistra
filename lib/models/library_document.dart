@@ -36,6 +36,7 @@ class LibraryDocument {
 
   bool get isTxt => format == 'txt';
   bool get isDjvu => format == 'djvu' || format == 'djv';
+  bool get isXlsx => format == 'xlsx' || format == 'xls';
   final int pageCount;
   final int lastPage;
   final bool reflowMode;

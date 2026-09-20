@@ -14,18 +14,12 @@ class DocumentTile extends StatefulWidget {
   const DocumentTile({
     super.key,
     required this.document,
-    required this.index,
     required this.onTap,
     required this.onDelete,
     required this.onToggleStar,
   });
 
   final LibraryDocument document;
-
-  /// This tile's position in the (already-sorted) library list, needed
-  /// to attach the drag handle to the right item in the surrounding
-  /// [ReorderableListView].
-  final int index;
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback onToggleStar;
@@ -68,6 +62,8 @@ String _formatBadge(String format) {
     case 'rtf':
     case 'docx':
     case 'txt':
+    case 'xlsx':
+    case 'xls':
       return format.toUpperCase();
     default:
       return 'PDF';
@@ -111,9 +107,9 @@ class _DocumentTileState extends State<DocumentTile> {
   /// renders and caches it now, so it's instant every time after the
   /// first time this document is shown in the library.
   Future<Uint8List?> _loadOrGenerateThumbnail() async {
-    // Plain text has no page to render a thumbnail from — the fallback
-    // icon below is the whole story for these.
-    if (widget.document.isTextDocument) return null;
+    // Plain text and spreadsheets have no page to render a thumbnail from —
+    // the fallback icon below is the whole story for these.
+    if (widget.document.isTextDocument || widget.document.isXlsx) return null;
 
     final cache = context.read<ThumbnailCache>();
     final cached = await cache.read(widget.document.id);
@@ -163,7 +159,7 @@ class _DocumentTileState extends State<DocumentTile> {
   /// only the first page's own header is actually read), which is why this
   /// only ever runs on demand rather than alongside the thumbnail.
   Future<_PageMeasurement?> _loadMeasurement() async {
-    if (widget.document.isTextDocument) return null;
+    if (widget.document.isTextDocument || widget.document.isXlsx) return null;
     try {
       if (widget.document.isDjvu) {
         final document = await DjvuDocument.open(widget.document.filePath);
@@ -313,13 +309,6 @@ class _DocumentTileState extends State<DocumentTile> {
                         : l10n.pinTooltip,
                     onPressed: widget.onToggleStar,
                   ),
-                  ReorderableDragStartListener(
-                    index: widget.index,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(Icons.drag_handle),
-                    ),
-                  ),
                   IconButton(
                     icon: const Icon(Icons.more_vert),
                     onPressed: () => _showMenu(context),
@@ -391,11 +380,13 @@ class _DocumentTileState extends State<DocumentTile> {
                   return ColoredBox(
                     color: scheme.primaryContainer,
                     child: Icon(
-                      // Text formats (txt, epub, fb2, rtf, docx) have no page
-                      // to make a thumbnail from, so they get a book icon
-                      // rather than the PDF one.
+                      // Text formats (txt, epub, fb2, rtf, docx) and
+                      // spreadsheets have no page to make a thumbnail from,
+                      // so they get their own icon rather than the PDF one.
                       widget.document.isTextDocument
                           ? Icons.menu_book_rounded
+                          : widget.document.isXlsx
+                          ? Icons.table_chart_rounded
                           : widget.document.isDjvu
                           ? Icons.auto_stories_rounded
                           : Icons.picture_as_pdf_rounded,

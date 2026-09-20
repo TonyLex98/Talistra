@@ -49,6 +49,7 @@ dependencies:
   # EPUB and DOCX are zip containers; FB2/DOCX/EPUB metadata is XML.
   archive: ^3.6.1
   xml: ^6.5.0
+  excel: ^4.0.6
 
 dev_dependencies:
   flutter_test:

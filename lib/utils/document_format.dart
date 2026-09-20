@@ -13,6 +13,8 @@ const supportedBookFormats = {
   'rtf',
   'docx',
   'djvu',
+  'xlsx',
+  'xls',
 };
 
 const supportedArchiveFormats = {'zip'};
@@ -77,6 +79,20 @@ String? detectDocumentFormatBytes(Uint8List bytes, {required String fileName}) {
   }
   if (ascii.startsWith(r'{\rtf')) return 'rtf';
 
+  // Legacy .xls is an OLE2/Compound File Binary container, not a ZIP —
+  // its signature is this fixed 8-byte header regardless of content.
+  if (bytes.length >= 8 &&
+      bytes[0] == 0xD0 &&
+      bytes[1] == 0xCF &&
+      bytes[2] == 0x11 &&
+      bytes[3] == 0xE0 &&
+      bytes[4] == 0xA1 &&
+      bytes[5] == 0xB1 &&
+      bytes[6] == 0x1A &&
+      bytes[7] == 0xE1) {
+    return 'xls';
+  }
+
   if (_looksLikeZip(bytes)) {
     try {
       final archive = ZipDecoder().decodeBytes(bytes, verify: true);
@@ -85,6 +101,7 @@ String? detectDocumentFormatBytes(Uint8List bytes, {required String fileName}) {
           .map((entry) => entry.name.replaceAll('\\', '/').toLowerCase())
           .toSet();
       if (names.contains('word/document.xml')) return 'docx';
+      if (names.contains('xl/workbook.xml')) return 'xlsx';
       if (names.contains('meta-inf/container.xml') ||
           names.any((name) => name.endsWith('.opf'))) {
         return 'epub';

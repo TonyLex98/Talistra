@@ -16,7 +16,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF or TXT — Talistra will open it in the right reading mode.';
+      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT or XLSX — Talistra will open it in the right reading mode.';
 
   @override
   String get importingLabel => 'Adding...';
@@ -363,6 +363,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noTextOnPage => 'No text was found on this page to adapt.';
+
+  @override
+  String get spreadsheetEmpty => 'This workbook has no data on any sheet.';
 
   @override
   String get selectionCopy => 'Copy';
