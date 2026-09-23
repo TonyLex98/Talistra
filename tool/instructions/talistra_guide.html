@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Talistra — полное руководство</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; }
+  html, body { background: #fff; }
+  body {
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    color: #1d2428;
+    -webkit-print-color-adjust: exact;
+  }
+  .page {
+    position: relative;
+    width: 210mm;
+    height: 296.5mm;
+    padding: 12.7mm 15.5mm;
+    box-sizing: border-box;
+    page-break-after: always;
+    overflow: hidden;
+  }
+  .cover-card {
+    position: absolute;
+    inset: 16.9mm;
+    background: #fbf6ec;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .cover-card .logo { width: 160pt; height: 160pt; border-radius: 30pt; }
+  .cover-card h1 { margin-top: 6pt; font-size: 42pt; font-weight: bold; }
+  .cover-card .tagline { margin-top: 10pt; font-size: 16pt; color: #5f686c; }
+  .cover-card .kind { margin-top: 30pt; font-size: 14pt; font-weight: bold; color: #007c78; }
+
+  header { display: flex; align-items: center; gap: 8pt; font-size: 10pt; color: #5f686c; }
+  header .mark { width: 36pt; height: 5pt; border-radius: 2.5pt; background: #007c78; }
+  header .no { margin-left: auto; }
+
+  h2 { margin-top: 22pt; font-size: 24pt; font-weight: bold; line-height: 1.1; }
+  .lead { margin-top: 14pt; font-size: 12.5pt; line-height: 1.35; }
+  ul { margin-top: 12pt; padding-left: 16pt; font-size: 11.5pt; line-height: 1.45; }
+  li { margin-top: 5pt; }
+
+  .shot {
+    position: absolute;
+    left: 50%;
+    bottom: 12.7mm;
+    transform: translateX(-50%);
+    width: 233.08pt;
+    height: 515.57pt;
+    padding: 6pt;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1pt solid #e0e0e0;
+    border-radius: 16pt;
+  }
+  .shot img {
+    display: block;
+    width: 221.08pt;
+    height: 503.57pt;
+    border-radius: 11pt;
+    object-fit: cover;
+    object-position: top;
+  }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <div class="cover-card">
+    <img class="logo" src="../../assets/branding/litra-launcher.png" alt="">
+    <h1>Talistra</h1>
+    <p class="tagline">Читалка документов с&nbsp;адаптивным текстом и&nbsp;офлайн-переводом</p>
+    <p class="kind">Полное руководство</p>
+  </div>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">1/8</span></header>
+  <h2>Библиотека и&nbsp;импорт</h2>
+  <p class="lead">Нажмите «Добавить книгу» и&nbsp;выберите файл. Talistra определяет формат по&nbsp;расширению и&nbsp;содержимому файла, добавляет книгу в&nbsp;библиотеку и&nbsp;запоминает место чтения.</p>
+  <ul>
+    <li>Поддерживаются PDF, DjVu и&nbsp;DJV, EPUB, FB2, DOCX, RTF, TXT, а&nbsp;также таблицы XLSX и&nbsp;XLS.</li>
+    <li>ZIP-архив открывается как контейнер: Talistra предложит выбрать книгу внутри.</li>
+    <li>Файлы можно открыть из&nbsp;проводника Android через «Открыть с&nbsp;помощью Talistra».</li>
+    <li>Долгое нажатие на&nbsp;книгу позволяет закрепить ее сверху или удалить из&nbsp;библиотеки.</li>
+  </ul>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">2/8</span></header>
+  <h2>Чтение PDF и&nbsp;DjVu</h2>
+  <p class="lead">В&nbsp;оригинальном режиме документы показаны непрерывной вертикальной лентой: страницы плавно прокручиваются одна за&nbsp;другой, как в&nbsp;PDF-ридере, без резких боковых перелистываний.</p>
+  <ul>
+    <li>Нажмите номер страницы в&nbsp;шапке, чтобы перейти к&nbsp;нужной странице.</li>
+    <li>Кнопки с&nbsp;лупами меняют масштаб. При увеличении можно свободно панорамировать страницу.</li>
+    <li>Ползунок справа показывает текущую страницу и&nbsp;помогает быстро перемещаться по&nbsp;большому документу.</li>
+    <li>DjVu использует такой&nbsp;же режим прокрутки, зума и&nbsp;оформления, как PDF.</li>
+  </ul>
+  <figure class="shot"><img src="../instructions_screenshots/reader_pdf_tecno.png" alt=""></figure>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">3/8</span></header>
+  <h2>Таблицы XLSX и&nbsp;XLS</h2>
+  <p class="lead">Книга открывается в&nbsp;компактном режиме: таблица разбита на&nbsp;страницы по&nbsp;ширине телефона. Кнопка с&nbsp;книгой в&nbsp;шапке переключает ее&nbsp;в&nbsp;оригинальную сетку листа.</p>
+  <ul>
+    <li>Лист прокручивается в&nbsp;обе стороны и&nbsp;увеличивается двумя пальцами.</li>
+    <li>Рисуются только видимые строки и&nbsp;столбцы, поэтому большая таблица листается без задержек.</li>
+    <li>Вкладки внизу переключают листы, а&nbsp;позиция и&nbsp;масштаб сохраняются.</li>
+    <li>Поиск, перевод, размер текста и&nbsp;темы оформления работают здесь так&nbsp;же, как в&nbsp;PDF и&nbsp;DjVu.</li>
+  </ul>
+  <figure class="shot"><img src="../instructions_screenshots/reader_xlsx.png" alt=""></figure>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">4/8</span></header>
+  <h2>Адаптивный режим</h2>
+  <p class="lead">Кнопка с&nbsp;книгой в&nbsp;шапке переключает оригинальную страницу в&nbsp;текст, подогнанный под ширину телефона. Это особенно удобно для чтения с&nbsp;небольшого экрана.</p>
+  <ul>
+    <li>Размер текста меняют кнопки A- и&nbsp;A+ в&nbsp;шапке.</li>
+    <li>Для EPUB, FB2, DOCX, RTF, TXT и&nbsp;таблиц адаптивный режим является основным.</li>
+    <li>У&nbsp;DjVu адаптивный текст строится из&nbsp;встроенного текстового слоя. Если его нет, оригинальную скан-страницу все равно можно читать и&nbsp;увеличивать.</li>
+  </ul>
+  <figure class="shot"><img src="../instructions_screenshots/reader_djvu_tecno.png" alt=""></figure>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">5/8</span></header>
+  <h2>Офлайн-перевод</h2>
+  <p class="lead">Переводчик работает прямо на&nbsp;устройстве. Нажмите слово, чтобы увидеть перевод и&nbsp;предложение; модели выбранных языков скачиваются один раз и&nbsp;затем не&nbsp;требуют интернета.</p>
+  <ul>
+    <li>Языки можно поменять в&nbsp;настройках или быстро переключить в&nbsp;шапке читалки.</li>
+    <li>В&nbsp;оригинальном PDF и&nbsp;DjVu кнопка перевода ведет в&nbsp;адаптивный текст той&nbsp;же страницы, где перевод удобен и&nbsp;точен.</li>
+    <li>Переводчик можно выключить полностью, оставив чистую читалку.</li>
+    <li>Экспериментальный синхронный перевод делит адаптивный экран на&nbsp;оригинал и&nbsp;перевод текущего фрагмента.</li>
+  </ul>
+  <figure class="shot"><img src="../instructions_screenshots/reader_translate_tecno.png" alt=""></figure>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">6/8</span></header>
+  <h2>Экран при&nbsp;чтении</h2>
+  <p class="lead">В&nbsp;настройках есть отдельный блок для комфортного чтения. Его параметры применяются только пока открыта книга и&nbsp;не&nbsp;меняют привычное поведение телефона в&nbsp;остальных приложениях.</p>
+  <ul>
+    <li>Яркость: выключите «Использовать системную яркость» и&nbsp;выберите значение от&nbsp;5% до&nbsp;100%. После выхода из&nbsp;книги вернется системная яркость.</li>
+    <li>Не&nbsp;гасить экран при&nbsp;чтении: Talistra удерживает экран включенным, пока заряд выше выбранного резерва.</li>
+    <li>По&nbsp;умолчанию резерв равен 20%. Если заряд ниже порога, или функция выключена, работает обычный системный тайм-аут экрана.</li>
+  </ul>
+  <figure class="shot"><img src="../instructions_screenshots/settings_brightness_tecno.png" alt=""></figure>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">7/8</span></header>
+  <h2>Оформление и&nbsp;текст</h2>
+  <p class="lead">Настройки позволяют сделать страницу спокойной и&nbsp;читаемой именно для вас. Все изменения сохраняются.</p>
+  <ul>
+    <li>Фон страницы: белый, кремовый, сепия, мятный, темный или ночной.</li>
+    <li>Шрифты для адаптивного текста: Literata, Lora, Source Serif, EB&nbsp;Garamond, Noto Serif, Inter или системный.</li>
+    <li>Настройте насыщенность и&nbsp;контраст. Контраст также помогает с&nbsp;бледными сканами PDF и&nbsp;DjVu.</li>
+    <li>Прогресс, выбранный режим, размер текста и&nbsp;положение в&nbsp;книге сохраняются автоматически.</li>
+  </ul>
+  <figure class="shot"><img src="../instructions_screenshots/settings_tecno.png" alt=""></figure>
+</section>
+
+<section class="page">
+  <header><span class="mark"></span><span>Talistra</span><span class="no">8/8</span></header>
+  <h2>Статистика и&nbsp;приватность</h2>
+  <p class="lead">Кнопка статистики на&nbsp;главном экране показывает реальное время чтения и&nbsp;прочитанные страницы.</p>
+  <ul>
+    <li>Смотрите итоги по&nbsp;книгам и&nbsp;по&nbsp;дням.</li>
+    <li>Быстрое пролистывание не&nbsp;засчитывается: учитывается только время, проведенное на&nbsp;странице.</li>
+    <li>Книги, прогресс, настройки и&nbsp;скачанные языковые модели остаются на&nbsp;устройстве.</li>
+    <li>Эту инструкцию можно открыть как обычную книгу из&nbsp;библиотеки в&nbsp;любой момент.</li>
+  </ul>
+  <figure class="shot"><img src="../instructions_screenshots/statistics_tecno.png" alt=""></figure>
+</section>
+
+</body>
+</html>

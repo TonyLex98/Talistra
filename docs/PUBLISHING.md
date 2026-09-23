@@ -26,7 +26,14 @@ update of this application.
 
 ## Build
 
-Increase `version:` in `pubspec.yaml` before each upload, then run:
+Increase `version:` in `pubspec.yaml` before each upload. If the bundled guide
+changed, rebuild it from its HTML source first:
+
+```powershell
+python tool/instructions/build_guide.py
+```
+
+Then run:
 
 ```powershell
 flutter pub get
