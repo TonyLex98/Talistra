@@ -221,8 +221,10 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
     if (_pageHeights.isEmpty) return;
     final page = (_reportedPage - 1).clamp(0, _pageHeights.length - 1);
     final fraction = _pageHeights[page] > 0
-        ? ((_scrollOffset.dy - _cumulativeY[page]) / _pageHeights[page])
-            .clamp(0.0, 1.0)
+        ? ((_scrollOffset.dy - _cumulativeY[page]) / _pageHeights[page]).clamp(
+            0.0,
+            1.0,
+          )
         : 0.0;
     final maxDx = _maxDx;
     final fractionX = maxDx > 0
@@ -236,10 +238,7 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
     if (infos == null ||
         (constraints.maxWidth == _viewportWidth &&
             constraints.maxHeight == _viewportHeight &&
-            _fittedContentWidth(
-              constraints.maxWidth,
-              constraints.maxHeight,
-            ) ==
+            _fittedContentWidth(constraints.maxWidth, constraints.maxHeight) ==
                 _contentWidth)) {
       return;
     }
@@ -274,7 +273,10 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
 
     _viewportWidth = constraints.maxWidth;
     _viewportHeight = constraints.maxHeight;
-    _contentWidth = _fittedContentWidth(constraints.maxWidth, constraints.maxHeight);
+    _contentWidth = _fittedContentWidth(
+      constraints.maxWidth,
+      constraints.maxHeight,
+    );
     _pageLeft = ((constraints.maxWidth - _contentWidth) / 2).clamp(
       0.0,
       constraints.maxWidth,
@@ -388,10 +390,7 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
     }
 
     final maxDx = math.max(0.0, _viewportWidth - _viewportWidth / nextZoom);
-    final maxDy = math.max(
-      0.0,
-      _totalHeight - _viewportHeight / nextZoom,
-    );
+    final maxDy = math.max(0.0, _totalHeight - _viewportHeight / nextZoom);
     setState(() {
       _zoom = nextZoom;
       _scrollOffset = Offset(
@@ -399,9 +398,7 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
           0.0,
           maxDx,
         ),
-        (_gestureStartFocalContent.dy -
-                details.localFocalPoint.dy /
-                    nextZoom)
+        (_gestureStartFocalContent.dy - details.localFocalPoint.dy / nextZoom)
             .clamp(0.0, maxDy),
       );
     });
@@ -469,18 +466,12 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
   /// paper), then the sharp one, which quietly replaces it.
   Future<Uint8List?> _previewFor(int pageIndex, int width) {
     final key = pageIndex * _keyStride + width;
-    return _previewFutures.putIfAbsent(
-      key,
-      () => _render(pageIndex, width),
-    );
+    return _previewFutures.putIfAbsent(key, () => _render(pageIndex, width));
   }
 
   Future<Uint8List?> _imageFor(int pageIndex, int width) {
     final key = pageIndex * _keyStride + width;
-    return _imageFutures.putIfAbsent(
-      key,
-      () => _render(pageIndex, width),
-    );
+    return _imageFutures.putIfAbsent(key, () => _render(pageIndex, width));
   }
 
   /// The raster width for the page the reader is actually looking at: the
@@ -501,7 +492,8 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
   int _neighborWidthFor(int page) {
     final native = _infos![page].width;
     if (native <= 0) return 900;
-    return math.min(native, _neighborWidthCap)
+    return math
+        .min(native, _neighborWidthCap)
         .clamp(_minRenderWidth, _maxRenderWidth)
         .toInt();
   }
@@ -694,9 +686,7 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
 
             return Stack(
               children: [
-                Positioned.fill(
-                  child: ColoredBox(color: widget.background),
-                ),
+                Positioned.fill(child: ColoredBox(color: widget.background)),
                 ClipRect(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -739,13 +729,14 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
                                 // neighbours from the reduced-width one
                                 // (which they upgrade to the moment they
                                 // become the page being looked at).
-                                future: _imageFutures[
-                                    page * _keyStride +
-                                    (page == visibleIndex
-                                        ? _sharpWidthFor(page)
-                                        : _neighborWidthFor(page))],
-                                previewFuture: _previewFutures[
-                                    page * _keyStride + previewWidth],
+                                future:
+                                    _imageFutures[page * _keyStride +
+                                        (page == visibleIndex
+                                            ? _sharpWidthFor(page)
+                                            : _neighborWidthFor(page))],
+                                previewFuture:
+                                    _previewFutures[page * _keyStride +
+                                        previewWidth],
                                 filter: widget.imageFilter,
                                 background: widget.background,
                               ),

@@ -37,8 +37,7 @@ class BookSearchBar extends StatefulWidget {
   /// so far — the reader jumps to the landed-on match's page and highlights
   /// it, and also washes over that page's other matches (from the full
   /// list) more faintly, so their positions are visible at a glance too.
-  final void Function(SearchMatch match, List<SearchMatch> allMatches)
-  onSelect;
+  final void Function(SearchMatch match, List<SearchMatch> allMatches) onSelect;
 
   final VoidCallback onClose;
 
@@ -150,7 +149,10 @@ class _BookSearchBarState extends State<BookSearchBar> {
             decoration: InputDecoration(
               hintText: l10n.searchHint,
               prefixIcon: const Icon(Icons.search, size: 18),
-              suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+              suffixIconConstraints: const BoxConstraints(
+                minWidth: 0,
+                minHeight: 0,
+              ),
               suffixIcon: (_searching && !hasResults)
                   ? const Padding(
                       padding: EdgeInsets.only(right: 8),
