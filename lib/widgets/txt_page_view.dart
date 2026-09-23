@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 
@@ -9,6 +8,7 @@ import '../utils/reading_text_style.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/reflow_paginator.dart';
 import '../utils/sentence_finder.dart';
+import 'translatable_text.dart';
 import 'translation_panel.dart';
 
 /// Plain-text counterpart to [ReflowPdfView] (see reflow_view.dart) — same
@@ -311,112 +311,29 @@ class _TxtPageState extends State<_TxtPage> {
     });
   }
 
-  static final _wordPattern = RegExp(r'[\p{L}\p{N}]+', unicode: true);
-
   Widget _buildParagraph(int blockIndex, ReflowBlock block, ReflowSlice slice) {
-    final text = block.text;
-    final baseStyle = readingTextStyle(
+    final hl = widget.highlight;
+    return TranslatableText(
+      text: block.text,
+      start: slice.start,
+      end: slice.end,
       settings: widget.settings,
       fontSize: widget.fontSize,
+      readingTheme: widget.readingTheme,
+      translatorEnabled: widget.translatorEnabled,
+      selectedStart: blockIndex == _selectedBlockIndex
+          ? _selectedWordStart
+          : null,
+      selectedEnd: blockIndex == _selectedBlockIndex ? _selectedWordEnd : null,
+      highlight: hl?.block == blockIndex
+          ? (start: hl!.start!, end: hl.end!)
+          : null,
+      otherHighlights: [
+        for (final o in widget.otherHighlights)
+          if (o.blockIndex == blockIndex) (start: o.start, end: o.end),
+      ],
+      onWordTap: (start, end, word) => _onWordTap(blockIndex, start, end, word),
     );
-    final hl = widget.highlight;
-    final hotStart = hl?.start;
-    final hotEnd = hl?.end;
-    final otherRanges = widget.otherHighlights
-        .where((o) => o.blockIndex == blockIndex)
-        .toList();
-
-    TextStyle styleAt({
-      required bool selected,
-      bool hot = false,
-      bool otherHot = false,
-    }) {
-      if (selected) {
-        return baseStyle.copyWith(
-          fontWeight: FontWeight.w700,
-          color: widget.readingTheme.accent,
-          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.16),
-        );
-      }
-      if (hot) {
-        return baseStyle.copyWith(
-          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.32),
-        );
-      }
-      if (otherHot) {
-        return baseStyle.copyWith(
-          backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.14),
-        );
-      }
-      return baseStyle;
-    }
-
-    bool isHot(int start, int end) {
-      if (hotStart == null || hotEnd == null || hl == null) return false;
-      if (hl.block != blockIndex) return false;
-      return start < hotEnd && end > hotStart;
-    }
-
-    bool isOtherHot(int start, int end) {
-      for (final o in otherRanges) {
-        if (start < o.end && end > o.start) return true;
-      }
-      return false;
-    }
-
-    final spans = <InlineSpan>[];
-    var last = slice.start;
-    for (final match in _wordPattern.allMatches(
-      text.substring(slice.start, slice.end),
-    )) {
-      final start = slice.start + match.start;
-      final end = slice.start + match.end;
-      if (start > last) {
-        spans.add(
-          TextSpan(
-            text: text.substring(last, start),
-            style: styleAt(
-              selected: false,
-              hot: isHot(last, start),
-              otherHot: isOtherHot(last, start),
-            ),
-          ),
-        );
-      }
-      final word = match.group(0)!;
-      final isSelected =
-          blockIndex == _selectedBlockIndex &&
-          start == _selectedWordStart &&
-          end == _selectedWordEnd;
-      spans.add(
-        TextSpan(
-          text: word,
-          style: styleAt(
-            selected: isSelected,
-            hot: isHot(start, end),
-            otherHot: isOtherHot(start, end),
-          ),
-          recognizer: widget.translatorEnabled
-              ? (TapGestureRecognizer()
-                  ..onTap = () => _onWordTap(blockIndex, start, end, word))
-              : null,
-        ),
-      );
-      last = end;
-    }
-    if (last < slice.end) {
-      spans.add(
-        TextSpan(
-          text: text.substring(last, slice.end),
-          style: styleAt(
-            selected: false,
-            hot: isHot(last, slice.end),
-            otherHot: isOtherHot(last, slice.end),
-          ),
-        ),
-      );
-    }
-    return Text.rich(TextSpan(children: spans));
   }
 
   @override

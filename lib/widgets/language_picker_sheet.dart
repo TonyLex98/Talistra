@@ -1,8 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/app_language.dart';
+import '../services/settings_service.dart';
+
+/// The reader's quick language-pair sheet, opened from the flags in its top
+/// bar. Shared by every reader so switching the translation languages works
+/// the same way wherever the reader is reading.
+void showQuickLanguageSwitch(BuildContext context) {
+  final l10n = AppLocalizations.of(context);
+  showModalBottomSheet(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.translationLanguageTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Consumer<SettingsService>(
+                builder: (context, settings, _) => Column(
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Text(
+                        settings.sourceAppLanguage.flag,
+                        style: const TextStyle(fontSize: 22),
+                      ),
+                      title: Text(l10n.fromLanguage),
+                      subtitle: Text(settings.sourceAppLanguage.displayName),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        final picked = await showLanguagePicker(
+                          context: context,
+                          current: settings.sourceLanguage,
+                          title: l10n.fromLanguagePickerTitle,
+                        );
+                        if (picked != null) settings.setSourceLanguage(picked);
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.swap_vert),
+                      tooltip: l10n.swapLanguagesTooltip,
+                      onPressed: settings.swapLanguages,
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Text(
+                        settings.targetAppLanguage.flag,
+                        style: const TextStyle(fontSize: 22),
+                      ),
+                      title: Text(l10n.toLanguage),
+                      subtitle: Text(settings.targetAppLanguage.displayName),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        final picked = await showLanguagePicker(
+                          context: context,
+                          current: settings.targetLanguage,
+                          title: l10n.toLanguagePickerTitle,
+                        );
+                        if (picked != null) settings.setTargetLanguage(picked);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
 
 /// Opens a searchable bottom sheet listing every language ML Kit supports
 /// and returns the one the user picked, or null if they dismissed it.

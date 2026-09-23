@@ -232,83 +232,6 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     _updateCurrentPage(target);
   }
 
-  Future<void> _quickLanguageSwitch() async {
-    final l10n = AppLocalizations.of(context);
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.translationLanguageTitle,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                Consumer<SettingsService>(
-                  builder: (context, settings, _) => Column(
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Text(
-                          settings.sourceAppLanguage.flag,
-                          style: const TextStyle(fontSize: 22),
-                        ),
-                        title: Text(l10n.fromLanguage),
-                        subtitle: Text(settings.sourceAppLanguage.displayName),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () async {
-                          final picked = await showLanguagePicker(
-                            context: context,
-                            current: settings.sourceLanguage,
-                            title: l10n.fromLanguagePickerTitle,
-                          );
-                          if (picked != null) {
-                            settings.setSourceLanguage(picked);
-                          }
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.swap_vert),
-                        tooltip: l10n.swapLanguagesTooltip,
-                        onPressed: settings.swapLanguages,
-                      ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Text(
-                          settings.targetAppLanguage.flag,
-                          style: const TextStyle(fontSize: 22),
-                        ),
-                        title: Text(l10n.toLanguage),
-                        subtitle: Text(settings.targetAppLanguage.displayName),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () async {
-                          final picked = await showLanguagePicker(
-                            context: context,
-                            current: settings.targetLanguage,
-                            title: l10n.toLanguagePickerTitle,
-                          );
-                          if (picked != null) {
-                            settings.setTargetLanguage(picked);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -443,7 +366,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                   ),
                   if (settings.translatorEnabled)
                     InkWell(
-                      onTap: _quickLanguageSwitch,
+                      onTap: () => showQuickLanguageSwitch(context),
                       borderRadius: BorderRadius.circular(9),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
