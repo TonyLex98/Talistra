@@ -8,7 +8,7 @@ class LibraryDocument {
     required this.sourceFingerprint,
     this.pageCount = 0,
     this.lastPage = 1,
-    this.reflowMode = false,
+    this.reflowMode,
     this.starred = false,
     this.manualOrder,
     this.pdfZoom = 1.0,
@@ -39,7 +39,16 @@ class LibraryDocument {
   bool get isXlsx => format == 'xlsx' || format == 'xls';
   final int pageCount;
   final int lastPage;
-  final bool reflowMode;
+
+  /// Which of the two reading views the reader last used, or null when they
+  /// have never switched and the format's own default still applies.
+  final bool? reflowMode;
+
+  /// The view this document opens in. A workbook's compact, paginated reading
+  /// is its default (its raw grid is a layout to look at, not to read
+  /// linearly); every format that has a second view defaults to its original
+  /// pages.
+  bool get reflowModeOrDefault => reflowMode ?? isXlsx;
   final DateTime lastOpenedAt;
 
   /// Fixed-layout (PDF and DjVu) page-view zoom, how far into [lastPage]

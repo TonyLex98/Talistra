@@ -160,6 +160,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get originalDocument => 'Original';
 
   @override
+  String get originalSheet => 'Original sheet';
+
+  @override
   String get zoomOut => 'Zoom out';
 
   @override

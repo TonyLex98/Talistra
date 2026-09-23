@@ -362,6 +362,12 @@ abstract class AppLocalizations {
   /// **'Оригинал'**
   String get originalDocument;
 
+  /// No description provided for @originalSheet.
+  ///
+  /// In ru, this message translates to:
+  /// **'Оригинал таблицы'**
+  String get originalSheet;
+
   /// No description provided for @zoomOut.
   ///
   /// In ru, this message translates to:

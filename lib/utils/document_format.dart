@@ -5,6 +5,9 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
+// The two spreadsheet formats are read by the app's own decoders:
+// .xlsx (ZIP/OOXML) by xlsx_decode.dart, legacy .xls (OLE2/BIFF8,
+// Excel 97-2003) by xls_decode.dart on top of the excel2003 record parser.
 const supportedBookFormats = {
   'pdf',
   'txt',

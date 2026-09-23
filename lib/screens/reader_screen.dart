@@ -117,7 +117,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     _currentPage = _document.lastPage;
     _pageCount = _document.pageCount;
     _pageEnteredAt = DateTime.now();
-    _reflowMode = _document.reflowMode;
+    _reflowMode = _document.reflowModeOrDefault;
     _reflowFontSize = _document.reflowFontSize;
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);

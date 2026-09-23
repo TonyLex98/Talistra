@@ -161,6 +161,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get originalDocument => 'Оригинал';
 
   @override
+  String get originalSheet => 'Оригинал таблицы';
+
+  @override
   String get zoomOut => 'Уменьшить';
 
   @override
