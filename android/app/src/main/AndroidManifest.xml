@@ -50,6 +50,8 @@
                 <data android:mimeType="image/x-djvu"/>
                 <data android:mimeType="application/x-djvu"/>
                 <data android:mimeType="text/plain"/>
+                <data android:mimeType="text/markdown"/>
+                <data android:mimeType="text/x-markdown"/>
             </intent-filter>
 
             <!-- Many file managers hand documents over with a generic MIME
@@ -68,6 +70,8 @@
                 <data android:pathPattern=".*\\.rtf"/>
                 <data android:pathPattern=".*\\.docx"/>
                 <data android:pathPattern=".*\\.txt"/>
+                <data android:pathPattern=".*\\.md"/>
+                <data android:pathPattern=".*\\.markdown"/>
                 <data android:pathPattern=".*\\.djvu"/>
                 <data android:pathPattern=".*\\.djv"/>
                 <data android:pathPattern=".*\\.xlsx"/>

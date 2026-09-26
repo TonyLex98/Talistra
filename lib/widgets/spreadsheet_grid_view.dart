@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
@@ -10,6 +11,7 @@ import '../services/translation_service.dart';
 import '../utils/sentence_finder.dart';
 import '../utils/spreadsheet_pages.dart';
 import '../utils/xlsx_decode.dart';
+import 'reading_selection_area.dart';
 import 'translatable_text.dart';
 import 'translation_panel.dart';
 
@@ -119,9 +121,12 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
   String? _selectedWord;
   SentenceMatch? _selectedSentence;
 
+  /// A passage the reader marked with a long press and asked the translator
+  /// about, in place of a tapped word.
+  String? _markedText;
+
   // Pan and pinch arrive as one scale gesture; a fling carries it on after
   // the fingers lift.
-  Offset _focal = Offset.zero;
   double _gestureScale = 1;
   Ticker? _fling;
   FrictionSimulation? _flingX;
@@ -261,14 +266,14 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
   }) {
     _stopFling();
     final byCell =
-        <({int sheet, int row, int column}),
-        List<({int start, int end})>>{};
+        <({int sheet, int row, int column}), List<({int start, int end})>>{};
     for (final other in others) {
       byCell
-          .putIfAbsent(
-            (sheet: other.sheetIndex, row: other.row, column: other.column),
-            () => <({int start, int end})>[],
-          )
+          .putIfAbsent((
+            sheet: other.sheetIndex,
+            row: other.row,
+            column: other.column,
+          ), () => <({int start, int end})>[])
           .add((start: other.start, end: other.end));
     }
     setState(() {
@@ -299,16 +304,74 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
 
   // ----------------------------------------------------------------- gestures
 
+  /// Pan and pinch entered as one team, the pinch its captain.
+  ///
+  /// A scale recognizer on its own waits before it claims a drag — a second
+  /// finger may still be on its way, and a pinch is not a pan — and while it
+  /// waits the reading surface's own selection layer claims the drag, so the
+  /// sheet stops panning as soon as it can be marked. The pan recognizer
+  /// settles a one-finger drag and hands the win to the scale recognizer,
+  /// which is what actually moves and zooms the sheet: a team is one
+  /// competitor in the arena, and its captain names the winner.
+  late final Map<Type, GestureRecognizerFactory> _gridGestures =
+      _buildGridGestures();
+
+  Map<Type, GestureRecognizerFactory> _buildGridGestures() {
+    final team = GestureArenaTeam();
+    // Claim the drag before the selection layer does. It accepts a horizontal
+    // drag once the finger has moved its touch slop (8 points on Android), so
+    // the sheet's own slop has to sit under that — otherwise a sideways drag
+    // marks text instead of panning, and a sheet wider than the screen can
+    // never be panned sideways at all.
+    const slop = DeviceGestureSettings(touchSlop: 4);
+    return <Type, GestureRecognizerFactory>{
+      ScaleGestureRecognizer:
+          GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
+            // A recognizer joins its team as it is made: the team can only be
+            // set while the recognizer is out of the arena, and this handler
+            // runs again on every rebuild, mid-drag included.
+            () {
+              final recognizer = ScaleGestureRecognizer()..team = team;
+              // The pinch is the captain: whatever the team wins, it is the
+              // pinch that gets the pointers and moves the sheet.
+              team.captain = recognizer;
+              return recognizer;
+            },
+            (ScaleGestureRecognizer instance) {
+              instance
+                ..gestureSettings = slop
+                ..onStart = _onScaleStart
+                ..onUpdate = _onScaleUpdate
+                ..onEnd = _onScaleEnd;
+            },
+          ),
+      PanGestureRecognizer:
+          GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(
+            () => PanGestureRecognizer()..team = team,
+            (PanGestureRecognizer instance) {
+              // Claiming the drag is all this recognizer does; what comes of it
+              // is the captain's business.
+              instance
+                ..gestureSettings = slop
+                ..onStart = (_) {};
+            },
+          ),
+    };
+  }
+
   void _onScaleStart(ScaleStartDetails details) {
     _stopFling();
-    _focal = details.localFocalPoint;
     _gestureScale = _scale;
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
     final focal = details.localFocalPoint;
     setState(() {
-      _offset += focal - _focal;
+      // The recognizer's own per-event delta rather than the distance from the
+      // point where it says the drag started: the event that wins the arena has
+      // moved the finger already, and re-anchoring there swallows that first
+      // step — which on a fast flick is most of the flick.
+      _offset += details.focalPointDelta;
       final next = (_gestureScale * details.scale).clamp(
         SpreadsheetGridView.minScale,
         SpreadsheetGridView.maxScale,
@@ -321,7 +384,6 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
         _offset = focal - content * next;
       }
       _offset = _clamp(_offset);
-      _focal = focal;
     });
     _notifyViewChanged();
   }
@@ -441,6 +503,7 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
           final rows = _rowWindow();
           final columns = _columnWindow();
           _anchor = topLeftCell();
+          final panelText = _markedText ?? _selectedWord;
           return Stack(
             clipBehavior: Clip.none,
             children: [
@@ -450,29 +513,35 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
                 top: 0,
                 bottom: tabBarHeight,
                 child: ClipRect(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onScaleStart: _onScaleStart,
-                    onScaleUpdate: _onScaleUpdate,
-                    onScaleEnd: _onScaleEnd,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _GridPainter(
-                              edges: edges,
-                              rows: rows,
-                              columns: columns,
-                              rowHeight: _rowHeight,
-                              offset: _offset,
-                              viewport: _viewport,
-                              theme: widget.readingTheme,
+                  // Above the pan/pinch detector, never inside it: a selection
+                  // region that sits within the sheet claims the drags the
+                  // sheet is panned with.
+                  child: ReadingSelectionArea(
+                    translatorEnabled: widget.translatorEnabled,
+                    onTranslateSelection: _translateMark,
+                    allText: () => spreadsheetSheetText(widget.sheets[_sheet]),
+                    child: RawGestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      gestures: _gridGestures,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _GridPainter(
+                                edges: edges,
+                                rows: rows,
+                                columns: columns,
+                                rowHeight: _rowHeight,
+                                offset: _offset,
+                                viewport: _viewport,
+                                theme: widget.readingTheme,
+                              ),
                             ),
                           ),
-                        ),
-                        Positioned.fill(child: _buildCells(rows, columns)),
-                      ],
+                          Positioned.fill(child: _buildCells(rows, columns)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -484,7 +553,7 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
                 height: tabBarHeight,
                 child: _buildTabs(),
               ),
-              if (_selectedWord != null)
+              if (panelText case final text?)
                 Positioned(
                   left: 16,
                   right: 16,
@@ -492,15 +561,20 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
                   child: Align(
                     alignment: Alignment.bottomCenter,
                     child: TranslationPanel(
-                      key: ValueKey(
-                        '$_selectedWord-${widget.source}-${widget.target}',
-                      ),
-                      word: _selectedWord!,
-                      sentenceMatch: _selectedSentence,
+                      key: ValueKey('$text-${widget.source}-${widget.target}'),
+                      word: text,
+                      sentenceMatch: _markedText == null
+                          ? _selectedSentence
+                          : null,
                       source: widget.source,
                       target: widget.target,
                       translationService: widget.translationService,
-                      onClose: () => setState(_clearSelection),
+                      onClose: () => setState(() {
+                        if (_markedText == null) {
+                          _clearSelection();
+                        }
+                        _markedText = null;
+                      }),
                     ),
                   ),
                 ),
@@ -514,7 +588,10 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
   /// The window of cells the viewport shows, laid out in the sheet's own
   /// coordinates and then translated as a whole — which is what makes panning
   /// a repaint rather than a re-layout.
-  Widget _buildCells(({int first, int last}) rows, ({int first, int last}) columns) {
+  Widget _buildCells(
+    ({int first, int last}) rows,
+    ({int first, int last}) columns,
+  ) {
     final cells = <Widget>[];
     if (_sheetData.rows.isEmpty || columns.last < columns.first) {
       return const SizedBox.shrink();
@@ -610,6 +687,16 @@ class SpreadsheetGridViewState extends State<SpreadsheetGridView>
     _selectedEnd = null;
     _selectedWord = null;
     _selectedSentence = null;
+  }
+
+  /// The reader marked cells with a long press and asked what they say. A mark
+  /// and a tapped word are two answers to the same question, so the word's own
+  /// highlight steps aside for the card.
+  void _translateMark(String text) {
+    setState(() {
+      _clearSelection();
+      _markedText = text;
+    });
   }
 
   Widget _buildTabs() {

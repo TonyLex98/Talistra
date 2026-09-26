@@ -15,6 +15,7 @@ import '../utils/reading_text_style.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/reflow_paginator.dart';
 import '../utils/sentence_finder.dart';
+import 'reading_selection_area.dart';
 import 'translation_panel.dart';
 
 /// Phone-friendly reading view: the PDF's text is reflowed for the screen
@@ -117,6 +118,11 @@ class ReflowPdfViewState extends State<ReflowPdfView>
   int? _selectedWordEnd;
   String? _selectedWord;
   SentenceMatch? _selectedSentence;
+
+  /// The long-press mark layer over the pages, so turning a page can also drop
+  /// whatever the reader had marked.
+  final GlobalKey<ReadingSelectionAreaState> _selectionKey =
+      GlobalKey<ReadingSelectionAreaState>();
 
   // The search hit the reader is looking at: which page and block it sits in,
   // and the [start, end) range inside that block's text to wash over. Stored
@@ -460,6 +466,19 @@ class ReflowPdfViewState extends State<ReflowPdfView>
     _selectedWordEnd = null;
     _selectedWord = null;
     _selectedSentence = null;
+    _selectionKey.currentState?.clearSelection();
+  }
+
+  /// The reader marked a passage with a long press and asked what it says. The
+  /// card answers for the whole mark, so the word highlight steps aside.
+  void _translateSelection(String text) {
+    setState(() {
+      _selectedBlockIndex = null;
+      _selectedWordStart = null;
+      _selectedWordEnd = null;
+      _selectedSentence = null;
+      _selectedWord = text;
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -565,11 +584,20 @@ class ReflowPdfViewState extends State<ReflowPdfView>
           _warmNeighbourPages(contentSize);
           _lastContentSize = contentSize;
 
-          final reader = _buildTurnableArea(
-            context,
-            constraints,
-            contentSize,
-            sideMargin,
+          // The mark layer sits above the turnable area rather than inside a
+          // page card: a selection region inside one claims a horizontal drag
+          // for itself, and the swipe meant to turn the page never gets there.
+          final reader = ReadingSelectionArea(
+            key: _selectionKey,
+            translatorEnabled: widget.translatorEnabled,
+            onTranslateSelection: _translateSelection,
+            allText: () => reflowBlocksText(_blocksFor(_pageIndex)),
+            child: _buildTurnableArea(
+              context,
+              constraints,
+              contentSize,
+              sideMargin,
+            ),
           );
           if (!widget.syncTranslationExperimental) return reader;
 

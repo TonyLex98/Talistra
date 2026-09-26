@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -53,7 +55,45 @@ class LibraryService extends ChangeNotifier {
         // Skip corrupted entries rather than failing the whole library.
       }
     }
-    return LibraryService(prefs, docs);
+    return LibraryService(prefs, docs).._watchForBackground();
+  }
+
+  /// Reading progress is written once per page the reader turns, and a page
+  /// turn is a swipe: serializing the whole library to disk in the middle of
+  /// one is just the kind of work that makes a big book stutter. The model
+  /// still updates at once — only the write waits, for a moment's quiet in
+  /// the reading or for the app going to the background.
+  static const _saveDelay = Duration(milliseconds: 1200);
+  Timer? _pendingSave;
+  AppLifecycleListener? _lifecycle;
+
+  void _watchForBackground() {
+    _lifecycle = AppLifecycleListener(onPause: saveNow, onDetach: saveNow);
+  }
+
+  /// Writes the library out without waiting for the coalesced save.
+  void saveNow() {
+    _pendingSave?.cancel();
+    _pendingSave = null;
+    unawaited(_persist());
+  }
+
+  void _scheduleSave() {
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      // Nothing is animating now, and the process may not live to see a
+      // timer fire — write it while there is still a moment.
+      saveNow();
+      return;
+    }
+    _pendingSave?.cancel();
+    _pendingSave = Timer(_saveDelay, saveNow);
+  }
+
+  @override
+  void dispose() {
+    _pendingSave?.cancel();
+    _lifecycle?.dispose();
+    super.dispose();
   }
 
   Future<void> _persist() async {
@@ -172,7 +212,7 @@ class LibraryService extends ChangeNotifier {
       reflowFontSize: reflowFontSize,
       lastOpenedAt: DateTime.now(),
     );
-    await _persist();
+    _scheduleSave();
     notifyListeners();
   }
 

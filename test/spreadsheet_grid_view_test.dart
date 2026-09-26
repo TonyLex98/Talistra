@@ -30,6 +30,7 @@ void main() {
     WidgetTester tester,
     GlobalKey<SpreadsheetGridViewState> key, {
     List<SpreadsheetSheet>? sheets,
+    List<List<double>>? columnWidths,
     SheetCell initialCell = const (sheetIndex: 0, row: 0, column: 0),
     required void Function(({int sheetIndex, int row, int column})) onView,
   }) async {
@@ -43,10 +44,12 @@ void main() {
               key: key,
               sheets:
                   sheets ?? [SpreadsheetSheet(name: 'Лист1', rows: _rows(400))],
-              columnWidths: [
-                [80, 60],
-                if ((sheets?.length ?? 1) > 1) [80, 60],
-              ],
+              columnWidths:
+                  columnWidths ??
+                  [
+                    [80, 60],
+                    if ((sheets?.length ?? 1) > 1) [80, 60],
+                  ],
               initialCell: initialCell,
               source: TranslateLanguage.russian,
               target: TranslateLanguage.english,
@@ -85,13 +88,51 @@ void main() {
     await pump(tester, key, onView: seen.add);
 
     final gesture = await tester.startGesture(const Offset(200, 400));
-    await gesture.moveBy(const Offset(0, -600));
-    await tester.pump();
+    for (var i = 0; i < 10; i++) {
+      await gesture.moveBy(const Offset(0, -60));
+      await tester.pump();
+    }
 
     expect(find.text('R2'), findsNothing);
     expect(find.text('R30'), findsOneWidget);
     expect(seen.last.row, greaterThan(0));
     expect(seen.last.column, 0);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a sheet wider than the window pans sideways', (tester) async {
+    // Ten columns of 80 points is twice the window. The reading surface marks
+    // text with a horizontal drag, which is exactly the drag a wide sheet has
+    // to pan with, so the sheet has to claim it first.
+    final key = GlobalKey<SpreadsheetGridViewState>();
+    final seen = <({int sheetIndex, int row, int column})>[];
+    await pump(
+      tester,
+      key,
+      sheets: [
+        SpreadsheetSheet(
+          name: 'Лист1',
+          rows: [
+            for (var r = 0; r < 20; r++) [for (var c = 0; c < 10; c++) 'C$c'],
+          ],
+        ),
+      ],
+      columnWidths: [
+        [for (var c = 0; c < 10; c++) 80],
+      ],
+      onView: seen.add,
+    );
+
+    // A real finger arrives at the selection layer's own threshold, so the
+    // drag is taken step by step rather than in one jump.
+    final gesture = await tester.startGesture(const Offset(200, 400));
+    for (var i = 0; i < 10; i++) {
+      await gesture.moveBy(const Offset(-12, 0));
+      await tester.pump();
+    }
+    expect(seen.last.column, greaterThan(0));
 
     await gesture.up();
     await tester.pumpAndSettle();
@@ -173,15 +214,17 @@ void main() {
     double cellSize() {
       // The reader's own text is built as styled runs inside one Text.rich
       // per cell, so the size in play is the span's, not the widget's.
-      final span = tester
-          .widgetList<Text>(
-            find.descendant(
-              of: find.byType(SpreadsheetGridView),
-              matching: find.byType(Text),
-            ),
-          )
-          .first
-          .textSpan! as TextSpan;
+      final span =
+          tester
+                  .widgetList<Text>(
+                    find.descendant(
+                      of: find.byType(SpreadsheetGridView),
+                      matching: find.byType(Text),
+                    ),
+                  )
+                  .first
+                  .textSpan!
+              as TextSpan;
       return ((span.children!.first as TextSpan).style!.fontSize)!;
     }
 

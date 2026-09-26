@@ -29,12 +29,16 @@ class LibraryDocument {
   /// field existed keep working unchanged.
   final String format;
 
-  /// Whether this document is read as flowing text (txt, epub, fb2, rtf,
-  /// docx) rather than as PDF pages.
+  /// Whether this document is read as flowing text (txt, md, epub, fb2,
+  /// rtf, docx) rather than as PDF pages.
   bool get isTextDocument =>
-      const {'txt', 'epub', 'fb2', 'rtf', 'docx'}.contains(format);
+      const {'txt', 'md', 'epub', 'fb2', 'rtf', 'docx'}.contains(format);
 
   bool get isTxt => format == 'txt';
+
+  /// Markdown, which is read as text but parsed for structure rather than
+  /// broken into plain paragraphs.
+  bool get isMarkdown => format == 'md';
   bool get isDjvu => format == 'djvu' || format == 'djv';
   bool get isXlsx => format == 'xlsx' || format == 'xls';
   final int pageCount;

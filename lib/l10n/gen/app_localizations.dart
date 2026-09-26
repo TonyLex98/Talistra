@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyLibrarySubtitle.
   ///
   /// In ru, this message translates to:
-  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT или XLSX — Talistra сама выберет подходящий режим чтения.'**
+  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD или XLSX — Talistra сама выберет подходящий режим чтения.'**
   String get emptyLibrarySubtitle;
 
   /// No description provided for @importingLabel.
@@ -145,6 +145,24 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Talistra не смогла распознать или открыть формат этого файла.'**
   String get unsupportedDocumentFormat;
+
+  /// No description provided for @unknownFormatTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Неизвестный формат'**
+  String get unknownFormatTitle;
+
+  /// No description provided for @unknownFormatAsText.
+  ///
+  /// In ru, this message translates to:
+  /// **'Talistra не нашла для этого файла читалку. Открыть его как обычный текст?'**
+  String get unknownFormatAsText;
+
+  /// No description provided for @openAsPlainText.
+  ///
+  /// In ru, this message translates to:
+  /// **'Открыть как текст'**
+  String get openAsPlainText;
 
   /// No description provided for @pageProgress.
   ///
@@ -769,6 +787,54 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Снять выделение'**
   String get selectionClose;
+
+  /// No description provided for @selectionTranslateShort.
+  ///
+  /// In ru, this message translates to:
+  /// **'Перевести'**
+  String get selectionTranslateShort;
+
+  /// No description provided for @selectionCopyAll.
+  ///
+  /// In ru, this message translates to:
+  /// **'Копировать всё'**
+  String get selectionCopyAll;
+
+  /// No description provided for @selectionSelectAll.
+  ///
+  /// In ru, this message translates to:
+  /// **'Выбрать всё'**
+  String get selectionSelectAll;
+
+  /// No description provided for @readerMoreTooltip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ещё'**
+  String get readerMoreTooltip;
+
+  /// No description provided for @copyPageAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Копировать страницу'**
+  String get copyPageAction;
+
+  /// No description provided for @copyBookAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Копировать всю книгу'**
+  String get copyBookAction;
+
+  /// No description provided for @copyingBookText.
+  ///
+  /// In ru, this message translates to:
+  /// **'Собираю текст книги…'**
+  String get copyingBookText;
+
+  /// No description provided for @nothingToCopy.
+  ///
+  /// In ru, this message translates to:
+  /// **'Здесь нет текста, который можно скопировать'**
+  String get nothingToCopy;
 
   /// No description provided for @wrongSourceLanguage.
   ///

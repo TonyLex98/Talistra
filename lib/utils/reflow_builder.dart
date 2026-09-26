@@ -63,52 +63,87 @@ List<_LineEntry> _mergeVisualRows(List<_LineEntry> entries) {
       // Whichever fragment carries more text is the row's body type.
       height: entry.text.length > last.text.length ? entry.height : last.height,
       text: '${last.text}$separator${entry.text}',
-      runs: [
-        ...last.runs,
-        for (final r in entry.runs)
-          FormatRun(
-            start: r.start + shift,
-            end: r.end + shift,
-            bold: r.bold,
-            italic: r.italic,
-          ),
-      ],
+      runs: [...last.runs, for (final r in entry.runs) r.shifted(shift)],
       allBold: last.allBold && entry.allBold,
     );
   }
   return merged;
 }
 
-/// A bold/italic run within a [ReflowBlock]'s text, as [start, end)
-/// character offsets into that block's own `text` string.
+/// A styled span within a [ReflowBlock]'s text, as [start, end) character
+/// offsets into that block's own `text` string.
+///
+/// The PDF path only ever sets [bold] and [italic], read from the source's
+/// own font info; the Markdown path additionally marks inline code, strike
+/// and links, which the same renderer then draws.
 class FormatRun {
   const FormatRun({
     required this.start,
     required this.end,
-    required this.bold,
-    required this.italic,
+    this.bold = false,
+    this.italic = false,
+    this.code = false,
+    this.strike = false,
+    this.link = false,
   });
   final int start;
   final int end;
   final bool bold;
   final bool italic;
+
+  /// Monospace, as inline code (`like this`) is set.
+  final bool code;
+
+  /// Struck through (`~~like this~~`).
+  final bool strike;
+
+  /// The label of a link (`[like this](url)`) — drawn in the accent colour
+  /// and underlined, but still tapped for a translation like any other word.
+  final bool link;
+
+  /// The same run with its offsets moved [by] characters into a longer
+  /// string — needed every time lines are joined, trimmed or merged.
+  FormatRun shifted(int by) => FormatRun(
+    start: start + by,
+    end: end + by,
+    bold: bold,
+    italic: italic,
+    code: code,
+    strike: strike,
+    link: link,
+  );
 }
 
 /// One unit of a reflowed page: either a paragraph of text, or a region
 /// that isn't text (almost always an image, chart or table) — carrying
 /// its PDF-space bounds so it can be rendered as a real, zoomable image
 /// instead of just a placeholder.
+///
+/// The extra fields below (`headingLevel`, [quoteDepth], [indent], [isCode],
+/// [isDivider]) exist for Markdown, which declares its structure in the text
+/// rather than in the page's geometry. A PDF block leaves them at their
+/// defaults, so nothing about how a PDF page is laid out changes.
 class ReflowBlock {
   const ReflowBlock.paragraph(
     this.text, {
     this.formatRuns = const [],
-    this.isHeading = false,
+    this.headingLevel = 0,
+    this.quoteDepth = 0,
+    this.indent = 0,
+    this.isCode = false,
+    this.isDivider = false,
+    this.gapAbove,
   }) : imageBounds = null;
   const ReflowBlock.image(Rect bounds)
     : text = '',
       imageBounds = bounds,
       formatRuns = const [],
-      isHeading = false;
+      headingLevel = 0,
+      quoteDepth = 0,
+      indent = 0,
+      isCode = false,
+      isDivider = false,
+      gapAbove = null;
 
   final String text;
   final Rect? imageBounds;
@@ -118,7 +153,33 @@ class ReflowBlock {
   /// used to flow into the paragraph above them, since a book typically
   /// leaves less space above a heading than the paragraph-break
   /// threshold, and the reflowed page read as one unbroken slab.
-  final bool isHeading;
+  bool get isHeading => headingLevel > 0;
+
+  /// The Markdown heading depth, `#` through `######` (1 to 6), or 0 for
+  /// body text. A PDF heading is one undifferentiated style, so it comes
+  /// through as level 1; the compact PDF view only ever checks [isHeading].
+  final int headingLevel;
+
+  /// How deeply this block is nested inside blockquotes (`>`), which the
+  /// reader draws as that many bars down its left edge.
+  final int quoteDepth;
+
+  /// How deeply this block is nested inside lists, in levels rather than
+  /// characters, so a wrapped item lines up under its own marker.
+  final int indent;
+
+  /// Preformatted text — a fenced code block or a table. Set in the
+  /// reader's monospace face, on a faint panel, with its own line breaks
+  /// kept instead of reflowed.
+  final bool isCode;
+
+  /// A thematic break (`---`): no text, just a rule across the column.
+  final bool isDivider;
+
+  /// The gap this block wants above itself when it starts a new run on a
+  /// sub-page, in place of the view's default block spacing. Null uses the
+  /// default. Headings want more than a paragraph does.
+  final double? gapAbove;
 
   /// Bold/italic spans carried over from the source PDF's own font info
   /// (see [TextWord.fontStyle]), so reflowed text doesn't flatten
@@ -126,6 +187,33 @@ class ReflowBlock {
   final List<FormatRun> formatRuns;
 
   bool get isImage => imageBounds != null;
+}
+
+/// The blocks as plain text — one blank line between them, empty ones (an
+/// image, a rule) left out. This is what a reader copies when they want the
+/// page or the whole book instead of one word.
+String reflowBlocksText(Iterable<ReflowBlock> blocks) => [
+  for (final block in blocks)
+    if (block.text.trim().isNotEmpty) block.text.trim(),
+].join('\n\n');
+
+/// The same for a paginated book: every page's blocks, then the next page's.
+String reflowPagesText(Iterable<Iterable<ReflowBlock>> pages) =>
+    reflowPageTexts([
+      for (final page in pages) page.map((block) => block.text),
+    ]);
+
+/// The same again for pages held as plain block texts — which is how the PDF
+/// search index caches a book once it has read it.
+String reflowPageTexts(Iterable<Iterable<String>> pages) {
+  final texts = [
+    for (final page in pages)
+      [
+        for (final text in page)
+          if (text.trim().isNotEmpty) text.trim(),
+      ].join('\n\n'),
+  ]..removeWhere((text) => text.isEmpty);
+  return texts.join('\n\n');
 }
 
 /// Recognizes a line that starts with a bullet or numbered-list marker
@@ -218,18 +306,7 @@ bool _looksLikeListItem(String text) => _listMarkerPattern.hasMatch(text);
   final leadingTrim = text.length - text.trimLeft().length;
   final trimmed = text.trim();
   if (leadingTrim == 0) return (text: trimmed, runs: runs);
-  return (
-    text: trimmed,
-    runs: [
-      for (final r in runs)
-        FormatRun(
-          start: r.start - leadingTrim,
-          end: r.end - leadingTrim,
-          bold: r.bold,
-          italic: r.italic,
-        ),
-    ],
-  );
+  return (text: trimmed, runs: [for (final r in runs) r.shifted(-leadingTrim)]);
 }
 
 /// Splits a single PDF page's extracted [lines] into reflowed paragraphs
@@ -359,7 +436,7 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
         ReflowBlock.paragraph(
           text,
           formatRuns: paragraphRuns,
-          isHeading: paragraphIsHeading,
+          headingLevel: paragraphIsHeading ? 1 : 0,
         ),
       );
     }
@@ -379,13 +456,7 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
     final shift = joined.length - entry.text.length;
     paragraphRuns = [
       ...paragraphRuns,
-      for (final r in entry.runs)
-        FormatRun(
-          start: r.start + shift,
-          end: r.end + shift,
-          bold: r.bold,
-          italic: r.italic,
-        ),
+      for (final r in entry.runs) r.shifted(shift),
     ];
     paragraph = joined;
   }

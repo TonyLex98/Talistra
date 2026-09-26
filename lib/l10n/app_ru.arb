@@ -3,12 +3,15 @@
 
   "settingsTooltip": "Настройки",
   "emptyLibraryTitle": "Ваша библиотека пуста",
-  "emptyLibrarySubtitle": "Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT или XLSX — Talistra сама выберет подходящий режим чтения.",
+  "emptyLibrarySubtitle": "Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD или XLSX — Talistra сама выберет подходящий режим чтения.",
   "importingLabel": "Добавление...",
   "addPdfLabel": "Добавить книгу",
   "archiveChooseBook": "Выберите книгу из архива",
   "archiveNoBooks": "В архиве не нашлось поддерживаемых книг.",
   "unsupportedDocumentFormat": "Talistra не смогла распознать или открыть формат этого файла.",
+  "unknownFormatTitle": "Неизвестный формат",
+  "unknownFormatAsText": "Talistra не нашла для этого файла читалку. Открыть его как обычный текст?",
+  "openAsPlainText": "Открыть как текст",
 
   "pageProgress": "Стр. {page} из {total}",
   "@pageProgress": {
@@ -163,6 +166,14 @@
   "selectionCopy": "Копировать",
   "selectionTranslate": "Перевести выделенное",
   "selectionClose": "Снять выделение",
+  "selectionTranslateShort": "Перевести",
+  "selectionCopyAll": "Копировать всё",
+  "selectionSelectAll": "Выбрать всё",
+  "readerMoreTooltip": "Ещё",
+  "copyPageAction": "Копировать страницу",
+  "copyBookAction": "Копировать всю книгу",
+  "copyingBookText": "Собираю текст книги…",
+  "nothingToCopy": "Здесь нет текста, который можно скопировать",
   "wrongSourceLanguage": "Текст не похож на {language} — перевод будет бессмысленным. Сменить язык оригинала?",
   "@wrongSourceLanguage": {
     "placeholders": { "language": {"type": "String"} }

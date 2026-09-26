@@ -135,6 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _bookExtensions = {
     'pdf',
     'txt',
+    'md',
     'epub',
     'fb2',
     'rtf',
@@ -171,10 +172,18 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final library = context.read<LibraryService>();
       final title = p.basenameWithoutExtension(fileName);
-      final format = await detectDocumentFormat(path, fileName: fileName);
-      if (format == null ||
-          (!supportedBookFormats.contains(format) &&
-              !supportedArchiveFormats.contains(format))) {
+      final detected = await detectDocumentFormat(path, fileName: fileName);
+      final String format;
+      if (detected != null &&
+          (supportedBookFormats.contains(detected) ||
+              supportedArchiveFormats.contains(detected))) {
+        format = detected;
+      } else if (await _offerAsPlainText(path)) {
+        // A file Talistra has no reader for is not necessarily one it can't
+        // show: anything that really is text can be read as a plain .txt
+        // book. Ask, rather than quietly refuse or quietly guess.
+        format = 'txt';
+      } else {
         throw const _UnsupportedDocumentException();
       }
       if (format == 'zip') {
@@ -216,6 +225,38 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       if (mounted) setState(() => _importing = false);
     }
+  }
+
+  /// Offers a file nothing else could read to be opened as a plain-text
+  /// book, and says whether the reader took the offer. Only worth asking for
+  /// bytes that are text at all — see [fileLooksLikeText].
+  Future<bool> _offerAsPlainText(String path) async {
+    if (!await fileLooksLikeText(path)) return false;
+    if (!mounted) return false;
+    setState(() => _importing = false);
+    final l10n = AppLocalizations.of(context);
+    final asText =
+        await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(l10n.unknownFormatTitle),
+            content: Text(l10n.unknownFormatAsText),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(l10n.cancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(l10n.openAsPlainText),
+              ),
+            ],
+          ),
+        ) ==
+        true;
+    if (!mounted) return false;
+    if (asText) setState(() => _importing = true);
+    return asText;
   }
 
   /// A ZIP is a container, not an e-book format. We only offer actual books

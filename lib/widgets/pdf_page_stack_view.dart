@@ -30,6 +30,30 @@ const double _horizontalDeadZone = 56.0;
 /// reach for the thumb, short enough to leave reading undisturbed.
 const Duration _idleDelay = Duration(milliseconds: 3000);
 
+/// How close to the top or bottom edge a dragged selection grip has to get
+/// before the document starts scrolling under it. Wide enough to hit
+/// comfortably with a thumb, narrow enough that a mark being widened in the
+/// middle of the page never triggers it.
+const double _autoScrollEdge = 64.0;
+
+/// How far the document moves per tick while a grip is held at an edge, in
+/// screen pixels. Slow enough that the word the grip lands on stays readable.
+const double _autoScrollSpeed = 7.0;
+
+const Duration _autoScrollTick = Duration(milliseconds: 16);
+
+/// The grips' own geometry: a visible bar this wide, inside a touch target
+/// this generous, kept this far inside the viewport.
+const double _gripWidth = 5.0;
+const double _gripHeight = 26.0;
+const double _gripTouchSize = 44.0;
+const double _gripMargin = 12.0;
+
+/// The two corners of a mark, in the view's own screen coordinates: the
+/// menu over a scan anchors itself on these exactly as the compact view's
+/// anchors itself on the system selection's own.
+typedef RangeAnchors = ({Offset above, Offset below});
+
 /// A from-scratch, continuously-scrolling PDF page stack rendered from
 /// rasterized page images (via [PdfRegionRenderer]/pdfx), replacing
 /// Syncfusion's `SfPdfViewer` for the main reading view.
@@ -110,7 +134,14 @@ class PdfPageStackView extends StatefulWidget {
   /// the finger moves (with [finished] false) and once more when it lifts,
   /// so the reader can show the selected text live and only offer the
   /// copy/translate actions once the selection has settled.
-  final void Function(String text, bool finished) onRangeSelected;
+  ///
+  /// [anchors] are the mark's corners in this view's own coordinates — the
+  /// reader anchors its action menu on those, the way the text readers
+  /// anchor theirs on the system's selection anchors, so one menu looks and
+  /// behaves the same whether the page is a picture or reflowed text. Null
+  /// once the mark is gone.
+  final void Function(String text, bool finished, RangeAnchors? anchors)
+  onRangeSelected;
   final VoidCallback onTapEmpty;
   final ValueChanged<int> onPageChanged;
 
@@ -243,6 +274,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   @override
   void dispose() {
     _hideBubbleTimer?.cancel();
+    _autoScrollTimer?.cancel();
     _flingController.dispose();
     super.dispose();
   }
@@ -511,7 +543,16 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         _startFling(-velocityY / _zoom);
       }
     }
+    _reanchorSelection();
     _reportViewSettled();
+  }
+
+  /// Re-reports the mark's corners without rebuilding the mark: after a
+  /// scroll or a pinch the text is the same, only its place on screen has
+  /// moved, and the menu anchored on it has to move with it.
+  void _reanchorSelection() {
+    if (!_hasRangeSelection) return;
+    widget.onRangeSelected(_selectionText, true, selectionAnchors());
   }
 
   void _startFling(double contentVelocity) {
@@ -531,6 +572,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     if (newDy != _scrollOffset.dy) {
       setState(() => _scrollOffset = Offset(_scrollOffset.dx, newDy));
       _maybeReportPageChange();
+      _reanchorSelection();
     }
     if (newDy <= 0 || newDy >= maxDy) {
       _flingController.stop();
@@ -590,7 +632,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   void _handleTap(Offset screenPoint) {
     if (_hasRangeSelection) {
       clearRangeSelection();
-      widget.onRangeSelected('', true);
+      widget.onRangeSelected('', true, null);
       return;
     }
     final found = _wordAtScreenPoint(screenPoint);
@@ -613,20 +655,36 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   //
   // The page is a picture, so there's no text layer for Flutter's own
   // selection handles to work with: a long press used to be able to grab
-  // exactly one word and nothing more. Instead the page's extracted words
-  // are flattened into one reading-order list per page ([buildPageWords]),
-  // which turns "select from here to there" into a range of indices —
-  // the long press sets the anchor, and dragging moves the far end,
-  // across lines, until the finger lifts.
+  // exactly one word and nothing more. Instead each page's extracted words
+  // are flattened into one reading-order list ([buildPageWords]), which
+  // turns "select from here to there" into a pair of [WordPosition]s —
+  // the long press sets both, the finger or either grip then moves one of
+  // them, across lines and across pages, until it lifts.
+  //
+  // Crossing a page break is what the grips are for: holding a grip near
+  // the top or bottom edge scrolls the document under the finger, so a
+  // mark can be dragged from the bottom of one page to the top of the
+  // next instead of stopping dead at the margin.
   // ---------------------------------------------------------------------
 
   final Map<int, List<PageWord>> _pageWordsCache = {};
   final Map<int, Set<String>> _pageLexiconCache = {};
 
-  int? _selectionPageIndex;
-  int? _selectionAnchorWord;
-  int? _selectionFocusWord;
-  List<Rect> _selectionRectsPdf = const [];
+  /// The mark, as its two ends. Kept in document order (`start` never
+  /// after `end`); dragging one end past the other swaps them, and the
+  /// finger keeps steering whichever end it ended up on.
+  WordPosition? _selectionStart;
+  WordPosition? _selectionEnd;
+  List<MarkedLine> _selectionRectsPdf = const [];
+  String _selectionText = '';
+
+  /// Which grip the finger currently holds (0 = start, 1 = end), and where
+  /// that finger is on screen — the scroll ticks re-resolve the mark's end
+  /// from the pointer, not from the grip, since the grip is drawn over the
+  /// text and the text is what is moving.
+  int? _heldGrip;
+  Offset? _gripPointer;
+  Timer? _autoScrollTimer;
 
   bool get _hasRangeSelection => _selectionRectsPdf.isNotEmpty;
 
@@ -642,6 +700,13 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         return const [];
       }
     });
+  }
+
+  Set<String> _lexiconForPage(int pageIndex) {
+    return _pageLexiconCache.putIfAbsent(
+      pageIndex,
+      () => buildPageLexicon(_wordsForPage(pageIndex).map((w) => w.text)),
+    );
   }
 
   /// Which page a screen point falls on, and where inside that page in
@@ -669,70 +734,280 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     );
   }
 
+  /// The word a screen point marks: the nearest one on the page under the
+  /// finger, wherever on that page it happens to be.
+  WordPosition? _wordPositionAt(Offset screenPoint) {
+    final hit = _pageHitAt(screenPoint);
+    if (hit == null) return null;
+    final index = wordIndexAt(_wordsForPage(hit.pageIndex), hit.pdfPoint);
+    if (index == null) return null;
+    return (pageIndex: hit.pageIndex, wordIndex: index);
+  }
+
   void _handleLongPress(Offset screenPoint) {
-    final hit = _pageHitAt(screenPoint);
-    if (hit == null) return;
-    final words = _wordsForPage(hit.pageIndex);
-    final index = wordIndexAt(words, hit.pdfPoint);
-    if (index == null) return;
-    _selectionPageIndex = hit.pageIndex;
-    _selectionAnchorWord = index;
-    _updateSelection(index, finished: false);
+    final position = _wordPositionAt(screenPoint);
+    if (position == null) return;
+    _selectionStart = position;
+    _selectionEnd = position;
+    _heldGrip = 1;
+    _gripPointer = screenPoint;
+    _recomputeSelection(finished: false);
+    _updateAutoScroll();
   }
 
-  /// Extends the live selection to whatever word is under the finger now.
-  /// A drag that strays onto another page is ignored rather than jumping:
-  /// the anchor's page owns the selection until the finger lifts.
+  /// Moves the end the finger is steering to whatever word is under it.
   void _extendSelection(Offset screenPoint) {
-    final anchorPage = _selectionPageIndex;
-    if (anchorPage == null) return;
-    final hit = _pageHitAt(screenPoint);
-    if (hit == null || hit.pageIndex != anchorPage) return;
-    final index = wordIndexAt(_wordsForPage(anchorPage), hit.pdfPoint);
-    if (index == null || index == _selectionFocusWord) return;
-    _updateSelection(index, finished: false);
+    _gripPointer = screenPoint;
+    // Re-armed on every move of the finger, whether or not the mark grew: a
+    // grip resting on the bottom edge has already marked the last word it can
+    // see, and from there the page has to come to the finger.
+    _updateAutoScroll();
+    final grip = _heldGrip;
+    if (grip == null || _selectionStart == null || _selectionEnd == null) {
+      return;
+    }
+    final position = _wordPositionAt(screenPoint);
+    if (position == null) return;
+    final current = grip == 0 ? _selectionStart! : _selectionEnd!;
+    if (position == current) return;
+    _moveGripTo(grip, position);
+    _recomputeSelection(finished: false);
   }
 
-  void _updateSelection(int focusWord, {required bool finished}) {
-    final pageIndex = _selectionPageIndex;
-    final anchor = _selectionAnchorWord;
-    if (pageIndex == null || anchor == null) return;
-    final words = _wordsForPage(pageIndex);
+  /// Re-points one end of the mark, swapping the two ends if that put the
+  /// mark backwards — and handing the finger the end it is now actually
+  /// dragging, so continuing to move keeps widening the mark the way the
+  /// finger implies rather than fighting the swap.
+  void _moveGripTo(int grip, WordPosition position) {
+    if (grip == 0) {
+      _selectionStart = position;
+      if (compareWordPositions(_selectionStart!, _selectionEnd!) > 0) {
+        final swap = _selectionStart;
+        _selectionStart = _selectionEnd;
+        _selectionEnd = swap;
+        _heldGrip = 1;
+      }
+    } else {
+      _selectionEnd = position;
+      if (compareWordPositions(_selectionEnd!, _selectionStart!) < 0) {
+        final swap = _selectionStart;
+        _selectionStart = _selectionEnd;
+        _selectionEnd = swap;
+        _heldGrip = 0;
+      }
+    }
+  }
+
+  /// Rebuilds the mark's text and rectangles from its two ends, and reports
+  /// both — with the screen-space corners a menu anchors itself on.
+  void _recomputeSelection({required bool finished}) {
+    final start = _selectionStart;
+    final end = _selectionEnd;
+    if (start == null || end == null) return;
+    final words = flattenWordRange(
+      start: start,
+      end: end,
+      wordsForPage: _wordsForPage,
+    );
     if (words.isEmpty) return;
+    final lexicon = <String>{};
+    for (var page = start.pageIndex; page <= end.pageIndex; page++) {
+      lexicon.addAll(_lexiconForPage(page));
+    }
     final selection = buildWordRangeSelection(
       words,
-      anchor,
-      focusWord,
-      // The page's own vocabulary, so copied text keeps real compound
+      0,
+      words.length - 1,
+      // The pages' own vocabulary, so copied text keeps real compound
       // hyphens and loses the hyphenation ones (see [joinLines]).
-      lexicon: _pageLexiconCache.putIfAbsent(
-        pageIndex,
-        () => buildPageLexicon(words.map((w) => w.text)),
-      ),
+      lexicon: lexicon,
     );
     setState(() {
-      _selectionFocusWord = focusWord;
       _selectionRectsPdf = selection.rects;
+      _selectionText = selection.text;
     });
-    widget.onRangeSelected(selection.text, finished);
+    widget.onRangeSelected(selection.text, finished, selectionAnchors());
   }
 
   void _finishSelection() {
-    final focus = _selectionFocusWord;
-    if (focus == null) return;
-    _updateSelection(focus, finished: true);
+    _stopAutoScroll();
+    _heldGrip = null;
+    _gripPointer = null;
+    if (_selectionEnd == null) return;
+    _recomputeSelection(finished: true);
+  }
+
+  /// The mark's first and last line, in screen coordinates: what both the
+  /// menu's anchors and the grips' positions are measured from.
+  ({Rect first, Rect last})? _markCorners() {
+    if (_selectionRectsPdf.isEmpty) return null;
+    final first = _screenRectFor(_selectionRectsPdf.first);
+    final last = _screenRectFor(_selectionRectsPdf.last);
+    if (first == null || last == null) return null;
+    return (first: first, last: last);
+  }
+
+  /// The mark's corners on screen: where a menu should sit above the mark,
+  /// and where it should fall back to below it — the same pair of anchors
+  /// `TextSelectionToolbarLayoutDelegate` is handed for real text.
+  ///
+  /// In this view's own coordinates, which is the space the reader lays the
+  /// menu in — the view fills the screen it is read on, the same way the
+  /// system's own anchors are the coordinates of the surface they mark.
+  RangeAnchors? selectionAnchors() {
+    final corners = _markCorners();
+    if (corners == null) return null;
+    // A mark the reader has panned partly past the edge still gets its menu
+    // on screen, at the edge it went past.
+    double inside(double dy) => dy.clamp(0.0, math.max(0.0, _viewportHeight));
+    return (
+      above: Offset(corners.first.left, inside(corners.first.top)),
+      below: Offset(corners.last.right, inside(corners.last.bottom)),
+    );
+  }
+
+  /// Where the two grips belong: the start grip at the left edge of the
+  /// mark's first line, the end grip at the right edge of its last.
+  ///
+  /// Clamped to the viewport, because a mark that has been dragged partly
+  /// past the edge has to keep both of its grips reachable.
+  ({Offset start, Offset end})? gripAnchors() {
+    final corners = _markCorners();
+    if (corners == null) return null;
+    Offset clamp(Offset point) => Offset(
+      point.dx.clamp(
+        _gripMargin,
+        math.max(_gripMargin, _viewportWidth - _gripMargin),
+      ),
+      point.dy.clamp(
+        _gripMargin,
+        math.max(_gripMargin, _viewportHeight - _gripMargin),
+      ),
+    );
+    return (
+      start: clamp(Offset(corners.first.left, corners.first.bottom)),
+      end: clamp(Offset(corners.last.right, corners.last.bottom)),
+    );
+  }
+
+  Rect? _screenRectFor(MarkedLine line) {
+    final content = _contentRectFor(line.pageIndex, line.bounds);
+    if (content == null) return null;
+    return Rect.fromLTWH(
+      (content.left - _scrollOffset.dx) * _zoom,
+      (content.top - _scrollOffset.dy) * _zoom,
+      content.width * _zoom,
+      content.height * _zoom,
+    );
+  }
+
+  // --- dragging a grip -------------------------------------------------
+
+  void _gripDragStart(int grip, Offset localPoint) {
+    _flingController.stop();
+    _longPressTimer?.cancel();
+    _longPressFired = false;
+    setState(() {
+      _heldGrip = grip;
+      _gripPointer = localPoint;
+    });
+    _updateAutoScroll();
+    _pokeBubble();
+  }
+
+  void _gripDragUpdate(int grip, Offset localPoint) {
+    _extendSelection(localPoint);
+  }
+
+  void _gripDragEnd() {
+    _finishSelection();
+    _reportViewSettled();
+  }
+
+  /// Starts, keeps or stops the scroll that runs while a grip is held near
+  /// the top or bottom edge.
+  void _updateAutoScroll() {
+    final pointer = _gripPointer;
+    if (pointer == null || _heldGrip == null) {
+      _stopAutoScroll();
+      return;
+    }
+    final edge = _autoScrollEdge;
+    double direction = 0;
+    if (pointer.dy < edge) {
+      direction = -1;
+    } else if (pointer.dy > _viewportHeight - edge) {
+      direction = 1;
+    }
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+    if (direction == 0) return;
+    _autoScrollTimer = Timer.periodic(_autoScrollTick, (_) {
+      _scrollUnderGrip(direction);
+    });
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+  }
+
+  void _scrollUnderGrip(double direction) {
+    final pointer = _gripPointer;
+    if (pointer == null) {
+      _stopAutoScroll();
+      return;
+    }
+    final maxDy = math.max(0.0, _totalContentHeight - _viewportHeight / _zoom);
+    // The scroll offset is in content space and the grip is on screen, so
+    // a zoomed-in page has to move proportionally less to keep up with the
+    // finger's edge.
+    final newDy = (_scrollOffset.dy + direction * _autoScrollSpeed / _zoom)
+        .clamp(0.0, maxDy);
+    if (newDy == _scrollOffset.dy) {
+      // Out of document to scroll — the mark simply stops growing here.
+      _stopAutoScroll();
+      return;
+    }
+    setState(() => _scrollOffset = Offset(_scrollOffset.dx, newDy));
+    _maybeReportPageChange();
+    _pokeBubble();
+    final position = _wordPositionAt(pointer);
+    final grip = _heldGrip;
+    if (position != null && grip != null) _moveGripTo(grip, position);
+    _recomputeSelection(finished: false);
   }
 
   /// Called when the reader dismisses the selection (a tap elsewhere, or
   /// closing the actions that go with it).
   void clearRangeSelection() {
-    if (!_hasRangeSelection && _selectionPageIndex == null) return;
+    if (!_hasRangeSelection && _selectionStart == null) return;
+    _stopAutoScroll();
     setState(() {
-      _selectionPageIndex = null;
-      _selectionAnchorWord = null;
-      _selectionFocusWord = null;
+      _selectionStart = null;
+      _selectionEnd = null;
       _selectionRectsPdf = const [];
+      _selectionText = '';
+      _heldGrip = null;
+      _gripPointer = null;
     });
+  }
+
+  /// «Выбрать всё» over a scan: the whole page being read, marked. The
+  /// picture-only view has no text region to select through, so this does
+  /// by word index what [SelectionArea.selectAll] does for a real one.
+  void selectAllOnCurrentPage() {
+    final page = (_selectionStart?.pageIndex ?? _reportedPage - 1).clamp(
+      0,
+      widget.pageSizes.isEmpty ? 0 : widget.pageSizes.length - 1,
+    );
+    final words = _wordsForPage(page);
+    if (words.isEmpty) return;
+    _selectionStart = (pageIndex: page, wordIndex: 0);
+    _selectionEnd = (pageIndex: page, wordIndex: words.length - 1);
+    _heldGrip = null;
+    _gripPointer = null;
+    _recomputeSelection(finished: true);
   }
 
   double _renderScaleFor(
@@ -875,6 +1150,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         onVerticalDragEnd: (_) {
           setState(() => _scrubbing = false);
           _pokeBubble();
+          _reanchorSelection();
           _reportViewSettled();
         },
         onVerticalDragCancel: () {
@@ -916,6 +1192,66 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         ),
       ),
     );
+  }
+
+  /// The two grips at the ends of a mark.
+  ///
+  /// They are drawn in screen space rather than over the page, so a grip
+  /// stays the size a thumb can hit at any zoom, and they sit above the
+  /// reading surface in the widget tree, which means a drag that starts on
+  /// one belongs to the mark and never to the page underneath it.
+  List<Widget> _buildGrips() {
+    final anchors = gripAnchors();
+    if (anchors == null) return const [];
+    return [_buildGrip(0, anchors.start), _buildGrip(1, anchors.end)];
+  }
+
+  Widget _buildGrip(int index, Offset anchor) {
+    return Positioned(
+      left: (anchor.dx - _gripTouchSize / 2).clamp(
+        0.0,
+        math.max(0.0, _viewportWidth - _gripTouchSize),
+      ),
+      top: (anchor.dy - _gripTouchSize / 2).clamp(
+        0.0,
+        math.max(0.0, _viewportHeight - _gripTouchSize),
+      ),
+      width: _gripTouchSize,
+      height: _gripTouchSize,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (details) =>
+            _gripDragStart(index, _viewLocal(details.globalPosition)),
+        onPanUpdate: (details) =>
+            _gripDragUpdate(index, _viewLocal(details.globalPosition)),
+        onPanEnd: (_) => _gripDragEnd(),
+        onPanCancel: _gripDragEnd,
+        child: Center(
+          child: Container(
+            width: _gripWidth,
+            height: _gripHeight,
+            decoration: BoxDecoration(
+              color: widget.highlightColor,
+              borderRadius: BorderRadius.circular(_gripWidth / 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 3,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A global point (what a gesture reports) in this view's own space,
+  /// which is the space every hit test here works in.
+  Offset _viewLocal(Offset global) {
+    final box = context.findRenderObject();
+    if (box is! RenderBox) return global;
+    return box.globalToLocal(global);
   }
 
   @override
@@ -1020,7 +1356,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
         final selectionRects = <Rect>[
           for (final r in _selectionRectsPdf)
-            if (_contentRectFor(_selectionPageIndex, r) case final rect?) rect,
+            if (_contentRectFor(r.pageIndex, r.bounds) case final rect?) rect,
         ];
 
         final currentPage = math.min(_reportedPage, widget.pageSizes.length);
@@ -1129,6 +1465,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
                 ),
               ),
             ),
+            ..._buildGrips(),
             _buildScrubber(currentPage),
           ],
         );

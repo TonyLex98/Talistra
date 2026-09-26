@@ -296,21 +296,24 @@ void main() {
       expect(watch.elapsedMilliseconds, lessThan(500));
     });
 
-    test('sizes a column for its header in the bold style it is painted in', () {
-      // The header line is the one row a sheet paints heavier than the rest.
-      // Measuring it in the body style instead sizes the column for text that
-      // is not the text shown, and the header is the first cell to truncate.
-      final widths = measureColumnWidths(
-        sheet('Лист1', [
-          ['Заголовок'],
-          ['x'],
-        ]),
-        style: style,
-        boldStyle: const TextStyle(fontSize: 40, fontWeight: FontWeight.w700),
-        maxColumnWidth: 10000,
-      );
+    test(
+      'sizes a column for its header in the bold style it is painted in',
+      () {
+        // The header line is the one row a sheet paints heavier than the rest.
+        // Measuring it in the body style instead sizes the column for text that
+        // is not the text shown, and the header is the first cell to truncate.
+        final widths = measureColumnWidths(
+          sheet('Лист1', [
+            ['Заголовок'],
+            ['x'],
+          ]),
+          style: style,
+          boldStyle: const TextStyle(fontSize: 40, fontWeight: FontWeight.w700),
+          maxColumnWidth: 10000,
+        );
 
-      expect(widths.single, greaterThan(150));
-    });
+        expect(widths.single, greaterThan(150));
+      },
+    );
   });
 }

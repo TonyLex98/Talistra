@@ -20,6 +20,7 @@ import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/djvu_page_stack_view.dart';
 import '../widgets/book_search_bar.dart';
+import '../widgets/reader_copy_menu.dart';
 import '../widgets/translation_panel.dart';
 import '../widgets/txt_page_view.dart';
 
@@ -360,6 +361,21 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     onDone();
   }
 
+  /// The page the reader is on, as text. Both views show the same page of the
+  /// same book, so the original scan copies the OCR text behind it too.
+  String? _copyPageText() {
+    final pages = _textPages;
+    if (pages == null) return null;
+    final index = _currentPage - 1;
+    if (index < 0 || index >= pages.length) return null;
+    return reflowBlocksText(pages[index]);
+  }
+
+  String? _copyBookText() {
+    final pages = _textPages;
+    return pages == null ? null : reflowPagesText(pages);
+  }
+
   void _onSearchSelect(SearchMatch match, List<SearchMatch> allMatches) {
     // A hit only ever comes from the OCR text, which the original scan view
     // has no way to draw a highlight over (it has no live text, only the
@@ -638,6 +654,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                   Expanded(
                     child: BookSearchBar(
                       search: _runSearch,
+                      readingPage: () => _currentPage - 1,
                       onSelect: _onSearchSelect,
                       onClose: _closeSearch,
                     ),
@@ -793,6 +810,10 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                     icon: const Icon(Icons.search),
                     tooltip: l10n.searchTooltip,
                     onPressed: _textPages == null ? null : _openSearch,
+                  ),
+                  ReaderCopyMenu(
+                    pageText: _copyPageText,
+                    bookText: _copyBookText,
                   ),
                 ],
               ],

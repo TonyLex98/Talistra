@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/settings_service.dart';
 
+/// The face preformatted text is set in: a code block's indentation and a
+/// table's columns only line up when every character is as wide as the next,
+/// which no proportional reading font is. The platform's own monospace is
+/// used rather than a bundled family, because none of the reading faces the
+/// app ships is monospaced and a code panel is the one place where that
+/// shows.
+const String codeFontFamily = 'monospace';
+
 /// Builds the text style reflowed reading text is set in, from the reader's
 /// own typography settings: family, weight (driven through the bundled
 /// variable fonts' weight axis) and ink contrast against the page.
@@ -47,6 +55,22 @@ TextStyle readingTextStyle({
 FontWeight _nearestWeight(int weight) {
   final index = ((weight / 100).round() - 1).clamp(0, 8);
   return FontWeight.values[index];
+}
+
+/// [base] set in the reader's own bold weight.
+///
+/// Text the *source* emphasises — `**like this**` in a Markdown file, a bold
+/// run in a PDF — goes through this rather than a hardcoded weight 700, so it
+/// is exactly as heavy as the reader's typography setting asks for, and a
+/// variable font still takes the exact weight through its axis.
+TextStyle emphasisedReadingStyle(TextStyle base, SettingsService settings) {
+  final weight = (settings.readingWeight + 250).clamp(300, 900);
+  return base.copyWith(
+    fontWeight: _nearestWeight(weight),
+    fontVariations: settings.readingFont.hasVariableWeight
+        ? [FontVariation('wght', weight.toDouble())]
+        : base.fontVariations,
+  );
 }
 
 final RegExp _readingWordPattern = RegExp(r'[\p{L}\p{N}]+', unicode: true);

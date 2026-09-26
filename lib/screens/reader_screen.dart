@@ -17,10 +17,13 @@ import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
 import '../utils/pdf_region_renderer.dart';
+import '../utils/reflow_builder.dart';
 import '../utils/sentence_finder.dart';
 import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/pdf_page_stack_view.dart';
+import '../widgets/reader_copy_menu.dart';
+import '../widgets/reading_selection_area.dart';
 import '../widgets/reflow_view.dart';
 import '../widgets/book_search_bar.dart';
 import '../widgets/translation_panel.dart';
@@ -82,10 +85,13 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   /// A long-press-and-drag text selection in the PDF view: the selected
   /// text, whether the drag has finished (only then are actions offered),
-  /// and whether the reader asked to translate it.
+  /// and whether the reader asked to translate it. [_rangeAnchors] is where
+  /// the mark sits on screen, so its menu can float over it the same way it
+  /// does over marked text in every other reader.
   String? _rangeText;
   bool _rangeSettled = false;
   bool _translateRange = false;
+  RangeAnchors? _rangeAnchors;
 
   // Shown instantly on open (before the real PDF has finished loading)
   // so reopening a document doesn't start from a blank screen.
@@ -343,15 +349,21 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// finger moves and once more when it lifts; the copy/translate actions
   /// only appear for the settled selection, so they don't flicker in and
   /// out of existence mid-drag.
-  void _onRangeSelected(String text, bool finished) {
+  void _onRangeSelected(String text, bool finished, RangeAnchors? anchors) {
     final trimmed = text.trim();
     if (finished && trimmed.isEmpty) {
-      if (_rangeText != null) setState(() => _rangeText = null);
+      if (_rangeText != null) {
+        setState(() {
+          _rangeText = null;
+          _rangeAnchors = null;
+        });
+      }
       return;
     }
     setState(() {
       _rangeText = trimmed.isEmpty ? null : trimmed;
       _rangeSettled = finished;
+      _rangeAnchors = trimmed.isEmpty ? null : anchors;
       // A word translation and a range selection are two different
       // answers to "what am I looking at" — showing both at once would
       // just be two cards fighting over the screen.
@@ -369,6 +381,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     setState(() {
       _rangeText = null;
       _rangeSettled = false;
+      _rangeAnchors = null;
       _translateRange = false;
     });
   }
@@ -386,15 +399,50 @@ class _ReaderScreenState extends State<ReaderScreen>
     _clearRangeSelection();
   }
 
-  /// The bar of actions for a settled range selection: how much was
-  /// selected, and what can be done with it.
-  Widget _buildRangeActions(
+  /// The whole page rather than the dragged range. A mark over a scan is
+  /// made by dragging two grips, so a reader who means "the page" is one
+  /// long drag away — this saves them that.
+  void _copyWholePage() {
+    final text = _copyPageText();
+    if (text == null || text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).nothingToCopy),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppLocalizations.of(context).copiedLabel),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    _clearRangeSelection();
+  }
+
+  /// «Выбрать всё» over a scan: mark the whole page being read, grips and
+  /// all, so the reader can then shrink the mark from either side rather
+  /// than drag it across the page first.
+  void _selectAllRange() {
+    final view = _pdfViewKey.currentState;
+    if (view == null) return;
+    view.selectAllOnCurrentPage();
+    setState(() => _translateRange = false);
+  }
+
+  /// The menu over a settled range selection — the very same one the text
+  /// readers float over marked text, anchored on the mark's own corners.
+  Widget _buildRangeMenu(
     SettingsService settings,
     TranslationService translationService,
   ) {
     final l10n = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final text = _rangeText!;
+    final text = _rangeText;
+    final anchors = _rangeAnchors;
+    if (text == null || anchors == null) return const SizedBox.shrink();
 
     if (_translateRange) {
       return Positioned(
@@ -415,48 +463,37 @@ class _ReaderScreenState extends State<ReaderScreen>
       );
     }
 
-    return Positioned(
-      left: 12,
-      right: 12,
-      bottom: 16,
-      child: Material(
-        elevation: 6,
-        borderRadius: BorderRadius.circular(16),
-        color: scheme.surfaceContainerHigh,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  text,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.copy_rounded, size: 20),
-                tooltip: l10n.selectionCopy,
-                onPressed: _copyRangeSelection,
-              ),
-              if (settings.translatorEnabled)
-                IconButton(
-                  icon: const Icon(Icons.translate, size: 20),
-                  tooltip: l10n.selectionTranslate,
-                  onPressed: () => setState(() => _translateRange = true),
-                ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, size: 20),
-                tooltip: l10n.selectionClose,
-                onPressed: _clearRangeSelection,
-              ),
-            ],
-          ),
+    final items = [
+      ContextMenuButtonItem(
+        type: ContextMenuButtonType.custom,
+        label: l10n.selectionCopy,
+        onPressed: _copyRangeSelection,
+      ),
+      ContextMenuButtonItem(
+        type: ContextMenuButtonType.custom,
+        label: l10n.selectionCopyAll,
+        onPressed: _copyWholePage,
+      ),
+      ContextMenuButtonItem(
+        type: ContextMenuButtonType.custom,
+        label: l10n.selectionSelectAll,
+        onPressed: _selectAllRange,
+      ),
+      if (settings.translatorEnabled)
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.custom,
+          label: l10n.selectionTranslateShort,
+          onPressed: () => setState(() => _translateRange = true),
         ),
+    ];
+    return Positioned.fill(
+      child: ReadingSelectionMenu(
+        anchorAbove: anchors.above,
+        anchorBelow: anchors.below,
+        children: AdaptiveTextSelectionToolbar.getAdaptiveButtons(
+          context,
+          items,
+        ).toList(),
       ),
     );
   }
@@ -804,6 +841,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                   Expanded(
                     child: BookSearchBar(
                       search: _runSearch,
+                      readingPage: () => _currentPage - 1,
                       onSelect: _onSearchSelect,
                       onClose: _closeSearch,
                     ),
@@ -960,7 +998,33 @@ class _ReaderScreenState extends State<ReaderScreen>
         tooltip: l10n.searchTooltip,
         onPressed: _pageCount == 0 ? null : _openSearch,
       ),
+      ReaderCopyMenu(
+        pageText: () => _pageCount == 0 ? null : _copyPageText(),
+        bookText: _copyBookText,
+      ),
     ];
+  }
+
+  /// The page as the reader sees it: the same reflowed blocks search runs
+  /// over, or — while the index is still working through the book — the same
+  /// extraction it does for that page.
+  String? _copyPageText() {
+    final document = _pdfDocument;
+    if (document == null) return null;
+    final index = _currentPage - 1;
+    if (index < 0 || index >= _pageCount) return null;
+    return reflowPageTexts([
+      _pdfSearchIndex.pageBlocks(index) ?? pageBlockTexts(document, index),
+    ]);
+  }
+
+  /// The whole book, which for a PDF means the text of every page — so it
+  /// waits for the search index that already extracts them in the background
+  /// instead of pulling the same pages through the file a second time.
+  Future<String?> _copyBookText() async {
+    if (_pdfDocument == null || _pageCount == 0) return null;
+    await _pdfSearchIndex.done;
+    return reflowPageTexts(_pdfSearchIndex.bookPages ?? const []);
   }
 
   Widget _buildLoadingPreview(SettingsService settings) {
@@ -1059,7 +1123,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                 translationService,
               ),
             if (_rangeText != null && _rangeSettled)
-              _buildRangeActions(settings, translationService),
+              _buildRangeMenu(settings, translationService),
           ],
         );
       },

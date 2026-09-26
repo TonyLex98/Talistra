@@ -20,6 +20,7 @@ import '../utils/xlsx_decode.dart';
 import '../utils/xls_decode.dart';
 import '../widgets/book_search_bar.dart';
 import '../widgets/language_picker_sheet.dart';
+import '../widgets/reader_copy_menu.dart';
 import '../widgets/spreadsheet_grid_view.dart';
 import '../widgets/spreadsheet_page_view.dart';
 
@@ -168,10 +169,7 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
     // to stop, so a scroll never turns into a persist per frame.
     if (settle) {
       _progressSave?.cancel();
-      _progressSave = Timer(
-        const Duration(milliseconds: 700),
-        _saveProgress,
-      );
+      _progressSave = Timer(const Duration(milliseconds: 700), _saveProgress);
     } else {
       _saveProgress();
     }
@@ -288,9 +286,11 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
       if (_reflowMode) {
         _pageViewKey.currentState?.jumpToPage(_currentPage);
       } else {
-        _gridViewKey.currentState?.showCell(
-          (sheetIndex: page.sheetIndex, row: page.firstRow, column: page.firstColumn),
-        );
+        _gridViewKey.currentState?.showCell((
+          sheetIndex: page.sheetIndex,
+          row: page.firstRow,
+          column: page.firstColumn,
+        ));
       }
     });
   }
@@ -332,13 +332,11 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
     } else {
       final page = _pageAt(target);
       if (page != null) {
-        _gridViewKey.currentState?.showCell(
-          (
-            sheetIndex: page.sheetIndex,
-            row: page.firstRow,
-            column: page.firstColumn,
-          ),
-        );
+        _gridViewKey.currentState?.showCell((
+          sheetIndex: page.sheetIndex,
+          row: page.firstRow,
+          column: page.firstColumn,
+        ));
       }
     }
     _updateCurrentPage(target);
@@ -522,6 +520,7 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
                   Expanded(
                     child: BookSearchBar(
                       search: _runSearch,
+                      readingPage: () => _currentPage - 1,
                       onSelect: _onSearchSelect,
                       onClose: _closeSearch,
                     ),
@@ -628,9 +627,7 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
                     visualDensity: VisualDensity.compact,
                     iconSize: 22,
                     icon: Icon(
-                      _reflowMode
-                          ? Icons.grid_on
-                          : Icons.auto_stories_outlined,
+                      _reflowMode ? Icons.grid_on : Icons.auto_stories_outlined,
                     ),
                     tooltip: _reflowMode
                         ? l10n.originalSheet
@@ -643,6 +640,11 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
                     icon: const Icon(Icons.search),
                     tooltip: l10n.searchTooltip,
                     onPressed: hasPages ? _openSearch : null,
+                  ),
+                  ReaderCopyMenu(
+                    pageText: () => _pageAt(_currentPage)?.text,
+                    bookText: () =>
+                        spreadsheetPagesText(_grid?.pages ?? const []),
                   ),
                 ],
               ],

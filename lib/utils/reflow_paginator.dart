@@ -5,7 +5,8 @@ import 'package:flutter/widgets.dart';
 import 'reflow_builder.dart';
 
 /// A piece of one [ReflowBlock] placed on a sub-page: either a whole image
-/// block, or the character range `[start, end)` of a paragraph's text.
+/// or divider block, or the character range `[start, end)` of a paragraph's
+/// text.
 ///
 /// Ranges rather than copies of the text, because everything else —
 /// tap-to-translate, the bold/italic runs, the sentence lookup — is
@@ -32,6 +33,11 @@ class ReflowSlice {
 /// One screenful of reflowed content.
 typedef ReflowSubPage = List<ReflowSlice>;
 
+/// How far one block's text sits in from the left and right edges of the
+/// reading column — a blockquote's bars, a list's nesting, a code panel's
+/// own padding.
+typedef ReflowInsets = ({double left, double right});
+
 /// Lays a PDF page's reflowed [blocks] out into screen-sized sub-pages, so
 /// the compact view can be turned page by page with a swipe like an e-book
 /// instead of scrolled as one long column.
@@ -54,6 +60,14 @@ List<ReflowSubPage> paginateReflowBlocks({
   // render a fixed bottom margin per slice rather than only a gap between
   // blocks (see `blockSpacing`). Defaults to 0 for callers that don't.
   double trailingSpacing = 0.0,
+  // Used by callers that remember nothing between layouts. A book's reader
+  // passes one (see [ReflowLineCache]) so that a height change re-packs
+  // already-measured lines instead of laying the book out again.
+  ReflowLineCache? lineCache,
+  // Per-block horizontal inset, for content that is drawn inside something
+  // (a quote, an indented list item). Measuring a block's lines at any
+  // wider than they will be painted is how a page overflows at the bottom.
+  ReflowInsets Function(ReflowBlock block)? insetsFor,
 }) {
   if (blocks.isEmpty || width <= 0 || height <= 0) return const [];
 
@@ -70,6 +84,7 @@ List<ReflowSubPage> paginateReflowBlocks({
 
   for (var blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     final block = blocks[blockIndex];
+    final gap = block.gapAbove ?? blockSpacing;
 
     if (block.isImage) {
       final bounds = block.imageBounds!;
@@ -91,52 +106,90 @@ List<ReflowSubPage> paginateReflowBlocks({
       continue;
     }
 
-    final style = styleFor(block);
-    var offset = 0;
-    var firstSlice = true;
-    while (offset < block.text.length) {
-      final spacing = firstSlice && used > 0 ? blockSpacing : 0.0;
-      // Room for this slice's own trailing margin is reserved up front, not
-      // just added to the bookkeeping after the fact — otherwise a slice
-      // greedily packed right up to the page edge, with its margin tacked
-      // on afterwards, runs past `height` by about `trailingSpacing` (a real
-      // bug: widening the margin alone never fixed the overflow it was
-      // meant to guard against, because it never shrank how much text
-      // [_charactersThatFit] was allowed to select in the first place).
-      final available = height - used - spacing - trailingSpacing;
-      // Not even one line fits in what's left: start a fresh sub-page.
-      // (Unless the sub-page is already empty, in which case the line has
-      // to go somewhere and this one is as good as any.)
-      final lineHeight = _measureLineHeight(style, width, fontSize, textScaler);
-      if (available < lineHeight && used > 0) {
+    if (block.isDivider) {
+      const ruleHeight = 1.0;
+      final spacing = used > 0 ? gap : 0.0;
+      if (used > 0 && used + spacing + ruleHeight + trailingSpacing > height) {
         closePage();
-        continue;
       }
-
-      final fits = _charactersThatFit(
-        text: block.text,
-        start: offset,
-        style: style,
-        width: width,
-        maxHeight: math.max(available, lineHeight),
-        textScaler: textScaler,
-      );
-      final end = math.max(offset + 1, fits.end);
       current.add(
         ReflowSlice(
           blockIndex: blockIndex,
-          start: offset,
-          end: end,
+          start: 0,
+          end: 0,
+          isFirstOfBlock: true,
+        ),
+      );
+      used += spacing + ruleHeight + trailingSpacing;
+      continue;
+    }
+
+    final style = styleFor(block);
+    final insets = insetsFor?.call(block) ?? (left: 0.0, right: 0.0);
+    // Whatever is left after the block's own inset is the width its lines
+    // are laid out in — and have to be measured in, or the painted lines
+    // come out one taller than the page was budgeted for.
+    final textWidth = math.max(20.0, width - insets.left - insets.right);
+    if (block.text.isEmpty) continue;
+    // One layout of the whole block, read back as the lines it breaks into.
+    // Measuring every page break by re-laying out the text left over behind
+    // it cost a layout pass per break, and a book's worth of breaks made a
+    // big document unopenable.
+    final lines =
+        lineCache?.measure(
+          text: block.text,
+          style: style,
+          width: textWidth,
+          textScaler: textScaler,
+          fallbackHeight: fontSize * 1.5,
+        ) ??
+        _measureLines(
+          text: block.text,
+          style: style,
+          width: textWidth,
+          textScaler: textScaler,
+          fallbackHeight: fontSize * 1.5,
+        );
+    var line = 0;
+    var firstSlice = true;
+    while (line < lines.count) {
+      final spacing = firstSlice && used > 0 ? gap : 0.0;
+      // Room for this slice's own trailing margin is reserved up front, not
+      // just added to the bookkeeping after the fact — otherwise a slice
+      // greedily packed right up to the page edge, with its margin tacked on
+      // afterwards, runs past `height` by `trailingSpacing`.
+      final available = height - used - spacing - trailingSpacing;
+      final startLine = line;
+      var consumed = 0.0;
+      while (line < lines.count &&
+          consumed + lines.heights[line] <= available) {
+        consumed += lines.heights[line];
+        line++;
+      }
+      if (line == startLine) {
+        // Not even one line fits in what's left of this page.
+        if (used > 0) {
+          closePage();
+          continue;
+        }
+        // On a page of its own the line has to go somewhere.
+        consumed = lines.heights[line];
+        line++;
+      }
+      current.add(
+        ReflowSlice(
+          blockIndex: blockIndex,
+          start: lines.starts[startLine],
+          end: line < lines.count ? lines.starts[line] : block.text.length,
           isFirstOfBlock: firstSlice,
         ),
       );
       // Some callers (see [trailingSpacing]) render every slice with its own
       // bottom margin, not just a gap before a new block starts — that has
       // to be budgeted here too or the last line on a page runs past `height`.
-      used += spacing + fits.height + trailingSpacing;
-      offset = end;
+      used += spacing + consumed + trailingSpacing;
       firstSlice = false;
-      if (offset < block.text.length) closePage();
+      if (line < lines.count) closePage();
     }
   }
 
@@ -144,70 +197,101 @@ List<ReflowSubPage> paginateReflowBlocks({
   return pages;
 }
 
-double _measureLineHeight(
-  TextStyle style,
-  double width,
-  double fontSize,
-  TextScaler textScaler,
-) {
-  final painter = TextPainter(
-    text: TextSpan(text: 'Ag', style: style),
-    textDirection: TextDirection.ltr,
-    textScaler: textScaler,
-  )..layout(maxWidth: width);
-  final height = painter.height;
-  painter.dispose();
-  return height > 0 ? height : fontSize * 1.5;
+/// The lines one block's text breaks into: the character each line starts at,
+/// and how tall it is.
+///
+/// The starts are the exact boundaries the block is sliced at, so a block's
+/// slices tile its text — nothing is lost or doubled where a page ends.
+class ReflowLines {
+  const ReflowLines(this.starts, this.heights);
+
+  final List<int> starts;
+  final List<double> heights;
+
+  int get count => starts.length;
 }
 
-/// How much of `text` starting at [start] fits in [maxHeight], snapped to a
-/// line boundary, plus the height that much text actually takes.
-({int end, double height}) _charactersThatFit({
+/// Remembers the measured [ReflowBlock] line breaks of a book, so that
+/// re-paginating it — the keyboard opening, any other height change — re-packs
+/// lines that are already known instead of laying the whole book out again.
+///
+/// A block's breaks depend on its text, its style and the width it is set in,
+/// and not at all on how tall a page has to hold them, which is exactly the
+/// one thing those re-paginations change.
+class ReflowLineCache {
+  final Map<
+    ({String text, TextStyle style, double width, TextScaler textScaler}),
+    ReflowLines
+  >
+  _measured = {};
+
+  // Enough for a book's worth of paragraphs; past it the old entries are
+  // text the reader has scrolled away from and won't come back to.
+  static const _maxBlocks = 20000;
+
+  ReflowLines measure({
+    required String text,
+    required TextStyle style,
+    required double width,
+    required TextScaler textScaler,
+    required double fallbackHeight,
+  }) {
+    final shape = (
+      text: text,
+      style: style,
+      width: width,
+      textScaler: textScaler,
+    );
+    final known = _measured[shape];
+    if (known != null) return known;
+    final lines = _measureLines(
+      text: text,
+      style: style,
+      width: width,
+      textScaler: textScaler,
+      fallbackHeight: fallbackHeight,
+    );
+    if (_measured.length >= _maxBlocks) _measured.clear();
+    return _measured[shape] = lines;
+  }
+}
+
+/// Lays [text] out once at [width] and reads its line breaks and the height
+/// of each line off the result.
+ReflowLines _measureLines({
   required String text,
-  required int start,
   required TextStyle style,
   required double width,
-  required double maxHeight,
   required TextScaler textScaler,
+  required double fallbackHeight,
 }) {
-  final remaining = text.substring(start);
   final painter = TextPainter(
-    text: TextSpan(text: remaining, style: style),
+    text: TextSpan(text: text, style: style),
     textDirection: TextDirection.ltr,
     textScaler: textScaler,
   )..layout(maxWidth: width);
-
   try {
-    if (painter.height <= maxHeight) {
-      return (end: text.length, height: painter.height);
-    }
     final metrics = painter.computeLineMetrics();
-    var lines = 0;
-    var consumed = 0.0;
-    for (final line in metrics) {
-      if (consumed + line.height > maxHeight) break;
-      consumed += line.height;
-      lines++;
-    }
-    if (lines == 0) {
-      // Nothing fits by the metrics (a very tall first line): take one
-      // line anyway so pagination always makes progress.
-      final first = metrics.isEmpty ? null : metrics.first;
-      final cutoff = painter
-          .getPositionForOffset(Offset(width, (first?.height ?? maxHeight) - 1))
+    if (metrics.isEmpty) return ReflowLines([0], [fallbackHeight]);
+    final starts = List<int>.filled(metrics.length, 0);
+    final heights = List<double>.filled(metrics.length, fallbackHeight);
+    // A line's top is a y coordinate inside it, so `top + 1` still lands on
+    // that line however the metrics rounded — and the starts have to keep
+    // walking forward for the slices built out of them to tile the text.
+    var upTo = 0;
+    for (var i = 0; i < metrics.length; i++) {
+      final line = metrics[i];
+      heights[i] = line.height > 0 ? line.height : fallbackHeight;
+      if (i == 0) {
+        starts[i] = 0;
+        continue;
+      }
+      final offset = painter
+          .getPositionForOffset(Offset(0, line.baseline - line.ascent + 1))
           .offset;
-      return (
-        end: start + math.max(1, cutoff),
-        height: first?.height ?? maxHeight,
-      );
+      starts[i] = upTo = math.max(upTo, math.min(offset, text.length));
     }
-    // The character at the start of the first line that did NOT fit is
-    // exactly where this sub-page ends.
-    final nextLineTop =
-        metrics[lines - 1].baseline + metrics[lines - 1].descent + 1;
-    final cutoff = painter.getPositionForOffset(Offset(0, nextLineTop)).offset;
-    if (cutoff <= 0) return (end: text.length, height: painter.height);
-    return (end: start + cutoff, height: consumed);
+    return ReflowLines(starts, heights);
   } finally {
     painter.dispose();
   }

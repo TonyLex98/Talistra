@@ -10,6 +10,13 @@ import '../services/library_service.dart';
 import '../services/page_image_cache.dart';
 import '../utils/pdf_region_renderer.dart';
 
+/// The star and the menu are the least interesting thing on a library row and
+/// the title is the most, so they get the compact metrics the reader headers
+/// use instead of Material's 48px box — the width they hand back goes to the
+/// name, which is what truncates.
+const EdgeInsets _actionPadding = EdgeInsets.symmetric(horizontal: 4);
+const BoxConstraints _actionBox = BoxConstraints(minWidth: 34, minHeight: 40);
+
 class DocumentTile extends StatefulWidget {
   const DocumentTile({
     super.key,
@@ -62,6 +69,7 @@ String _formatBadge(String format) {
     case 'rtf':
     case 'docx':
     case 'txt':
+    case 'md':
     case 'xlsx':
     case 'xls':
       return format.toUpperCase();
@@ -308,10 +316,16 @@ class _DocumentTileState extends State<DocumentTile> {
                         ? l10n.unpinTooltip
                         : l10n.pinTooltip,
                     onPressed: widget.onToggleStar,
+                    visualDensity: VisualDensity.compact,
+                    padding: _actionPadding,
+                    constraints: _actionBox,
                   ),
                   IconButton(
                     icon: const Icon(Icons.more_vert),
                     onPressed: () => _showMenu(context),
+                    visualDensity: VisualDensity.compact,
+                    padding: _actionPadding,
+                    constraints: _actionBox,
                   ),
                 ],
               ),

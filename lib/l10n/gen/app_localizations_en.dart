@@ -16,7 +16,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT or XLSX — Talistra will open it in the right reading mode.';
+      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD or XLSX — Talistra will open it in the right reading mode.';
 
   @override
   String get importingLabel => 'Adding...';
@@ -33,6 +33,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get unsupportedDocumentFormat =>
       'Talistra can’t recognise or open this file format.';
+
+  @override
+  String get unknownFormatTitle => 'Unrecognised format';
+
+  @override
+  String get unknownFormatAsText =>
+      'Talistra found no reader for this file. Open it as plain text?';
+
+  @override
+  String get openAsPlainText => 'Open as plain text';
 
   @override
   String pageProgress(int page, int total) {
@@ -378,6 +388,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectionClose => 'Clear selection';
+
+  @override
+  String get selectionTranslateShort => 'Translate';
+
+  @override
+  String get selectionCopyAll => 'Copy all';
+
+  @override
+  String get selectionSelectAll => 'Select all';
+
+  @override
+  String get readerMoreTooltip => 'More';
+
+  @override
+  String get copyPageAction => 'Copy page';
+
+  @override
+  String get copyBookAction => 'Copy whole book';
+
+  @override
+  String get copyingBookText => 'Gathering the book\'s text…';
+
+  @override
+  String get nothingToCopy => 'There is no text here to copy';
 
   @override
   String wrongSourceLanguage(String language) {

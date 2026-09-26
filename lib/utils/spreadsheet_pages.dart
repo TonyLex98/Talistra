@@ -164,8 +164,7 @@ class SpreadsheetPage {
 
   /// The row of the sheet that this page's [displayedRow]-th row was taken
   /// from.
-  int sheetRowOf(int displayedRow) =>
-      repeatsHeader && displayedRow == 0
+  int sheetRowOf(int displayedRow) => repeatsHeader && displayedRow == 0
       ? 0
       : firstRow + displayedRow - (repeatsHeader ? 1 : 0);
 
@@ -176,6 +175,36 @@ class SpreadsheetPage {
     row: sheetRowOf(blockIndex ~/ columnCount),
     column: firstColumn + blockIndex % columnCount,
   );
+
+  /// The page as text a reader can paste elsewhere: a row per line, a cell
+  /// per tab, so the grid keeps its shape outside the app.
+  String get text => spreadsheetRowsText(rows);
+}
+
+/// [rows] as a grid of text: one line per row, cells separated by tabs — the
+/// shape a spreadsheet survives being pasted into anything else in.
+String spreadsheetRowsText(Iterable<List<String>> rows) =>
+    rows.map((row) => row.join('\t')).join('\n');
+
+/// A whole sheet as text. This is what the original grid view copies — it
+/// shows a sheet, not a page of one.
+String spreadsheetSheetText(SpreadsheetSheet sheet) =>
+    spreadsheetRowsText(sheet.rows);
+
+/// Every page of the workbook as one run of text, in reading order — with a
+/// column header repeated only where it is first read, since the pages that
+/// continue a long sheet carry it again only so a page on its own makes
+/// sense.
+String spreadsheetPagesText(List<SpreadsheetPage> pages) {
+  final texts = <String>[];
+  for (final page in pages) {
+    final rows = page.repeatsHeader && page.firstRow > 0
+        ? page.rows.skip(1)
+        : page.rows;
+    final text = rows.map((row) => row.join('\t')).join('\n');
+    if (text.trim().isNotEmpty) texts.add(text);
+  }
+  return texts.join('\n\n');
 }
 
 /// The page that shows [row], [column] of a sheet, as its zero-based index —

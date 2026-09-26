@@ -81,7 +81,7 @@ Future<void> _seedInstructionsPdf(
     await library.importBytes(
       bytes: bytes,
       title: title,
-      sourceFingerprint: 'bundled_talistra_guide_v4',
+      sourceFingerprint: 'bundled_talistra_guide_v5',
     );
     await settings.markInstructionsSeeded();
   } catch (error, stack) {

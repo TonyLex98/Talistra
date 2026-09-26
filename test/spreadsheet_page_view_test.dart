@@ -151,9 +151,7 @@ void main() {
     tester,
   ) async {
     final seen = <int>[];
-    await tester.pumpWidget(
-      wrap(_Harness(pages: pages(), onPage: seen.add)),
-    );
+    await tester.pumpWidget(wrap(_Harness(pages: pages(), onPage: seen.add)));
     await tester.pumpAndSettle();
 
     final harness = tester.state<_HarnessState>(find.byType(_Harness));

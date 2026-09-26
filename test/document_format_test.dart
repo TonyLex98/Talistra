@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -67,7 +68,96 @@ void main() {
         'txt',
       );
     });
+
+    test('recognises Markdown by every extension it ships under', () {
+      for (final name in [
+        'notes.md',
+        'NOTES.MD',
+        'read.markdown',
+        'old.mdown',
+      ]) {
+        expect(
+          detectDocumentFormatBytes(
+            Uint8List.fromList(utf8.encode('# Notes\n\n- one\n- two')),
+            fileName: name,
+          ),
+          'md',
+          reason: name,
+        );
+      }
+      // A Markdown file that is really a picture is still not a book.
+      expect(
+        detectDocumentFormatBytes(
+          Uint8List.fromList([...utf8.encode('# Notes'), 0, 0, 1, 2]),
+          fileName: 'notes.md',
+        ),
+        isNull,
+      );
+    });
   });
+
+  group('offering an unrecognised file as plain text', () {
+    test('accepts prose and CSV whatever extension it carries', () async {
+      expect(
+        await _looksLikeText('First paragraph.\n\nSecond paragraph.'),
+        isTrue,
+      );
+      expect(await _looksLikeText('name,price\napple,2\npear,5'), isTrue);
+    });
+
+    test('accepts a Windows-1251 file that is not valid UTF-8', () async {
+      // "Проверка" in CP-1251: no NULs, and the reader decodes it fine.
+      final bytes = Uint8List.fromList(const [
+        0xcf,
+        0xf0,
+        0xe5,
+        0xe2,
+        0xe5,
+        0xf0,
+        0xea,
+        0xe0,
+        0x0a,
+      ]);
+      expect(await fileLooksLikeText(await _write(bytes)), isTrue);
+    });
+
+    test('rejects UTF-16, which the reader has no decoder for', () async {
+      final path = await _write(
+        Uint8List.fromList(
+          utf8.encode('Привет мир!').expand((byte) => [byte, 0]).toList(),
+        ),
+      );
+      expect(await fileLooksLikeText(path), isFalse);
+    });
+
+    test('rejects an empty file', () async {
+      expect(await _looksLikeText(''), isFalse);
+    });
+
+    test('rejects binary data that happens to contain no NUL bytes', () async {
+      // One control byte every 16 bytes: a compressed stream, not a book.
+      final bytes = Uint8List.fromList(
+        List<int>.generate(
+          512,
+          (index) => index % 16 == 0 ? 0x01 : 0x41 + index % 26,
+        ),
+      );
+      expect(await fileLooksLikeText(await _write(bytes)), isFalse);
+    });
+  });
+}
+
+Future<bool> _looksLikeText(String content) async =>
+    fileLooksLikeText(await _write(utf8.encode(content)));
+
+Directory? _scratchDir;
+int _written = 0;
+
+Future<String> _write(List<int> bytes) async {
+  final dir = _scratchDir ??= Directory.systemTemp.createTempSync('formats');
+  final path = '${dir.path}${Platform.pathSeparator}book-${_written++}.bin';
+  await File(path).writeAsBytes(bytes, flush: true);
+  return path;
 }
 
 String? _detectZip(Map<String, String> files) {

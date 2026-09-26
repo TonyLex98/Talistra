@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 const supportedBookFormats = {
   'pdf',
   'txt',
+  'md',
   'epub',
   'fb2',
   'rtf',
@@ -33,13 +34,7 @@ Future<String?> detectDocumentFormat(
     throw const FormatException('The document is larger than 700 MB');
   }
   final probeLength = length < 8192 ? length : 8192;
-  final probe = await file
-      .openRead(0, probeLength)
-      .fold<BytesBuilder>(
-        BytesBuilder(copy: false),
-        (builder, chunk) => builder..add(chunk),
-      );
-  final probeBytes = probe.takeBytes();
+  final probeBytes = await _readProbe(file, probeLength);
 
   // Fixed-page and plain-text signatures live at the beginning of the file,
   // so large books do not need to be copied wholesale merely to identify
@@ -135,11 +130,54 @@ String? detectDocumentFormatBytes(Uint8List bytes, {required String fileName}) {
     return 'fb2';
   }
 
-  // Plain text has no reliable magic number. Only accept it when the caller
-  // actually named it as text and the probe contains no binary NUL bytes.
-  if (extension == 'txt' && !probe.contains(0)) return 'txt';
+  // Plain text and Markdown have no reliable magic number. Only accept them
+  // when the caller actually named the file as one of them, and the probe
+  // contains no binary NUL bytes. Markdown's extensions all collapse to
+  // 'md', which is the format the reader checks rather than the file name.
+  if (!probe.contains(0)) {
+    if (extension == 'txt') return 'txt';
+    if (const {'md', 'markdown', 'mdown', 'mkd'}.contains(extension)) {
+      return 'md';
+    }
+  }
   return null;
 }
+
+/// Whether a file nothing in [supportedBookFormats] matches is still worth
+/// offering to the reader as a plain-text book.
+///
+/// Only text. A video or a database opened as a book shows nothing but
+/// garbage, so the offer would be a way to fill the library with unreadable
+/// entries rather than a way to read one more file.
+///
+/// Judged on bytes rather than on what UTF-8 makes of them: the reader also
+/// reads Windows-1251, so a Cyrillic file that is not valid UTF-8 is still a
+/// file worth offering. UTF-16 is not — its zero bytes give it away, and the
+/// reader has no decoder for it anyway.
+Future<bool> fileLooksLikeText(String path) async {
+  final file = File(path);
+  final length = await file.length();
+  if (length <= 0) return false;
+  final bytes = await _readProbe(file, length < 8192 ? length : 8192);
+  if (bytes.isEmpty || bytes.contains(0)) return false;
+  // Control bytes other than the whitespace prose uses are what binary data
+  // looks like when it happens to have no NULs in it.
+  var control = 0;
+  for (final byte in bytes) {
+    if (byte < 0x20 && byte != 0x09 && byte != 0x0a && byte != 0x0d) control++;
+  }
+  return control * 50 <= bytes.length;
+}
+
+/// The first [probeLength] bytes of [file] — enough to identify a document
+/// without copying a two-gigabyte book into memory to look at it.
+Future<Uint8List> _readProbe(File file, int probeLength) => file
+    .openRead(0, probeLength)
+    .fold<BytesBuilder>(
+      BytesBuilder(copy: false),
+      (builder, chunk) => builder..add(chunk),
+    )
+    .then((builder) => builder.takeBytes());
 
 bool _looksLikeZip(Uint8List bytes) =>
     bytes.length >= 4 &&

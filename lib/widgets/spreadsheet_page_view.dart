@@ -5,6 +5,7 @@ import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../utils/sentence_finder.dart';
 import '../utils/spreadsheet_pages.dart';
+import 'reading_selection_area.dart';
 import 'translatable_text.dart';
 import 'translation_panel.dart';
 
@@ -140,38 +141,61 @@ class SpreadsheetPageViewState extends State<SpreadsheetPageView> {
     super.dispose();
   }
 
+  /// What the reader last marked with a long press and asked the translator
+  /// about, in place of a tapped word.
+  String? _markedText;
+
+  /// The page on screen as text — a row per line, a cell per tab.
+  String? _pageText() {
+    final pages = widget.pages;
+    if (_currentPage < 0 || _currentPage >= pages.length) return null;
+    return pages[_currentPage].text;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: widget.readingTheme.background,
-      child: PageView.builder(
-        controller: _pageController,
-        itemCount: widget.pages.length,
-        onPageChanged: (index) {
-          setState(() => _currentPage = index);
-          widget.onPageChanged(index + 1);
-        },
-        itemBuilder: (context, index) {
-          final page = widget.pages[index];
-          return _GridPage(
-            key: ValueKey(
-              '$index/${page.rows.length}/${page.firstColumn}/${widget.fontSize}',
-            ),
-            page: page,
-            columnWidths: widget.columnWidths[page.sheetIndex],
-            source: widget.source,
-            target: widget.target,
-            translationService: widget.translationService,
-            fontSize: widget.fontSize,
-            readingTheme: widget.readingTheme,
-            settings: widget.settings,
-            translatorEnabled: widget.translatorEnabled,
-            highlight: index == _hlPageIndex && _hlBlockIndex != null
-                ? (block: _hlBlockIndex, start: _hlStart, end: _hlEnd)
-                : null,
-            otherHighlights: index == _hlPageIndex ? _hlOthers : const [],
-          );
-        },
+      // Outside the pager, not inside a page: a selection region that sits
+      // within a page claims the horizontal drag, and the page never turns.
+      child: ReadingSelectionArea(
+        translatorEnabled: widget.translatorEnabled,
+        onTranslateSelection: (text) => setState(() => _markedText = text),
+        allText: _pageText,
+        child: PageView.builder(
+          controller: _pageController,
+          itemCount: widget.pages.length,
+          onPageChanged: (index) {
+            setState(() {
+              _currentPage = index;
+              _markedText = null;
+            });
+            widget.onPageChanged(index + 1);
+          },
+          itemBuilder: (context, index) {
+            final page = widget.pages[index];
+            return _GridPage(
+              key: ValueKey(
+                '$index/${page.rows.length}/${page.firstColumn}/${widget.fontSize}',
+              ),
+              page: page,
+              columnWidths: widget.columnWidths[page.sheetIndex],
+              source: widget.source,
+              target: widget.target,
+              translationService: widget.translationService,
+              fontSize: widget.fontSize,
+              readingTheme: widget.readingTheme,
+              settings: widget.settings,
+              translatorEnabled: widget.translatorEnabled,
+              markedText: index == _currentPage ? _markedText : null,
+              onMarkedTextClear: () => setState(() => _markedText = null),
+              highlight: index == _hlPageIndex && _hlBlockIndex != null
+                  ? (block: _hlBlockIndex, start: _hlStart, end: _hlEnd)
+                  : null,
+              otherHighlights: index == _hlPageIndex ? _hlOthers : const [],
+            );
+          },
+        ),
       ),
     );
   }
@@ -191,6 +215,8 @@ class _GridPage extends StatefulWidget {
     required this.translatorEnabled,
     required this.highlight,
     required this.otherHighlights,
+    required this.markedText,
+    required this.onMarkedTextClear,
   });
 
   final SpreadsheetPage page;
@@ -202,6 +228,14 @@ class _GridPage extends StatefulWidget {
   final ReadingTheme readingTheme;
   final SettingsService settings;
   final bool translatorEnabled;
+
+  /// A passage the reader marked with a long press and asked about, while this
+  /// page is the one they marked it on. It answers for the card in place of a
+  /// tapped word.
+  final String? markedText;
+
+  /// Called when the card was showing a mark and the reader closed it.
+  final VoidCallback onMarkedTextClear;
 
   /// The cell this page shows as the current search hit, if any.
   final ({int? block, int? start, int? end})? highlight;
@@ -257,6 +291,7 @@ class _GridPageState extends State<_GridPage> {
   @override
   Widget build(BuildContext context) {
     final page = widget.page;
+    final panelText = widget.markedText ?? _selectedWord;
     final columnCount = page.columnCount;
     if (columnCount == 0) return const SizedBox.shrink();
     final gridWidth = [
@@ -317,7 +352,7 @@ class _GridPageState extends State<_GridPage> {
             ],
           ),
         ),
-        if (_selectedWord != null)
+        if (panelText case final text?)
           Positioned(
             left: 16,
             right: 16,
@@ -325,15 +360,17 @@ class _GridPageState extends State<_GridPage> {
             child: Align(
               alignment: Alignment.bottomCenter,
               child: TranslationPanel(
-                key: ValueKey(
-                  '$_selectedWord-${widget.source}-${widget.target}',
-                ),
-                word: _selectedWord!,
-                sentenceMatch: _selectedSentence,
+                key: ValueKey('$text-${widget.source}-${widget.target}'),
+                word: text,
+                sentenceMatch: widget.markedText == null
+                    ? _selectedSentence
+                    : null,
                 source: widget.source,
                 target: widget.target,
                 translationService: widget.translationService,
-                onClose: _clear,
+                onClose: widget.markedText == null
+                    ? _clear
+                    : widget.onMarkedTextClear,
               ),
             ),
           ),

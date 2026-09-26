@@ -153,8 +153,9 @@ bool _isLetter(String ch) => ch.isNotEmpty && _letterPattern.hasMatch(ch);
 
 /// The work a single page needs before it can be searched: its reflowed
 /// block texts, exactly as the reflowed view would lay them out — so a hit's
-/// [SearchMatch.blockIndex] still points at the right block for highlighting.
-List<String> _pageBlockTexts(PdfDocument document, int index) {
+/// [SearchMatch.blockIndex] still points at the right block for highlighting,
+/// and so copying a page gets the same text the reader is looking at.
+List<String> pageBlockTexts(PdfDocument document, int index) {
   try {
     final lines = extractPageLines(document, index);
     Size pageSize;
@@ -231,6 +232,30 @@ class PdfSearchIndex {
   /// True once every page has been indexed.
   bool get isReady => _countKnown && _filledCount == _totalPages;
 
+  /// Completes once every page has been indexed — the point at which the
+  /// whole book's text can be handed over at once. Copying a book is the only
+  /// reader action that cannot work page by page, so it waits for this rather
+  /// than quietly copying the part that happens to be finished.
+  Future<void> get done => _done.future;
+  final Completer<void> _done = Completer<void>();
+
+  /// The block texts of one page as the reflowed view would lay them out, or
+  /// null while the index has not reached that page yet.
+  List<String>? pageBlocks(int index) {
+    final pages = _pages;
+    if (pages == null ||
+        index < 0 ||
+        index >= pages.length ||
+        !_filled[index]) {
+      return null;
+    }
+    return pages[index];
+  }
+
+  /// Every page's block texts, in reading order, or null until the book has
+  /// been indexed.
+  List<List<String>>? get bookPages => isReady ? _pages : null;
+
   /// Starts building the index for [filePath] if it isn't already. Idempotent:
   /// calling it again while a build runs (or after it finished) is a no-op, so
   /// the reader can fire it from both "book opened" and "search opened".
@@ -255,6 +280,7 @@ class PdfSearchIndex {
         _filledCount = cached.length;
         _countKnown = true;
         _building = false;
+        _finish();
         _reportNewPages();
         _finishActiveSearch();
         return;
@@ -268,6 +294,7 @@ class PdfSearchIndex {
     _filled = List<bool>.filled(total, false);
     if (total == 0) {
       _building = false;
+      _finish();
       _finishActiveSearch();
       return;
     }
@@ -297,6 +324,7 @@ class PdfSearchIndex {
             _building = false;
             _isolates.clear();
             _ports.clear();
+            _finish();
             _reportNewPages();
             _finishActiveSearch();
             if (documentId != null && cache != null && _pages != null) {
@@ -309,6 +337,12 @@ class PdfSearchIndex {
         await Isolate.spawn(_worker, [filePath, port.sendPort, start, end]),
       );
     }
+  }
+
+  /// Releases [done] once a book is fully indexed. Idempotent: the cache hit,
+  /// the empty-book and the last-worker paths all report through here.
+  void _finish() {
+    if (!_done.isCompleted) _done.complete();
   }
 
   /// Scans pages that have become newly indexed since the last report for
@@ -400,7 +434,7 @@ class PdfSearchIndex {
     final document = PdfDocument(inputBytes: bytes);
     try {
       for (var i = start; i < end; i++) {
-        sendPort.send({'page': i, 'blocks': _pageBlockTexts(document, i)});
+        sendPort.send({'page': i, 'blocks': pageBlockTexts(document, i)});
       }
     } finally {
       document.dispose();

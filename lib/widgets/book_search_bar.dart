@@ -20,6 +20,7 @@ class BookSearchBar extends StatefulWidget {
   const BookSearchBar({
     super.key,
     required this.search,
+    required this.readingPage,
     required this.onSelect,
     required this.onClose,
   });
@@ -39,6 +40,12 @@ class BookSearchBar extends StatefulWidget {
   /// list) more faintly, so their positions are visible at a glance too.
   final void Function(SearchMatch match, List<SearchMatch> allMatches) onSelect;
 
+  /// Where the reader is, as a zero-based page index in the same coordinates
+  /// as [SearchMatch.pageIndex]. A search starts looking from there rather
+  /// than from the first page of the book: looking something up mid-book
+  /// should not throw the reader back to the beginning.
+  final int Function() readingPage;
+
   final VoidCallback onClose;
 
   @override
@@ -54,6 +61,18 @@ class _BookSearchBarState extends State<BookSearchBar> {
   int _current = -1;
   Timer? _debounce;
   int _searchGeneration = 0;
+
+  /// Where the reader was when the running search started. Captured then
+  /// rather than read per batch, because landing on a match moves the reader
+  /// and the next batch would otherwise measure itself against the page the
+  /// previous batch sent them to.
+  int _fromPage = 0;
+
+  /// Whether the reader has stepped through the matches with the arrows.
+  /// Until they do, matches that are still arriving keep re-landing the search
+  /// on the closest one to where they were reading; once they have, the
+  /// search leaves them alone.
+  bool _readerMoved = false;
 
   /// Whether a real (non-empty) query has actually been run — distinguishes
   /// "haven't searched yet" (no query, or still typing) from "searched and
@@ -87,6 +106,8 @@ class _BookSearchBarState extends State<BookSearchBar> {
       return;
     }
     final generation = ++_searchGeneration;
+    _fromPage = widget.readingPage();
+    _readerMoved = false;
     setState(() {
       _searching = true;
       _hasSearched = true;
@@ -99,13 +120,8 @@ class _BookSearchBarState extends State<BookSearchBar> {
             query,
             onBatch: (batch) {
               if (!mounted || generation != _searchGeneration) return;
-              setState(() {
-                _matches = [..._matches, ...batch];
-                if (_current < 0) _current = 0;
-              });
-              if (_current == 0 && _matches.isNotEmpty) {
-                widget.onSelect(_matches.first, _matches);
-              }
+              setState(() => _matches = [..._matches, ...batch]);
+              _landOnClosestMatch();
             },
             onDone: () {
               if (!mounted || generation != _searchGeneration) return;
@@ -123,9 +139,24 @@ class _BookSearchBarState extends State<BookSearchBar> {
     );
   }
 
+  /// Lands the search on the match closest ahead of where the reader was.
+  ///
+  /// Matches can arrive in several batches and out of page order (the PDF
+  /// reader's isolates finish pages whenever they finish them), so this runs
+  /// again per batch: each re-landing is nearer than the last, and the search
+  /// settles once the book has been scanned.
+  void _landOnClosestMatch() {
+    if (_readerMoved || _matches.isEmpty) return;
+    final best = _closestAheadOf(_matches, _fromPage);
+    if (_current >= 0 && _matches[_current] == _matches[best]) return;
+    setState(() => _current = best);
+    widget.onSelect(_matches[best], _matches);
+  }
+
   void _selectAt(int index) {
     final wrapped = _wrap(index);
     if (wrapped < 0) return;
+    _readerMoved = true;
     setState(() => _current = wrapped);
     widget.onSelect(_matches[wrapped], _matches);
   }
@@ -222,6 +253,32 @@ class _BookSearchBarState extends State<BookSearchBar> {
     if (_matches.isEmpty) return -1;
     return (index % _matches.length + _matches.length) % _matches.length;
   }
+}
+
+/// The index of the match a search should open on: the first one on
+/// [fromPage] or later, or the first in the book when everything found lies
+/// behind where the reader was — the same wrap the arrows make at the ends.
+///
+/// [matches] is not in page order while a PDF index is still being built, so
+/// "closest" is worked out by page rather than by position in the list.
+int _closestAheadOf(List<SearchMatch> matches, int fromPage) {
+  var best = 0;
+  for (var i = 1; i < matches.length; i++) {
+    final candidate = matches[i];
+    final incumbent = matches[best];
+    if (candidate.pageIndex == incumbent.pageIndex) continue;
+    final ahead = candidate.pageIndex >= fromPage;
+    final incumbentAhead = incumbent.pageIndex >= fromPage;
+    if (ahead != incumbentAhead) {
+      if (ahead) best = i;
+      continue;
+    }
+    // Both on the same side of the reader: the smallest page number is the
+    // nearest one ahead, and — when neither is ahead and the search wraps to
+    // the start of the book — the first match found.
+    if (candidate.pageIndex < incumbent.pageIndex) best = i;
+  }
+  return best;
 }
 
 class _ArrowButton extends StatelessWidget {

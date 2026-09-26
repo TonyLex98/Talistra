@@ -13,10 +13,13 @@ import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/ebook_text.dart';
+import '../utils/markdown_blocks.dart';
+import '../utils/text_decode.dart';
 import '../utils/txt_paragraphs.dart';
 import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/book_search_bar.dart';
+import '../widgets/reader_copy_menu.dart';
 import '../widgets/txt_page_view.dart';
 
 /// Reader for plain .txt files — deliberately much simpler than
@@ -84,9 +87,18 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
       // Every reflowable format ends up here as paragraphs, so the reading
       // experience (pagination, tap-to-translate, typography) is identical
       // whether the file was a .txt, an EPUB or a Word document.
-      final format = ebookFormatFromPath(_document.filePath) ?? EbookFormat.txt;
-      final paragraphs = extractEbookParagraphs(bytes, format);
-      final pages = buildTxtPagesFromParagraphs(paragraphs);
+      //
+      // Markdown is the exception: its structure *is* its text, so it is
+      // parsed into blocks that carry their headings, lists, quotes and code
+      // with them instead of being flattened into paragraphs.
+      final pages = _document.isMarkdown
+          ? buildTxtPagesFromBlocks(parseMarkdownBlocks(decodeTextFile(bytes)))
+          : buildTxtPagesFromParagraphs(
+              extractEbookParagraphs(
+                bytes,
+                ebookFormatFromPath(_document.filePath) ?? EbookFormat.txt,
+              ),
+            );
       if (!mounted) return;
       setState(() {
         _pages = pages;
@@ -290,6 +302,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                   Expanded(
                     child: BookSearchBar(
                       search: _runSearch,
+                      readingPage: () => _currentPage - 1,
                       onSelect: _onSearchSelect,
                       onClose: _closeSearch,
                     ),
@@ -398,6 +411,12 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                     icon: const Icon(Icons.search),
                     tooltip: l10n.searchTooltip,
                     onPressed: _pages.isEmpty ? null : _openSearch,
+                  ),
+                  ReaderCopyMenu(
+                    pageText: () => _pages.isEmpty
+                        ? null
+                        : reflowBlocksText(_pages[_currentPage - 1]),
+                    bookText: () async => reflowPagesText(_pages),
                   ),
                 ],
               ],
