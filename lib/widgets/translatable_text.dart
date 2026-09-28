@@ -108,7 +108,7 @@ class TranslatableText extends StatelessWidget {
     // run touch this word?" word by word instead is what a Markdown page
     // with a hundred inline-code spans pays for — twice the time to turn a
     // page over the same text with no styling at all.
-    final emphasis = _emphasisBits(formatRuns, start, stop);
+    final emphasis = _emphasisBits(text, formatRuns, start, stop);
 
     // One style per distinct combination of emphases, and one per
     // combination the selection and the search hits then put on top of it.
@@ -172,29 +172,47 @@ class TranslatableText extends StatelessWidget {
       final from = run.start < start ? start : run.start;
       final to = run.end > stop ? stop : run.end;
       if (from >= to) continue;
-      spans.add(
-        TextSpan(
-          text: text.substring(from, to),
-          style: styleAt(
-            selected:
-                run.word &&
-                run.start == selectedStart &&
-                run.end == selectedEnd,
-            hot: overlaps(hot, from, to),
-            otherHot: others.any((o) => overlaps(o, from, to)),
-            from: from,
-            to: to,
+      final selected =
+          run.word && run.start == selectedStart && run.end == selectedEnd;
+      // One recognizer for the whole word, however many pieces it is drawn
+      // in.
+      final recognizer = !run.word || !translatorEnabled
+          ? null
+          : (TapGestureRecognizer()
+              ..onTap = () => onWordTap(from, to, text.substring(from, to)));
+      // Cut where the document's own emphasis changes, so a style covers
+      // exactly its characters. Taking one style for a whole run gave the
+      // space and the bracket beside an inline `code` word the monospace
+      // face too — whose fallback line is taller — and the line painted
+      // taller than the paginator had measured it.
+      var pieceStart = from;
+      for (var i = from + 1; i <= to; i++) {
+        if (i < to && emphasis[i - start] == emphasis[pieceStart - start]) {
+          continue;
+        }
+        spans.add(
+          TextSpan(
+            text: text.substring(pieceStart, i),
+            style: styleAt(
+              selected: selected,
+              hot: overlaps(hot, pieceStart, i),
+              otherHot: others.any((o) => overlaps(o, pieceStart, i)),
+              from: pieceStart,
+              to: i,
+            ),
+            recognizer: recognizer,
           ),
-          recognizer: !run.word || !translatorEnabled
-              ? null
-              : (TapGestureRecognizer()
-                  ..onTap = () =>
-                      onWordTap(from, to, text.substring(from, to))),
-        ),
-      );
+        );
+        pieceStart = i;
+      }
     }
     return Text.rich(
       TextSpan(children: spans),
+      // The block's own style as the paragraph's, not the ambient one: a
+      // paragraph takes the metrics of its root style into every line, and
+      // the Material default (Roboto 14 at 1.43) under a 16 pt serif made
+      // each line a pixel or two taller than the paginator measured.
+      style: baseStyle,
       maxLines: maxLines,
       overflow:
           overflow ??
@@ -209,14 +227,28 @@ const int _codeBit = 4;
 const int _strikeBit = 8;
 const int _linkBit = 16;
 
-/// For each character of `[start, stop)`, the bits of every [FormatRun] that
-/// covers it.
-List<int> _emphasisBits(List<FormatRun> runs, int start, int stop) {
+/// For each character of `[start, stop)` of [text], the emphasis it is set
+/// in: the bits of every [FormatRun] over it — and, for a letter, of every
+/// run over any part of its word, since a word is set in one face or
+/// another, never half and half. The spaces and punctuation between words
+/// keep exactly their own, so a code or bold word's face doesn't spill onto
+/// the space beside it.
+///
+/// The one definition the painter and the paginator both use: they have to
+/// agree character by character, or a line is measured in one face and
+/// drawn in another.
+List<int> _emphasisBits(
+  String text,
+  List<FormatRun> runs,
+  int start,
+  int stop,
+) {
   final emphasis = List<int>.filled(stop - start, 0);
+  if (runs.isEmpty) return emphasis;
+  final own = List<int>.filled(text.length, 0);
   for (final run in runs) {
-    if (run.end <= start || run.start >= stop) continue;
-    final from = (run.start < start ? start : run.start) - start;
-    final to = (run.end > stop ? stop : run.end) - start;
+    final from = run.start.clamp(0, text.length);
+    final to = run.end.clamp(0, text.length);
     final bits =
         (run.bold ? _boldBit : 0) |
         (run.italic ? _italicBit : 0) |
@@ -224,8 +256,21 @@ List<int> _emphasisBits(List<FormatRun> runs, int start, int stop) {
         (run.strike ? _strikeBit : 0) |
         (run.link ? _linkBit : 0);
     for (var i = from; i < to; i++) {
-      emphasis[i] |= bits;
+      own[i] |= bits;
     }
+  }
+  for (final word in readingTextRuns(text)) {
+    if (!word.word || word.end <= start || word.start >= stop) continue;
+    var bits = 0;
+    for (var i = word.start; i < word.end; i++) {
+      bits |= own[i];
+    }
+    for (var i = word.start; i < word.end; i++) {
+      own[i] = bits;
+    }
+  }
+  for (var i = start; i < stop; i++) {
+    emphasis[i - start] = own[i];
   }
   return emphasis;
 }
@@ -287,7 +332,7 @@ InlineSpan readingTextSpan({
   required ReadingTheme readingTheme,
 }) {
   if (formatRuns.isEmpty) return TextSpan(text: text, style: style);
-  final emphasis = _emphasisBits(formatRuns, 0, text.length);
+  final emphasis = _emphasisBits(text, formatRuns, 0, text.length);
   final styles = <int, TextStyle>{};
   final spans = <TextSpan>[];
   var from = 0;

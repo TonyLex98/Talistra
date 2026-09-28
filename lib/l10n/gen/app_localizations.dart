@@ -1351,6 +1351,12 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Слова попадают сюда из карточки перевода: кнопка «В словарь». «Тренировка» — повторить их.'**
   String get vocabularyHint;
+
+  /// No description provided for @ocrUnavailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Распознавание текста для этого языка книги недоступно на устройстве — страницы показаны как есть.'**
+  String get ocrUnavailable;
 }
 
 class _AppLocalizationsDelegate

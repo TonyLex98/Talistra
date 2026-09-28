@@ -297,10 +297,13 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   /// scroll position within that page, which jumping to the page's top
   /// would otherwise needlessly throw away every single time modes are
   /// toggled without actually having moved pages in between.
-  void jumpToPage(int page, {bool resetZoom = true}) {
+  /// Scrolls page [page] (1-based) to the top — or, with [fraction], the
+  /// point that far down it (0 to 1): where the compact view's text was, when
+  /// the reader switches over.
+  void jumpToPage(int page, {bool resetZoom = true, double? fraction}) {
     if (_cumulativeY.isEmpty) return;
     final index = (page - 1).clamp(0, widget.pageSizes.length - 1);
-    if (!resetZoom && index + 1 == _reportedPage) return;
+    if (!resetZoom && fraction == null && index + 1 == _reportedPage) return;
     _flingController.stop();
     setState(() {
       // Only a deliberate "go to page" jump re-centers horizontally too —
@@ -310,8 +313,16 @@ class PdfPageStackViewState extends State<PdfPageStackView>
       // not something that should reset just because a different page
       // number came into view.
       final dx = resetZoom ? 0.0 : _scrollOffset.dx;
-      _scrollOffset = Offset(dx, _cumulativeY[index]);
       if (resetZoom) _zoom = _minZoom;
+      final maxDy = math.max(
+        0.0,
+        _totalContentHeight - _viewportHeight / _zoom,
+      );
+      final within = (fraction ?? 0).clamp(0.0, 1.0) * _pageHeights[index];
+      _scrollOffset = Offset(
+        dx,
+        (_cumulativeY[index] + within).clamp(0.0, maxDy),
+      );
     });
     _reportedPage = index + 1;
     _pokeBubble();

@@ -26,7 +26,8 @@ import '../widgets/book_search_bar.dart';
 import '../widgets/contents_sheet.dart';
 import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
-import '../widgets/txt_page_view.dart';
+import '../widgets/paged_reflow_view.dart';
+import '../widgets/reflow_source.dart';
 import '../widgets/text_prompt_dialog.dart';
 
 /// Reader for plain .txt files — deliberately much simpler than
@@ -49,7 +50,10 @@ class TxtReaderScreen extends StatefulWidget {
 
 class _TxtReaderScreenState extends State<TxtReaderScreen>
     with WidgetsBindingObserver {
-  final _pageViewKey = GlobalKey<TxtPageViewState>();
+  final _pageViewKey = GlobalKey<PagedReflowViewState>();
+
+  /// The book's synthetic pages, for the compact view every format shares.
+  TextBookSource? _source;
   late LibraryDocument _document;
 
   List<List<ReflowBlock>> _pages = const [];
@@ -124,6 +128,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
       if (!mounted) return;
       setState(() {
         _pages = pages;
+        _source = TextBookSource(pages);
         _contents = tocFromPages(pages);
         _loading = false;
         // The saved page may be from an older layout of the book with more
@@ -566,17 +571,19 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
         ),
       );
     }
-    return TxtPageView(
+    return PagedReflowView(
       key: _pageViewKey,
-      pages: _pages,
+      source: _source!,
       initialPage: _currentPage,
-      source: settings.sourceLanguage,
-      target: settings.targetLanguage,
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
       translationService: translationService,
       fontSize: _fontSize,
       readingTheme: settings.readingTheme,
       settings: settings,
       translatorEnabled: settings.translatorEnabled,
+      syncTranslationExperimental:
+          settings.translatorEnabled && settings.syncTranslationExperimental,
       onPageChanged: _updateCurrentPage,
       onNoteSelection: (text) => addNoteFromSelection(
         context,

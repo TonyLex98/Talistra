@@ -7,13 +7,14 @@ import 'package:transreade/services/settings_service.dart';
 import 'package:transreade/services/translation_service.dart';
 import 'package:transreade/utils/reflow_builder.dart';
 import 'package:transreade/widgets/translatable_text.dart';
-import 'package:transreade/widgets/txt_page_view.dart';
+import 'package:transreade/widgets/paged_reflow_view.dart';
+import 'package:transreade/widgets/reflow_source.dart';
 
 late SettingsService settings;
 
 /// The one view under test, kept across [tester.pumpWidget] calls so the same
 /// state sees a resize rather than being rebuilt from scratch.
-final _key = GlobalKey<TxtPageViewState>();
+final _key = GlobalKey<PagedReflowViewState>();
 
 /// A book of [count] source pages, one paragraph each, each saying which page
 /// it is — so a test can tell where the reader ended up.
@@ -44,12 +45,12 @@ Future<void> _pump(
         body: SizedBox(
           width: 400,
           height: height,
-          child: TxtPageView(
+          child: PagedReflowView(
             key: _key,
-            pages: pages,
+            source: TextBookSource(pages),
             initialPage: initialPage,
-            source: TranslateLanguage.english,
-            target: TranslateLanguage.russian,
+            sourceLanguage: TranslateLanguage.english,
+            targetLanguage: TranslateLanguage.russian,
             translationService: TranslationService(),
             fontSize: fontSize,
             readingTheme: settings.readingTheme,
@@ -135,10 +136,15 @@ void main() {
     expect(reported.where((page) => page != 500), isEmpty);
     // A page the reader turns themselves is their own doing, and has to reach
     // the reader — the suppression above is only for the jump's own report.
+    // A swipe turns a sub-page; the book's page changes once the last of
+    // page 500's sub-pages has been turned.
     final told = reported.length;
-    await tester.drag(find.byType(PageView), const Offset(-400, 0));
-    await tester.pumpAndSettle();
+    for (var i = 0; i < 6 && reported.length == told; i++) {
+      await tester.drag(find.byType(PagedReflowView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+    }
     expect(reported.length, greaterThan(told));
+    expect(reported.last, 501);
     expect(tester.takeException(), isNull);
   });
 

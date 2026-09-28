@@ -12,11 +12,12 @@ import 'package:transreade/utils/markdown_blocks.dart';
 import 'package:transreade/utils/reflow_builder.dart';
 import 'package:transreade/utils/txt_paragraphs.dart';
 import 'package:transreade/widgets/translatable_text.dart';
-import 'package:transreade/widgets/txt_page_view.dart';
+import 'package:transreade/widgets/paged_reflow_view.dart';
+import 'package:transreade/widgets/reflow_source.dart';
 
 late SettingsService settings;
 
-final _key = GlobalKey<TxtPageViewState>();
+final _key = GlobalKey<PagedReflowViewState>();
 
 /// Paragraphs the way an FB2 novel hands them over: Cyrillic prose of every
 /// length, from a line of dialogue to a paragraph that runs over a page.
@@ -48,12 +49,12 @@ Future<void> _pump(
         body: SizedBox(
           width: 392,
           height: 700,
-          child: TxtPageView(
+          child: PagedReflowView(
             key: _key,
-            pages: pages,
+            source: TextBookSource(pages),
             initialPage: 1,
-            source: TranslateLanguage.russian,
-            target: TranslateLanguage.english,
+            sourceLanguage: TranslateLanguage.russian,
+            targetLanguage: TranslateLanguage.english,
             translationService: TranslationService(),
             fontSize: fontSize,
             readingTheme: settings.readingTheme,
@@ -73,7 +74,7 @@ Future<void> _pump(
 Future<void> _turnPages(WidgetTester tester, int count) async {
   for (var i = 0; i < count; i++) {
     expect(tester.takeException(), isNull, reason: 'screen $i overflowed');
-    await tester.drag(find.byType(PageView), const Offset(-392, 0));
+    await tester.drag(find.byType(PagedReflowView), const Offset(-392, 0));
     await tester.pumpAndSettle();
   }
   expect(tester.takeException(), isNull);

@@ -134,9 +134,11 @@ class ReflowBlock {
     this.isCode = false,
     this.isDivider = false,
     this.gapAbove,
+    this.sourceTop,
+    this.sourceBottom,
   }) : imageBounds = null,
        imageBytes = null;
-  const ReflowBlock.image(Rect bounds)
+  ReflowBlock.image(Rect bounds)
     : text = '',
       imageBounds = bounds,
       imageBytes = null,
@@ -146,7 +148,9 @@ class ReflowBlock {
       indent = 0,
       isCode = false,
       isDivider = false,
-      gapAbove = null;
+      gapAbove = null,
+      sourceTop = bounds.isEmpty ? null : bounds.top,
+      sourceBottom = bounds.isEmpty ? null : bounds.bottom;
 
   /// A picture a book carries inside itself (an FB2 binary, an EPUB image):
   /// [bytes] is the encoded image and [size] its pixel size, which is all the
@@ -161,9 +165,18 @@ class ReflowBlock {
       indent = 0,
       isCode = false,
       isDivider = false,
-      gapAbove = null;
+      gapAbove = null,
+      sourceTop = null,
+      sourceBottom = null;
 
   final String text;
+
+  /// Where the block's lines run on its PDF page, top to bottom, in the
+  /// page's own points — what keeps the reader's place when they switch
+  /// between the page and its reflowed text. Null for a block that came
+  /// from anywhere but a page.
+  final double? sourceTop;
+  final double? sourceBottom;
 
   /// For a PDF figure, where it sits on the page; for a [ReflowBlock.picture],
   /// just its size. Either way its aspect ratio is what it is paginated by.
@@ -443,6 +456,8 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
   var paragraph = '';
   var paragraphRuns = <FormatRun>[];
   var paragraphIsHeading = false;
+  var paragraphTop = 0.0;
+  var paragraphBottom = 0.0;
 
   void flush() {
     final text = paragraph.trim();
@@ -462,6 +477,8 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
           text,
           formatRuns: paragraphRuns,
           headingLevel: paragraphIsHeading ? 1 : 0,
+          sourceTop: paragraphTop,
+          sourceBottom: paragraphBottom,
         ),
       );
     }
@@ -474,6 +491,8 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
     paragraph = entry.text;
     paragraphRuns = List.of(entry.runs);
     paragraphIsHeading = isHeadingAt(index);
+    paragraphTop = entry.bounds.top;
+    paragraphBottom = entry.bounds.bottom;
   }
 
   void continueParagraph(_LineEntry entry) {
@@ -484,6 +503,7 @@ List<ReflowBlock> buildReflowPageBlocks(List<TextLine> lines, Size pageSize) {
       for (final r in entry.runs) r.shifted(shift),
     ];
     paragraph = joined;
+    paragraphBottom = math.max(paragraphBottom, entry.bounds.bottom);
   }
 
   final firstTop = orderedLines.first.bounds.top;

@@ -13,6 +13,7 @@ import 'services/app_reloader.dart';
 import 'services/error_log.dart';
 import 'services/library_service.dart';
 import 'services/model_download_service.dart';
+import 'services/ocr_service.dart';
 import 'services/page_image_cache.dart';
 import 'services/reading_display_service.dart';
 import 'services/search_index_cache.dart';
@@ -37,6 +38,7 @@ void main() async {
   final thumbnailCache = await ThumbnailCache.create();
   final previewCache = await PagePreviewCache.create();
   final searchIndexCache = await SearchIndexCache.open();
+  final ocrCache = await OcrCache.open();
   final readingDisplay = ReadingDisplayService();
 
   if (!stored.settings.instructionsSeeded) {
@@ -50,6 +52,7 @@ void main() async {
       thumbnailCache: thumbnailCache,
       previewCache: previewCache,
       searchIndexCache: searchIndexCache,
+      ocrCache: ocrCache,
       readingDisplay: readingDisplay,
     ),
   );
@@ -106,9 +109,11 @@ class _TalistraHost extends StatefulWidget {
     required this.thumbnailCache,
     required this.previewCache,
     required this.searchIndexCache,
+    required this.ocrCache,
     required this.readingDisplay,
   });
 
+  final OcrCache ocrCache;
   final SharedPreferences prefs;
   final StoredServices initial;
   final ThumbnailCache thumbnailCache;
@@ -143,6 +148,7 @@ class _TalistraHostState extends State<_TalistraHost> {
       searchIndexCache: widget.searchIndexCache,
       statistics: _stored.statistics,
       readingDisplay: widget.readingDisplay,
+      ocrCache: widget.ocrCache,
       annotations: _stored.annotations,
       vocabulary: _stored.vocabulary,
       reload: _reload,
@@ -202,7 +208,11 @@ class TalistraApp extends StatelessWidget {
     required this.annotations,
     required this.vocabulary,
     this.reload,
+    this.ocrCache,
   });
+
+  /// Pages already read by OCR; none in a test that doesn't need them.
+  final OcrCache? ocrCache;
 
   /// Loads the stored services again (see [AppReloader]); nothing to do in a
   /// test that built them itself.
@@ -227,6 +237,11 @@ class TalistraApp extends StatelessWidget {
         Provider<ThumbnailCache>.value(value: thumbnailCache),
         Provider<PagePreviewCache>.value(value: previewCache),
         Provider<SearchIndexCache>.value(value: searchIndexCache),
+        if (ocrCache case final cache?) Provider<OcrCache>.value(value: cache),
+        Provider<OcrEngine>(
+          create: (_) => MlKitOcrEngine(),
+          dispose: (_, engine) => (engine as MlKitOcrEngine).close(),
+        ),
         ChangeNotifierProvider<StatisticsService>.value(value: statistics),
         ChangeNotifierProvider<AnnotationService>.value(value: annotations),
         ChangeNotifierProvider<VocabularyService>.value(value: vocabulary),

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, TextLine;
@@ -27,7 +28,9 @@ import '../widgets/language_picker_sheet.dart';
 import '../widgets/pdf_page_stack_view.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/reading_selection_area.dart';
-import '../widgets/reflow_view.dart';
+import '../widgets/page_ocr.dart';
+import '../widgets/paged_reflow_view.dart';
+import '../widgets/pdf_reflow_source.dart';
 import '../widgets/book_search_bar.dart';
 import '../widgets/contents_sheet.dart';
 import '../widgets/reader_annotations.dart';
@@ -50,7 +53,14 @@ class ReaderScreen extends StatefulWidget {
 class _ReaderScreenState extends State<ReaderScreen>
     with WidgetsBindingObserver {
   final _pdfViewKey = GlobalKey<PdfPageStackViewState>();
-  final _reflowKey = GlobalKey<ReflowPdfViewState>();
+  final _reflowKey = GlobalKey<PagedReflowViewState>();
+
+  /// The compact view's pages, made once the document has loaded.
+  PdfReflowSource? _reflowSource;
+
+  /// How far down the page the original view's screen starts, 0 to 1 — kept
+  /// so switching to the compact view opens on the same words.
+  double _pdfFraction = 0;
   late LibraryDocument _document;
 
   PdfDocument? _pdfDocument;
@@ -130,6 +140,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     _pageCount = _document.pageCount;
     _pageEnteredAt = DateTime.now();
     _reflowMode = _document.reflowModeOrDefault;
+    _pdfFraction = _document.pdfScrollFraction;
     _reflowFontSize = _document.reflowFontSize;
     WidgetsBinding.instance.addObserver(this);
     context.read<SettingsService>().setLastDocumentId(widget.documentId);
@@ -182,6 +193,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _flushDwellTime();
     unawaited(_pdfSearchIndex.cancel());
+    _reflowSource?.dispose();
     _pdfDocument?.dispose();
     _renderer?.close();
     super.dispose();
@@ -247,6 +259,19 @@ class _ReaderScreenState extends State<ReaderScreen>
         _renderer = renderer;
         _pageSizes = sizes;
         _pageCount = pageCount;
+        _reflowSource = PdfReflowSource(
+          document: doc,
+          renderer: renderer,
+          linesCache: _pageLinesCache,
+          ocr: pageOcrFor(
+            context,
+            documentId: widget.documentId,
+            languageCode: context
+                .read<SettingsService>()
+                .sourceLanguage
+                .bcpCode,
+          ),
+        );
       });
       // Record that the document was opened even if the user never
       // changes pages (e.g. single-page PDFs, or leaving before scrolling).
@@ -294,6 +319,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     double scrollFraction,
     double scrollFractionX,
   ) {
+    _pdfFraction = scrollFraction;
     context.read<LibraryService>().updateProgress(
       widget.documentId,
       lastPage: _currentPage,
@@ -699,13 +725,25 @@ class _ReaderScreenState extends State<ReaderScreen>
     // its own scroll position — so only the view being switched TO needs
     // an explicit re-sync, in case the reader moved pages in the other
     // one since it was last visible.
+    //
+    // And to the same *place* on the page, not its top: the compact view
+    // opens on the words that were at the top of the screen, and the page
+    // scrolls to where the compact view's text sits on it.
+    final compactFraction = _reflowKey.currentState?.pageFraction;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_reflowMode) {
-        _reflowKey.currentState?.jumpToPage(_currentPage);
+        _reflowKey.currentState?.jumpToPage(
+          _currentPage,
+          fraction: _pdfFraction,
+        );
       } else {
         // resetZoom: false — switching modes shouldn't discard a zoom
         // level the reader deliberately set for this file.
-        _pdfViewKey.currentState?.jumpToPage(_currentPage, resetZoom: false);
+        _pdfViewKey.currentState?.jumpToPage(
+          _currentPage,
+          resetZoom: false,
+          fraction: compactFraction,
+        );
       }
     });
   }
@@ -1108,15 +1146,13 @@ class _ReaderScreenState extends State<ReaderScreen>
     SettingsService settings,
     TranslationService translationService,
   ) {
-    return ReflowPdfView(
+    return PagedReflowView(
       key: _reflowKey,
-      document: _pdfDocument!,
-      renderer: _renderer!,
-      pageCount: _pageCount,
+      source: _reflowSource!,
       initialPage: _currentPage,
-      linesCache: _pageLinesCache,
-      source: settings.sourceLanguage,
-      target: settings.targetLanguage,
+      initialFraction: _pdfFraction,
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
       translationService: translationService,
       fontSize: _reflowFontSize,
       readingTheme: settings.readingTheme,

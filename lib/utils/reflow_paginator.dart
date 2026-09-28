@@ -151,9 +151,11 @@ List<ReflowSubPage> paginateReflowBlocks({
     // Measuring every page break by re-laying out the text left over behind
     // it cost a layout pass per break, and a book's worth of breaks made a
     // big document unopenable.
+    // Rooted in the block's own style, the way the text widget paints it:
+    // a paragraph's root style sets the metrics every line starts from.
     final span = block.formatRuns.isEmpty || spanFor == null
         ? TextSpan(text: block.text, style: style)
-        : spanFor(block, style);
+        : TextSpan(style: style, children: [spanFor(block, style)]);
     final lines =
         lineCache?.measure(
           text: block.text,

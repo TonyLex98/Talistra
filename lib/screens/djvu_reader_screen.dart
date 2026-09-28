@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:provider/provider.dart';
 
@@ -23,7 +24,9 @@ import '../widgets/book_search_bar.dart';
 import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/translation_panel.dart';
-import '../widgets/txt_page_view.dart';
+import '../widgets/djvu_reflow_source.dart';
+import '../widgets/page_ocr.dart';
+import '../widgets/paged_reflow_view.dart';
 import '../widgets/text_prompt_dialog.dart';
 
 const double _barHeight = 50;
@@ -66,7 +69,14 @@ class DjvuReaderScreen extends StatefulWidget {
 class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     with WidgetsBindingObserver {
   late final LibraryDocument _document;
-  final _textPageViewKey = GlobalKey<TxtPageViewState>();
+  final _textPageViewKey = GlobalKey<PagedReflowViewState>();
+
+  /// The compact view's pages: the text layer, and OCR where it has none.
+  DjvuReflowSource? _source;
+
+  /// How far down the page the original view's screen starts, 0 to 1 — so
+  /// the compact view opens on the same place.
+  double _scanFraction = 0;
   final _originalStackKey = GlobalKey<DjvuPageStackViewState>();
 
   DjvuDocument? _djvu;
@@ -75,7 +85,9 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   bool _reflowMode = true;
   double _fontSize = 17;
   bool _textLoading = false;
-  List<List<ReflowBlock>>? _textPages;
+
+  /// Every page's text as it is known now — grows as OCR reads pages.
+  List<List<ReflowBlock>>? get _textPages => _source?.pages;
   bool _searchOpen = false;
   String? _selectedWord;
   SentenceMatch? _selectedSentence;
@@ -155,25 +167,22 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
       final extractedPages = rawPages
           .map(_reflowDjvuText)
           .toList(growable: false);
-      final hasText = extractedPages.any((page) => page.isNotEmpty);
-      final pages = hasText
-          ? extractedPages
-                .map(
-                  (page) => page.isEmpty
-                      ? <ReflowBlock>[
-                          ReflowBlock.paragraph(
-                            AppLocalizations.of(context).djvuNoTextLayer,
-                          ),
-                        ]
-                      : page,
-                )
-                .toList(growable: false)
-          : extractedPages;
+      final source = DjvuReflowSource(
+        document: document,
+        textLayer: extractedPages,
+        ocr: pageOcrFor(
+          context,
+          documentId: widget.documentId,
+          languageCode: context.read<SettingsService>().sourceLanguage.bcpCode,
+        ),
+      );
+      final hasText = source.readable;
       setState(() {
-        _textPages = pages;
+        _source?.dispose();
+        _source = source;
         _textLoading = false;
-        // Image-only scans still open correctly: there is simply nothing
-        // to reflow, so use the original page view for those documents.
+        // A scan that can't be read at all (no text layer, and a language
+        // OCR doesn't read) opens on its pages.
         if (!hasText) _reflowMode = false;
       });
       unawaited(
@@ -198,6 +207,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_readingDisplay.exit());
     _flushDwellTime();
+    _source?.dispose();
     final document = _djvu;
     if (document != null) unawaited(document.close());
     super.dispose();
@@ -262,6 +272,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   ) {
     final document = _djvu;
     if (document == null) return;
+    _scanFraction = scrollFraction;
     unawaited(
       context.read<LibraryService>().updateProgress(
         widget.documentId,
@@ -395,18 +406,21 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
         _selectedWord = null;
         _selectedSentence = null;
       });
-    } else if (pages != null && pages.any((page) => page.isNotEmpty)) {
+    } else if (pages != null && (_source?.readable ?? false)) {
       setState(() {
         _reflowMode = true;
         _selectedWord = null;
         _selectedSentence = null;
       });
       WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _textPageViewKey.currentState?.jumpToPage(_currentPage),
+        (_) => _textPageViewKey.currentState?.jumpToPage(
+          _currentPage,
+          fraction: _scanFraction,
+        ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).djvuNoTextLayer)),
+        SnackBar(content: Text(AppLocalizations.of(context).ocrUnavailable)),
       );
       return;
     }
@@ -581,17 +595,20 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
         );
       }
       final translationService = context.read<TranslationService>();
-      return TxtPageView(
+      return PagedReflowView(
         key: _textPageViewKey,
-        pages: pages,
+        source: _source!,
         initialPage: _currentPage,
-        source: settings.sourceLanguage,
-        target: settings.targetLanguage,
+        initialFraction: _scanFraction,
+        sourceLanguage: settings.sourceLanguage,
+        targetLanguage: settings.targetLanguage,
         translationService: translationService,
         fontSize: _fontSize,
         readingTheme: settings.readingTheme,
         settings: settings,
         translatorEnabled: settings.translatorEnabled,
+        syncTranslationExperimental:
+            settings.translatorEnabled && settings.syncTranslationExperimental,
         onPageChanged: (page) => _onPageChanged(page - 1),
       );
     }
@@ -735,8 +752,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                       // switch to that text at the same source page instead of
                       // leaving a seemingly enabled but unusable button over a
                       // bitmap.
-                      if (!_reflowMode &&
-                          _textPages?.any((page) => page.isNotEmpty) == true) {
+                      if (!_reflowMode && (_source?.readable ?? false)) {
                         if (!settings.translatorEnabled) {
                           settings.setTranslatorEnabled(true);
                         }

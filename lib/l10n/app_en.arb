@@ -236,5 +236,6 @@
   "feedbackAttachLogSubtitle": "Technical details of crashes, without any book content",
   "shareAction": "Share",
   "shareFileAction": "Send the book file",
-  "vocabularyHint": "Words get here from the translation card: its Save word button. Practice reviews them."
+  "vocabularyHint": "Words get here from the translation card: its Save word button. Practice reviews them.",
+  "ocrUnavailable": "Text recognition isn't available on this device for the book's language — pages are shown as they are."
 }

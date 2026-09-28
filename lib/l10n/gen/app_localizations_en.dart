@@ -702,4 +702,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get vocabularyHint =>
       'Words get here from the translation card: its Save word button. Practice reviews them.';
+
+  @override
+  String get ocrUnavailable =>
+      'Text recognition isn\'t available on this device for the book\'s language — pages are shown as they are.';
 }

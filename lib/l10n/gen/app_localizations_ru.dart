@@ -705,4 +705,8 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get vocabularyHint =>
       'Слова попадают сюда из карточки перевода: кнопка «В словарь». «Тренировка» — повторить их.';
+
+  @override
+  String get ocrUnavailable =>
+      'Распознавание текста для этого языка книги недоступно на устройстве — страницы показаны как есть.';
 }

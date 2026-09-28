@@ -9,7 +9,7 @@ import 'reading_selection_area.dart';
 import 'translatable_text.dart';
 import 'translation_panel.dart';
 
-/// The spreadsheet counterpart to [TxtPageView]: the same swipe-a-page
+/// The spreadsheet counterpart to [PagedReflowView]: the same swipe-a-page
 /// reading surface, the same tap-a-word-to-translate behaviour and the same
 /// search highlighting, drawing a table's cells instead of its paragraphs.
 ///
@@ -60,7 +60,7 @@ class SpreadsheetPageView extends StatefulWidget {
 }
 
 /// Public so the reader screen can drive this view from its own "Go to page"
-/// dialog and from the search bar, exactly as it drives [TxtPageView].
+/// dialog and from the search bar, exactly as it drives [PagedReflowView].
 class SpreadsheetPageViewState extends State<SpreadsheetPageView> {
   late final PageController _pageController;
   int _currentPage = 0;

@@ -18,6 +18,7 @@ import '../services/djvu_service.dart';
 import '../services/annotation_service.dart';
 import '../services/incoming_file_service.dart';
 import '../services/library_service.dart';
+import '../services/ocr_service.dart';
 import '../services/page_image_cache.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
@@ -526,8 +527,16 @@ class _HomeScreenState extends State<HomeScreen> {
     // it can name) quietly leaves it out.
     final statistics = context.read<StatisticsService>();
     final annotations = context.read<AnnotationService>();
+    // Pages a scan had read by OCR go with it.
+    OcrCache? ocr;
+    try {
+      ocr = context.read<OcrCache>();
+    } on ProviderNotFoundException {
+      // No OCR in this build of the tree (a test).
+    }
     await library.remove(id);
     unawaited(annotations.removeDocument(id));
+    if (ocr != null) unawaited(ocr.forget(id));
     unawaited(thumbnails.delete(id));
     unawaited(previews.delete(id));
     unawaited(statistics.forget(id));

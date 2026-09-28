@@ -12,7 +12,8 @@ import 'package:transreade/utils/reading_text_style.dart';
 import 'package:transreade/utils/reflow_builder.dart';
 import 'package:transreade/utils/txt_paragraphs.dart';
 import 'package:transreade/widgets/translatable_text.dart';
-import 'package:transreade/widgets/txt_page_view.dart';
+import 'package:transreade/widgets/paged_reflow_view.dart';
+import 'package:transreade/widgets/reflow_source.dart';
 
 /// Read by [_pump], which builds the view the way the reader screen does.
 late SettingsService settings;
@@ -65,11 +66,13 @@ Future<void> _pump(
         body: SizedBox(
           width: 400,
           height: 600,
-          child: TxtPageView(
-            pages: buildTxtPagesFromBlocks(parseMarkdownBlocks(markdown)),
+          child: PagedReflowView(
+            source: TextBookSource(
+              buildTxtPagesFromBlocks(parseMarkdownBlocks(markdown)),
+            ),
             initialPage: 1,
-            source: TranslateLanguage.english,
-            target: TranslateLanguage.russian,
+            sourceLanguage: TranslateLanguage.english,
+            targetLanguage: TranslateLanguage.russian,
             translationService: TranslationService(),
             fontSize: fontSize,
             readingTheme: settings.readingTheme,
@@ -202,7 +205,7 @@ void main() {
           end: shown.end ?? shown.text.length,
         ));
       }
-      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.drag(find.byType(PagedReflowView), const Offset(-400, 0));
       await tester.pumpAndSettle();
     }
 
@@ -212,9 +215,20 @@ void main() {
       if (block.text.isEmpty) continue;
       final Set<({int start, int end})> painted =
           slices[block.text] ?? const {};
+      // Line breaks don't count: a slice of preformatted text ends on the
+      // break its next slice starts after, and that break is the page's
+      // edge rather than a character drawn on it.
       expect(
-        painted.fold<int>(0, (sum, slice) => sum + slice.end - slice.start),
-        block.text.length,
+        painted.fold<int>(
+          0,
+          (sum, slice) =>
+              sum +
+              block.text
+                  .substring(slice.start, slice.end)
+                  .replaceAll('\n', '')
+                  .length,
+        ),
+        block.text.replaceAll('\n', '').length,
         reason: '${block.text} is painted once, whole and in order',
       );
       expect(

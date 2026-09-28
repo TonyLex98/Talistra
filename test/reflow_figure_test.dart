@@ -25,7 +25,7 @@ void main() {
   test('a figure that turned out blank takes no room', () {
     final pages = _paginate([
       const ReflowBlock.paragraph('Before.'),
-      const ReflowBlock.image(Rect.zero),
+      ReflowBlock.image(Rect.zero),
       const ReflowBlock.paragraph('After.'),
     ]);
     expect(pages.single.map((s) => s.blockIndex), [0, 2]);
@@ -34,8 +34,8 @@ void main() {
   test('a figure is given the room its own size asks for', () {
     // Two figures of 240 px would not share a 500 px page; two of 180 do.
     List<ReflowSubPage> withHeight(double height) => _paginate([
-      const ReflowBlock.image(Rect.fromLTWH(0, 0, 100, 100)),
-      const ReflowBlock.image(Rect.fromLTWH(0, 0, 100, 100)),
+      ReflowBlock.image(Rect.fromLTWH(0, 0, 100, 100)),
+      ReflowBlock.image(Rect.fromLTWH(0, 0, 100, 100)),
     ], imageSizeFor: (_) => Size(100, height));
     expect(withHeight(180), hasLength(1));
     expect(withHeight(240), hasLength(2));
