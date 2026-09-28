@@ -102,24 +102,37 @@ class VocabularyScreen extends StatelessWidget {
                     margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              l10n.vocabularyDue(due),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
+                          Text(
+                            l10n.vocabularyHint,
+                            style: TextStyle(color: scheme.onSurfaceVariant),
                           ),
-                          FilledButton.icon(
-                            icon: const Icon(Icons.style_outlined),
-                            label: Text(l10n.practiceAction),
-                            onPressed: due == 0
-                                ? null
-                                : () => Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => const PracticeScreen(),
-                                    ),
-                                  ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  l10n.vocabularyDue(due),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                              ),
+                              FilledButton.icon(
+                                icon: const Icon(Icons.style_outlined),
+                                label: Text(l10n.practiceAction),
+                                onPressed: due == 0
+                                    ? null
+                                    : () => Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              const PracticeScreen(),
+                                        ),
+                                      ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

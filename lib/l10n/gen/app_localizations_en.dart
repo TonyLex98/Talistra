@@ -698,4 +698,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shareFileAction => 'Send the book file';
+
+  @override
+  String get vocabularyHint =>
+      'Words get here from the translation card: its Save word button. Practice reviews them.';
 }

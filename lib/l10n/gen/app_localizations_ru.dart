@@ -701,4 +701,8 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get shareFileAction => 'Отправить файл книги';
+
+  @override
+  String get vocabularyHint =>
+      'Слова попадают сюда из карточки перевода: кнопка «В словарь». «Тренировка» — повторить их.';
 }

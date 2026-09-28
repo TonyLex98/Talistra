@@ -22,6 +22,7 @@ import '../services/page_image_cache.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
+import '../services/vocabulary_service.dart';
 import '../utils/document_format.dart';
 import '../utils/pdf_unlock.dart';
 import '../widgets/document_tile.dart';
@@ -431,9 +432,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ).push(MaterialPageRoute(builder: (_) => const StatisticsScreen())),
           ),
           IconButton(
-            icon: Icon(
-              Icons.translate,
-              color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+            // A card box, not the translate glyph — that one is the
+            // translator's own switch, and two buttons wearing it read as
+            // one feature twice.
+            icon: Badge(
+              isLabelVisible: context.watch<VocabularyService>().due.isNotEmpty,
+              label: Text('${context.watch<VocabularyService>().due.length}'),
+              child: Icon(
+                Icons.style_outlined,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
             ),
             tooltip: l10n.vocabularyTooltip,
             onPressed: () => Navigator.of(

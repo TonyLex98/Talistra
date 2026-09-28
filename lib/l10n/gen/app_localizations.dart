@@ -1345,6 +1345,12 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Отправить файл книги'**
   String get shareFileAction;
+
+  /// No description provided for @vocabularyHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Слова попадают сюда из карточки перевода: кнопка «В словарь». «Тренировка» — повторить их.'**
+  String get vocabularyHint;
 }
 
 class _AppLocalizationsDelegate

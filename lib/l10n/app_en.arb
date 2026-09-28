@@ -235,5 +235,6 @@
   "feedbackAttachLog": "Attach the error log",
   "feedbackAttachLogSubtitle": "Technical details of crashes, without any book content",
   "shareAction": "Share",
-  "shareFileAction": "Send the book file"
+  "shareFileAction": "Send the book file",
+  "vocabularyHint": "Words get here from the translation card: its Save word button. Practice reviews them."
 }
