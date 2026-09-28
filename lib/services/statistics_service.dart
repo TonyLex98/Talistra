@@ -184,6 +184,38 @@ class StatisticsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Moves everything recorded for [from] onto [to] — a book restored from a
+  /// backup comes back under a new library id.
+  Future<void> reassign(String from, String to) async {
+    if (from == to) return;
+    var changed = false;
+    final seconds = _secondsByDocument.remove(from);
+    if (seconds != null) {
+      _secondsByDocument[to] = (_secondsByDocument[to] ?? 0) + seconds;
+      changed = true;
+    }
+    final pages = _pagesByDocument.remove(from);
+    if (pages != null) {
+      _pagesByDocument.putIfAbsent(to, () => <int>{}).addAll(pages);
+      changed = true;
+    }
+    for (final day in _pagesByDay.values) {
+      final moved = [
+        for (final entry in day)
+          if (entry.startsWith('$from:')) entry,
+      ];
+      for (final entry in moved) {
+        day
+          ..remove(entry)
+          ..add('$to${entry.substring(from.length)}');
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    await _persist();
+    notifyListeners();
+  }
+
   Future<void> _persist() async {
     final payload = jsonEncode({
       'seconds': _secondsByDocument,

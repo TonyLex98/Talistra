@@ -9,6 +9,7 @@ import '../services/model_download_service.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../utils/reading_text_style.dart';
+import '../widgets/backup_section.dart';
 import '../widgets/language_picker_sheet.dart';
 import 'feedback_screen.dart';
 
@@ -57,6 +58,9 @@ class SettingsScreen extends StatelessWidget {
             _SectionHeader(l10n.syncTranslationSectionTitle),
             const _SyncTranslationSection(),
           ],
+          const Divider(height: 32),
+          _SectionHeader(l10n.backupSectionTitle),
+          const BackupSection(),
           const Divider(height: 32),
           _SectionHeader(l10n.supportSectionTitle),
           const _SupportSection(),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -7,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'screens/home_screen.dart';
 import 'services/annotation_service.dart';
+import 'services/app_reloader.dart';
 import 'services/library_service.dart';
 import 'services/model_download_service.dart';
 import 'services/page_image_cache.dart';
@@ -27,33 +30,121 @@ void main() async {
   // SyncfusionLicense.registerLicense('YOUR_LICENSE_KEY');
 
   final prefs = await SharedPreferences.getInstance();
-  final settings = SettingsService.load(prefs);
-  final library = await LibraryService.load(prefs);
+  final stored = await StoredServices.load(prefs);
   final thumbnailCache = await ThumbnailCache.create();
   final previewCache = await PagePreviewCache.create();
   final searchIndexCache = await SearchIndexCache.open();
-  final statistics = await StatisticsService.load(prefs);
   final readingDisplay = ReadingDisplayService();
-  final annotations = AnnotationService.load(prefs);
-  final vocabulary = VocabularyService.load(prefs);
 
-  if (!settings.instructionsSeeded) {
-    await _seedInstructionsPdf(settings, library);
+  if (!stored.settings.instructionsSeeded) {
+    await _seedInstructionsPdf(stored.settings, stored.library);
   }
 
   runApp(
-    TalistraApp(
-      settings: settings,
-      library: library,
+    _TalistraHost(
+      prefs: prefs,
+      initial: stored,
       thumbnailCache: thumbnailCache,
       previewCache: previewCache,
       searchIndexCache: searchIndexCache,
-      statistics: statistics,
       readingDisplay: readingDisplay,
-      annotations: annotations,
-      vocabulary: vocabulary,
     ),
   );
+}
+
+/// The services that live in SharedPreferences — everything a restored
+/// backup changes underneath the app, and so everything that has to be
+/// loaded again after one.
+class StoredServices {
+  StoredServices._(
+    this.settings,
+    this.library,
+    this.statistics,
+    this.annotations,
+    this.vocabulary,
+  );
+
+  final SettingsService settings;
+  final LibraryService library;
+  final StatisticsService statistics;
+  final AnnotationService annotations;
+  final VocabularyService vocabulary;
+
+  static Future<StoredServices> load(SharedPreferences prefs) async {
+    final services = StoredServices._(
+      SettingsService.load(prefs),
+      await LibraryService.load(prefs),
+      await StatisticsService.load(prefs),
+      AnnotationService.load(prefs),
+      VocabularyService.load(prefs),
+    );
+    // A book a restored backup knew comes back under a new id; what was
+    // kept for the old one follows it.
+    services.library.onRestoredFromBackup = (backupId, documentId) {
+      unawaited(services.annotations.reassign(backupId, documentId));
+      unawaited(services.statistics.reassign(backupId, documentId));
+    };
+    return services;
+  }
+
+  void dispose() {
+    library.dispose();
+    settings.dispose();
+    statistics.dispose();
+    annotations.dispose();
+    vocabulary.dispose();
+  }
+}
+
+class _TalistraHost extends StatefulWidget {
+  const _TalistraHost({
+    required this.prefs,
+    required this.initial,
+    required this.thumbnailCache,
+    required this.previewCache,
+    required this.searchIndexCache,
+    required this.readingDisplay,
+  });
+
+  final SharedPreferences prefs;
+  final StoredServices initial;
+  final ThumbnailCache thumbnailCache;
+  final PagePreviewCache previewCache;
+  final SearchIndexCache searchIndexCache;
+  final ReadingDisplayService readingDisplay;
+
+  @override
+  State<_TalistraHost> createState() => _TalistraHostState();
+}
+
+class _TalistraHostState extends State<_TalistraHost> {
+  late StoredServices _stored = widget.initial;
+
+  Future<void> _reload() async {
+    await widget.prefs.reload();
+    final fresh = await StoredServices.load(widget.prefs);
+    if (!mounted) return;
+    final old = _stored;
+    setState(() => _stored = fresh);
+    // Nothing is listening to the old ones once this frame is built.
+    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TalistraApp(
+      settings: _stored.settings,
+      library: _stored.library,
+      thumbnailCache: widget.thumbnailCache,
+      previewCache: widget.previewCache,
+      searchIndexCache: widget.searchIndexCache,
+      statistics: _stored.statistics,
+      readingDisplay: widget.readingDisplay,
+      annotations: _stored.annotations,
+      vocabulary: _stored.vocabulary,
+      reload: _reload,
+    );
+  }
 }
 
 // Adds the bundled user-guide PDF once for each guide version. A later guide
@@ -107,7 +198,12 @@ class TalistraApp extends StatelessWidget {
     required this.readingDisplay,
     required this.annotations,
     required this.vocabulary,
+    this.reload,
   });
+
+  /// Loads the stored services again (see [AppReloader]); nothing to do in a
+  /// test that built them itself.
+  final Future<void> Function()? reload;
 
   final SettingsService settings;
   final LibraryService library;
@@ -131,6 +227,7 @@ class TalistraApp extends StatelessWidget {
         ChangeNotifierProvider<StatisticsService>.value(value: statistics),
         ChangeNotifierProvider<AnnotationService>.value(value: annotations),
         ChangeNotifierProvider<VocabularyService>.value(value: vocabulary),
+        Provider<AppReloader>.value(value: AppReloader(reload ?? () async {})),
         Provider<ReadingDisplayService>(
           create: (_) => readingDisplay,
           dispose: (_, service) => service.dispose(),

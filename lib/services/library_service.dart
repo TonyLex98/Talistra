@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/library_document.dart';
+import 'backup.dart';
 
 /// Owns the list of PDFs the user has imported, persisting it as JSON in
 /// SharedPreferences and keeping the actual files in the app's private
@@ -96,6 +97,36 @@ class LibraryService extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Told when a book comes back into the library that a restored backup
+  /// knew under another id — so the notes and statistics kept for that id
+  /// can move onto the book's new one.
+  void Function(String backupId, String documentId)? onRestoredFromBackup;
+
+  /// [document] with the progress a restored backup kept for the same file,
+  /// if it kept any — the other half of `restoreBackup`, for the books that
+  /// weren't in the library when it ran.
+  LibraryDocument _adoptFromBackup(LibraryDocument document) {
+    final pending = _prefs.getStringList(pendingRestoreKey);
+    if (pending == null || pending.isEmpty) return document;
+    for (var i = 0; i < pending.length; i++) {
+      final LibraryDocument saved;
+      try {
+        saved = LibraryDocument.fromJson(
+          jsonDecode(pending[i]) as Map<String, dynamic>,
+        );
+      } catch (_) {
+        continue;
+      }
+      if (saved.sourceFingerprint != document.sourceFingerprint) continue;
+      unawaited(
+        _prefs.setStringList(pendingRestoreKey, [...pending]..removeAt(i)),
+      );
+      onRestoredFromBackup?.call(saved.id, document.id);
+      return withProgressOf(document, saved);
+    }
+    return document;
+  }
+
   Future<void> _persist() async {
     final raw = _documents.map((d) => jsonEncode(d.toJson())).toList();
     await _prefs.setStringList(_key, raw);
@@ -152,10 +183,11 @@ class LibraryService extends ChangeNotifier {
       sourceFingerprint: fingerprint,
       format: format,
     );
-    _documents.add(document);
+    final adopted = _adoptFromBackup(document);
+    _documents.add(adopted);
     await _persist();
     notifyListeners();
-    return document;
+    return adopted;
   }
 
   /// Adds a document from raw bytes rather than a picked file — used to
@@ -184,10 +216,11 @@ class LibraryService extends ChangeNotifier {
       sourceFingerprint: sourceFingerprint ?? 'bundled_$id',
       format: format,
     );
-    _documents.add(document);
+    final adopted = _adoptFromBackup(document);
+    _documents.add(adopted);
     await _persist();
     notifyListeners();
-    return document;
+    return adopted;
   }
 
   Future<void> updateProgress(
