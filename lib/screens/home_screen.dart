@@ -141,6 +141,8 @@ class _HomeScreenState extends State<HomeScreen> {
     'pdf',
     'txt',
     'md',
+    'xml',
+    'html',
     'epub',
     'fb2',
     'rtf',

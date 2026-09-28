@@ -121,13 +121,18 @@ void main() {
       expect(await fileLooksLikeText(await _write(bytes)), isTrue);
     });
 
-    test('rejects UTF-16, which the reader has no decoder for', () async {
+    test('accepts UTF-16, which Windows writes text and XML in', () async {
       final path = await _write(
-        Uint8List.fromList(
-          utf8.encode('Привет мир!').expand((byte) => [byte, 0]).toList(),
-        ),
+        Uint8List.fromList([
+          0xFF,
+          0xFE,
+          for (final unit in 'Привет, world!'.codeUnits) ...[
+            unit & 0xFF,
+            unit >> 8,
+          ],
+        ]),
       );
-      expect(await fileLooksLikeText(path), isFalse);
+      expect(await fileLooksLikeText(path), isTrue);
     });
 
     test('rejects an empty file', () async {

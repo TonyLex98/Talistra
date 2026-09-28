@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
+import 'text_decode.dart';
+
 // The two spreadsheet formats are read by the app's own decoders:
 // .xlsx (ZIP/OOXML) by xlsx_decode.dart, legacy .xls (OLE2/BIFF8,
 // Excel 97-2003) by xls_decode.dart on top of the excel2003 record parser.
@@ -12,6 +14,8 @@ const supportedBookFormats = {
   'pdf',
   'txt',
   'md',
+  'xml',
+  'html',
   'epub',
   'fb2',
   'rtf',
@@ -124,7 +128,15 @@ String? detectDocumentFormatBytes(Uint8List bytes, {required String fileName}) {
     }
   }
 
-  final textProbe = utf8.decode(probe, allowMalformed: true).toLowerCase();
+  // UTF-16 text is all zero bytes to a byte-level look, so it is decoded
+  // before anything below asks whether the file is text.
+  final utf16 = utf16EndianOf(probe);
+  final textProbe =
+      (utf16 != null
+              ? decodeTextFile(Uint8List.fromList(probe))
+              : utf8.decode(probe, allowMalformed: true))
+          .toLowerCase();
+  final isText = utf16 != null || !probe.contains(0);
   if (textProbe.contains('<fictionbook') ||
       (textProbe.contains('<?xml') && extension == 'fb2')) {
     return 'fb2';
@@ -134,11 +146,19 @@ String? detectDocumentFormatBytes(Uint8List bytes, {required String fileName}) {
   // when the caller actually named the file as one of them, and the probe
   // contains no binary NUL bytes. Markdown's extensions all collapse to
   // 'md', which is the format the reader checks rather than the file name.
-  if (!probe.contains(0)) {
+  if (isText) {
     if (extension == 'txt') return 'txt';
     if (const {'md', 'markdown', 'mdown', 'mkd'}.contains(extension)) {
       return 'md';
     }
+    if (const {'html', 'htm', 'xhtml'}.contains(extension)) return 'html';
+    if (extension == 'xml') return 'xml';
+    // Named anything at all, markup says what it is.
+    final head = textProbe.replaceFirst('\ufeff', '').trimLeft();
+    if (head.startsWith('<!doctype html') || head.startsWith('<html')) {
+      return 'html';
+    }
+    if (head.startsWith('<?xml')) return 'xml';
   }
   return null;
 }
@@ -159,7 +179,9 @@ Future<bool> fileLooksLikeText(String path) async {
   final length = await file.length();
   if (length <= 0) return false;
   final bytes = await _readProbe(file, length < 8192 ? length : 8192);
-  if (bytes.isEmpty || bytes.contains(0)) return false;
+  if (bytes.isEmpty) return false;
+  if (utf16EndianOf(bytes) != null) return true;
+  if (bytes.contains(0)) return false;
   // Control bytes other than the whitespace prose uses are what binary data
   // looks like when it happens to have no NULs in it.
   var control = 0;

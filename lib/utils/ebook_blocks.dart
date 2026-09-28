@@ -633,3 +633,77 @@ int _docxHeadingLevel(String style) {
   if (match == null) return 0;
   return int.parse(match.group(1)!);
 }
+
+// ---------------------------------------------------------------- XML
+
+/// How deep an XML tree is drawn before deeper elements stop moving right: a
+/// phone's column has no room for a staircase twenty levels high.
+const _maxXmlIndent = 6;
+
+/// A generic XML file, read as the tree it is: an element holding only text
+/// is one line — its name in bold, then its text, which is what a reader
+/// came to read (and translate); an element holding others is its name, with
+/// its children set in under it. Attributes follow a name in parentheses.
+///
+/// A file that doesn't parse is shown as it is, in the code face.
+List<ReflowBlock> xmlBlocks(String source) {
+  final XmlDocument xml;
+  try {
+    xml = XmlDocument.parse(source.replaceFirst('\ufeff', ''));
+  } on XmlException {
+    return [
+      ReflowBlock.paragraph(source.replaceAll('\r\n', '\n'), isCode: true),
+    ];
+  }
+  final blocks = <ReflowBlock>[];
+
+  String attributesOf(XmlElement element) {
+    if (element.attributes.isEmpty) return '';
+    return ' (${element.attributes.map((a) => '${a.name.local}="${a.value}"').join(', ')})';
+  }
+
+  void walk(XmlElement element, int depth) {
+    final indent = math.min(depth, _maxXmlIndent);
+    final name = '${element.name.local}${attributesOf(element)}';
+    final children = element.childElements.toList();
+    final ownText = element.children
+        .whereType<XmlText>()
+        .map((t) => t.value)
+        .join(' ')
+        .replaceAll(_whitespace, ' ')
+        .trim();
+    final cdata = element.children
+        .whereType<XmlCDATA>()
+        .map((c) => c.value)
+        .join('\n')
+        .trim();
+    final text = [ownText, cdata].where((t) => t.isNotEmpty).join(' ');
+    if (children.isEmpty) {
+      final line = text.isEmpty ? name : '$name: $text';
+      blocks.add(
+        ReflowBlock.paragraph(
+          line,
+          formatRuns: [FormatRun(start: 0, end: name.length, bold: true)],
+          indent: indent,
+          gapAbove: blocks.isEmpty ? null : 4,
+        ),
+      );
+      return;
+    }
+    final heading = text.isEmpty ? name : '$name: $text';
+    blocks.add(
+      ReflowBlock.paragraph(
+        heading,
+        formatRuns: [FormatRun(start: 0, end: name.length, bold: true)],
+        indent: indent,
+        gapAbove: blocks.isEmpty ? null : (depth == 0 ? 16 : 8),
+      ),
+    );
+    for (final child in children) {
+      walk(child, depth + 1);
+    }
+  }
+
+  walk(xml.rootElement, 0);
+  return blocks;
+}

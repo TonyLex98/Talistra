@@ -31,8 +31,16 @@ class LibraryDocument {
 
   /// Whether this document is read as flowing text (txt, md, epub, fb2,
   /// rtf, docx) rather than as PDF pages.
-  bool get isTextDocument =>
-      const {'txt', 'md', 'epub', 'fb2', 'rtf', 'docx'}.contains(format);
+  bool get isTextDocument => const {
+    'txt',
+    'md',
+    'xml',
+    'html',
+    'epub',
+    'fb2',
+    'rtf',
+    'docx',
+  }.contains(format);
 
   bool get isTxt => format == 'txt';
 

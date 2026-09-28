@@ -70,6 +70,8 @@ String _formatBadge(String format) {
     case 'docx':
     case 'txt':
     case 'md':
+    case 'xml':
+    case 'html':
     case 'xlsx':
     case 'xls':
       return format.toUpperCase();

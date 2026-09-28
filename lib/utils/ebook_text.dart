@@ -13,7 +13,7 @@ import 'text_decode.dart';
 /// A PDF is a page image with a text layer and gets its own reader; these
 /// are all *text* formats, so they end up in the same paginated reading
 /// view as a plain .txt file, in the reader's own font and colours.
-enum EbookFormat { txt, epub, fb2, rtf, docx }
+enum EbookFormat { txt, epub, fb2, rtf, docx, xml, html }
 
 /// The format a library entry was stored as (its `format` field), or null
 /// for one that isn't read as text.
@@ -23,6 +23,8 @@ EbookFormat? ebookFormatFromName(String format) => switch (format) {
   'fb2' => EbookFormat.fb2,
   'rtf' => EbookFormat.rtf,
   'docx' => EbookFormat.docx,
+  'xml' => EbookFormat.xml,
+  'html' => EbookFormat.html,
   _ => null,
 };
 
@@ -36,6 +38,10 @@ EbookFormat? ebookFormatFromPath(String path) {
     return EbookFormat.fb2;
   }
   if (lower.endsWith('.rtf')) return EbookFormat.rtf;
+  if (lower.endsWith('.xml')) return EbookFormat.xml;
+  if (lower.endsWith('.html') || lower.endsWith('.htm')) {
+    return EbookFormat.html;
+  }
   if (lower.endsWith('.docx')) return EbookFormat.docx;
   return null;
 }
@@ -58,6 +64,12 @@ List<ReflowBlock> extractEbookBlocks(Uint8List bytes, EbookFormat format) {
       return _plainBlocks(_rtfParagraphs(bytes));
     case EbookFormat.docx:
       return _docxBlocks(bytes);
+    case EbookFormat.html:
+      final html = decodeTextFile(bytes);
+      return htmlBlocks(html, (_) => null) ??
+          _plainBlocks(_htmlParagraphs(html));
+    case EbookFormat.xml:
+      return xmlBlocks(decodeTextFile(bytes));
   }
 }
 
