@@ -180,7 +180,10 @@ class _Markdown {
   int _parseLine(int index) {
     final line = _lines[index];
     if (line.trim().isEmpty) {
-      _levels.clear();
+      // A blank line between two items, or before a paragraph indented under
+      // one, is a loose list rather than its end: the nesting it had opened
+      // still holds for what follows. Anything else starts afresh.
+      if (!_continuesList(index + 1)) _levels.clear();
       return index + 1;
     }
 
@@ -224,7 +227,30 @@ class _Markdown {
 
     if (_isTableStart(index)) return _parseTable(index);
 
+    // A paragraph indented under a list item, past a blank line, is more of
+    // that item — drawn at its depth rather than back at the margin.
+    final width = _leadingWidth(line);
+    if (_levels.isNotEmpty && width > _levels.first) {
+      return _parseParagraph(
+        index,
+        indent: _levels.where((level) => level < width).length,
+      );
+    }
+
     return _parseParagraph(index);
+  }
+
+  /// Whether the first line with anything on it from [index] on belongs to
+  /// the list that is open: another item, or text indented under one.
+  bool _continuesList(int index) {
+    if (_levels.isEmpty) return false;
+    for (var i = index; i < _lines.length; i++) {
+      final line = _lines[i];
+      if (line.trim().isEmpty) continue;
+      return _listMarker.matchAsPrefix(line) != null ||
+          _leadingWidth(line) > _levels.first;
+    }
+    return false;
   }
 
   // ----------------------------------------------------------- structures
@@ -345,7 +371,7 @@ class _Markdown {
     if (_levels.isEmpty || indent > _levels.last) _levels.add(indent);
   }
 
-  int _parseParagraph(int index) {
+  int _parseParagraph(int index, {int indent = 0}) {
     final lines = <String>[_lines[index]];
     var end = index + 1;
     var headingLevel = 0;
@@ -365,7 +391,7 @@ class _Markdown {
 
     final text = _joinLines(lines);
     if (text.isEmpty) return end;
-    _levels.clear();
+    if (indent == 0) _levels.clear();
     if (headingLevel > 0) {
       _emit(
         () => _paragraph(
@@ -378,9 +404,13 @@ class _Markdown {
       );
     } else {
       _emit(
-        () => _paragraph(text, gap: _gapAbove(_Kind.paragraph, 0)),
+        () => _paragraph(
+          text,
+          indent: indent,
+          gap: _gapAbove(_Kind.paragraph, indent),
+        ),
         _Kind.paragraph,
-        indent: 0,
+        indent: indent,
       );
     }
     return end;
@@ -863,8 +893,14 @@ class _Inline {
       }
       if (ch == '<') {
         final close = source.indexOf('>', i + 1);
-        if (close > i + 1 && close <= to) {
-          final inner = source.substring(i + 1, close);
+        final inner = close > i + 1 && close < to
+            ? source.substring(i + 1, close)
+            : null;
+        // Only something shaped like a tag, an address or a comment is
+        // markup: `a < b and c > d` is a sentence, and dropping everything
+        // between the two signs would eat half of it.
+        if (inner != null &&
+            (_autoLink.hasMatch(inner) || _htmlTag.hasMatch(inner))) {
           flush();
           if (_autoLink.hasMatch(inner)) {
             _write(_urlOf(inner), flags.add(link: true));
@@ -1007,6 +1043,12 @@ final _autoLink = RegExp(r'^(https?://\S+|mailto:\S+|\S+@\S+\.\S+)$');
 
 final _lineBreakTag = RegExp(r'^/?br\s*/?$', caseSensitive: false);
 
+/// What goes between `<` and `>` in an HTML tag or comment: a name that
+/// starts with a letter, then attributes — never a bare space or an arrow.
+final _htmlTag = RegExp(
+  r'^(?:/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?/?|!--[^]*--)$',
+);
+
 String _urlOf(String inner) {
   final text = inner.trim();
   return text.startsWith('mailto:') ? text.substring(7) : text;
@@ -1028,7 +1070,14 @@ String unescapeMarkdownText(String text) {
   return result.replaceAllMapped(RegExp(r'&#(x?)([0-9a-fA-F]+);'), (match) {
     final radix = match.group(1)!.isEmpty ? 10 : 16;
     final code = int.tryParse(match.group(2)!, radix: radix);
-    return code == null ? match.group(0)! : String.fromCharCode(code);
+    // Only a real character: past U+10FFFF, a lone surrogate or NUL there is
+    // nothing to print, and asking for one would throw.
+    final valid =
+        code != null &&
+        code > 0 &&
+        code <= 0x10FFFF &&
+        (code < 0xD800 || code > 0xDFFF);
+    return valid ? String.fromCharCode(code) : match.group(0)!;
   });
 }
 

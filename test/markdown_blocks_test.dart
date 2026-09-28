@@ -77,6 +77,37 @@ Fruits:
       expect(blocks[4].indent, 2);
     });
 
+    test('a blank line inside a list keeps its nesting', () {
+      final blocks = parseMarkdownBlocks('''
+- citrus
+
+  - lemon
+
+  - lime
+
+- plum
+''');
+      expect(_shape(blocks), ['• citrus', 'i1 • lemon', 'i1 • lime', '• plum']);
+    });
+
+    test('an indented paragraph after a blank line stays with its item', () {
+      final blocks = parseMarkdownBlocks('''
+- first item
+
+  more about the first item
+
+- second item
+
+Back to prose.
+''');
+      expect(_shape(blocks), [
+        '• first item',
+        'i1 more about the first item',
+        '• second item',
+        'Back to prose.',
+      ]);
+    });
+
     test('an item continues over its own wrapped lines', () {
       final blocks = parseMarkdownBlocks('- first part\n  second part');
       expect(blocks.single.text, '• first part second part');
@@ -259,6 +290,31 @@ After
       expect(
         parseMarkdownBlocks('Text <b>rich</b> and <br> plain').single.text,
         'Text rich and\nplain',
+      );
+    });
+
+    test('a comparison is prose, not a tag', () {
+      // Only something shaped like a tag is dropped as one — text between a
+      // "less than" and a "greater than" is still the sentence.
+      expect(
+        parseMarkdownBlocks('if a < b and c > d then').single.text,
+        'if a < b and c > d then',
+      );
+      expect(parseMarkdownBlocks('x <- y -> z').single.text, 'x <- y -> z');
+      expect(
+        parseMarkdownBlocks(
+          'keep <span class="x">this</span> text',
+        ).single.text,
+        'keep this text',
+      );
+    });
+
+    test('a reference to no character is left as written', () {
+      // Past U+10FFFF there is no character to turn it into, and asking for
+      // one would throw — and take the whole file down with it.
+      expect(
+        parseMarkdownBlocks('bad &#99999999; and &#x110000; ok').single.text,
+        'bad &#99999999; and &#x110000; ok',
       );
     });
 
