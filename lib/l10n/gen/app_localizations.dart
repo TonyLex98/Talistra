@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyLibrarySubtitle.
   ///
   /// In ru, this message translates to:
-  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD или XLSX — Talistra сама выберет подходящий режим чтения.'**
+  /// **'Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD, HTML, XML, XLSX или картинку — Talistra сама выберет подходящий режим чтения.'**
   String get emptyLibrarySubtitle;
 
   /// No description provided for @importingLabel.

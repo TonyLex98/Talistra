@@ -56,6 +56,11 @@
                 <data android:mimeType="application/xml"/>
                 <data android:mimeType="text/html"/>
                 <data android:mimeType="application/xhtml+xml"/>
+                <data android:mimeType="image/jpeg"/>
+                <data android:mimeType="image/png"/>
+                <data android:mimeType="image/webp"/>
+                <data android:mimeType="image/gif"/>
+                <data android:mimeType="image/bmp"/>
             </intent-filter>
 
             <!-- Many file managers hand documents over with a generic MIME
@@ -83,6 +88,12 @@
                 <data android:pathPattern=".*\\.djv"/>
                 <data android:pathPattern=".*\\.xlsx"/>
                 <data android:pathPattern=".*\\.xls"/>
+                <data android:pathPattern=".*\\.jpg"/>
+                <data android:pathPattern=".*\\.jpeg"/>
+                <data android:pathPattern=".*\\.png"/>
+                <data android:pathPattern=".*\\.webp"/>
+                <data android:pathPattern=".*\\.gif"/>
+                <data android:pathPattern=".*\\.bmp"/>
             </intent-filter>
 
             <!-- Share sheet: "Share > Talistra". -->
@@ -99,6 +110,11 @@
                 <data android:mimeType="image/vnd.djvu"/>
                 <data android:mimeType="image/x-djvu"/>
                 <data android:mimeType="application/x-djvu"/>
+                <data android:mimeType="image/jpeg"/>
+                <data android:mimeType="image/png"/>
+                <data android:mimeType="image/webp"/>
+                <data android:mimeType="image/gif"/>
+                <data android:mimeType="image/bmp"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

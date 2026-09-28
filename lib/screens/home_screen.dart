@@ -16,6 +16,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/djvu_service.dart';
 import '../services/annotation_service.dart';
+import '../services/image_document.dart';
 import '../services/incoming_file_service.dart';
 import '../services/library_service.dart';
 import '../services/ocr_service.dart';
@@ -185,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final String format;
       if (detected != null &&
           (supportedBookFormats.contains(detected) ||
+              supportedImageFormats.contains(detected) ||
               supportedArchiveFormats.contains(detected))) {
         format = detected;
       } else {
@@ -206,6 +208,18 @@ class _HomeScreenState extends State<HomeScreen> {
         if (document != null && mounted) {
           _openDocument(document.id, replaceReaderStack: replaceReaderStack);
         }
+        return;
+      }
+      if (supportedImageFormats.contains(format)) {
+        // A picture opens as a book of one page (see image_document.dart).
+        final bytes = await File(path).readAsBytes();
+        final document = await library.importBytes(
+          bytes: await imageToPdf(bytes),
+          title: title,
+          sourceFingerprint: 'image_${p.basename(fileName)}_${bytes.length}',
+        );
+        if (!mounted) return;
+        _openDocument(document.id, replaceReaderStack: replaceReaderStack);
         return;
       }
       if (format == 'djvu') {
@@ -333,6 +347,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final format = detectDocumentFormatBytes(bytes, fileName: file.name);
       if (format != null && supportedBookFormats.contains(format)) {
         books.add(_ArchivedBook(file.name, format, bytes));
+      } else if (format != null && supportedImageFormats.contains(format)) {
+        books.add(_ArchivedBook(file.name, format, bytes));
       }
     }
     if (books.isEmpty) {
@@ -343,14 +359,27 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       return null;
     }
+    // A ZIP of nothing but pictures — scans, a comic — is one book of them,
+    // a page each, in the order their names count.
+    if (books.length > 1 &&
+        books.every((book) => supportedImageFormats.contains(book.format))) {
+      books.sort((a, b) => compareNaturally(a.name, b.name));
+      return library.importBytes(
+        bytes: await imagesToPdf([for (final book in books) book.bytes]),
+        title: p.basenameWithoutExtension(archiveName),
+        sourceFingerprint:
+            'zip_images_${p.basename(path)}_${books.length}_$expandedBytes',
+      );
+    }
     final picked = books.length == 1
         ? books.single
         : await _pickArchiveBook(books);
     if (picked == null) return null;
+    final isImage = supportedImageFormats.contains(picked.format);
     final document = await library.importBytes(
-      bytes: picked.bytes,
+      bytes: isImage ? await imageToPdf(picked.bytes) : picked.bytes,
       title: p.basenameWithoutExtension(picked.name),
-      format: picked.format,
+      format: isImage ? 'pdf' : picked.format,
       sourceFingerprint:
           'zip_${p.basename(path)}_${picked.name}_${picked.bytes.length}',
     );

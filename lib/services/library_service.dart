@@ -199,6 +199,15 @@ class LibraryService extends ChangeNotifier {
     String format = 'pdf',
     String? sourceFingerprint,
   }) async {
+    // The same file picked again opens what it became the first time.
+    if (sourceFingerprint != null) {
+      for (final existing in _documents) {
+        if (existing.sourceFingerprint == sourceFingerprint &&
+            await File(existing.filePath).exists()) {
+          return existing;
+        }
+      }
+    }
     final docsDir = await getApplicationDocumentsDirectory();
     final pdfsDir = Directory(p.join(docsDir.path, 'pdfs'));
     if (!await pdfsDir.exists()) await pdfsDir.create(recursive: true);

@@ -3,7 +3,7 @@
 
   "settingsTooltip": "Настройки",
   "emptyLibraryTitle": "Ваша библиотека пуста",
-  "emptyLibrarySubtitle": "Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD или XLSX — Talistra сама выберет подходящий режим чтения.",
+  "emptyLibrarySubtitle": "Добавьте PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD, HTML, XML, XLSX или картинку — Talistra сама выберет подходящий режим чтения.",
   "importingLabel": "Добавление...",
   "addPdfLabel": "Добавить книгу",
   "archiveChooseBook": "Выберите книгу из архива",

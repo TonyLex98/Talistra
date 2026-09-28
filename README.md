@@ -9,8 +9,9 @@ Google ML Kit's on-device models. No account, no advertising.
 | Format | Reader |
 | --- | --- |
 | PDF | the original pages (zoom, scroll, marked text across pages) or a reflowed, paginated text view; password-protected PDFs are unlocked once on import |
-| DjVu | the scanned pages, or the text layer reflowed |
-| FB2, FB2.ZIP, EPUB, DOCX, RTF, TXT, Markdown | paginated text in the reader's own font, with the book's headings, emphasis, verse, quotes, lists and pictures |
+| DjVu | the scanned pages, or the text layer reflowed (read off the scan by OCR where the file has none) |
+| FB2, FB2.ZIP, EPUB, DOCX, RTF, TXT, Markdown, HTML, XML | paginated text in the reader's own font, with the book's headings, emphasis, verse, quotes, lists, tables and pictures |
+| JPEG, PNG, WebP, GIF, BMP | a book of one page: zoom, and its text read off it by OCR in the compact view |
 | XLSX, XLS | the sheet grid, or a paginated compact view |
 | ZIP | any of the above, picked from inside it |
 

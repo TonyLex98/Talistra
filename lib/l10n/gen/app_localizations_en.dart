@@ -16,7 +16,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyLibrarySubtitle =>
-      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD or XLSX — Talistra will open it in the right reading mode.';
+      'Add PDF, DjVu, EPUB, FB2, DOCX, RTF, TXT, MD, HTML, XML, XLSX or a picture — Talistra will open it in the right reading mode.';
 
   @override
   String get importingLabel => 'Adding...';

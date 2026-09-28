@@ -27,6 +27,38 @@ const supportedBookFormats = {
 
 const supportedArchiveFormats = {'zip'};
 
+/// The image formats a picture is recognised in, by their signatures.
+const supportedImageFormats = {'jpg', 'png', 'webp', 'gif', 'bmp'};
+
+/// The image format [bytes] start with, or null for anything else.
+String? detectImageFormat(Uint8List bytes) {
+  bool startsWith(List<int> signature, [int at = 0]) {
+    if (bytes.length < at + signature.length) return false;
+    for (var i = 0; i < signature.length; i++) {
+      if (bytes[at + i] != signature[i]) return false;
+    }
+    return true;
+  }
+
+  if (startsWith([0xFF, 0xD8, 0xFF])) return 'jpg';
+  if (startsWith([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) {
+    return 'png';
+  }
+  if (startsWith('RIFF'.codeUnits) && startsWith('WEBP'.codeUnits, 8)) {
+    return 'webp';
+  }
+  if (startsWith('GIF87a'.codeUnits) || startsWith('GIF89a'.codeUnits)) {
+    return 'gif';
+  }
+  if (startsWith('BM'.codeUnits) && bytes.length > 26) {
+    // "BM" alone starts plenty of text; a bitmap's header says how big its
+    // info header is, and only a handful of sizes exist.
+    final info = ByteData.sublistView(bytes).getUint32(14, Endian.little);
+    if (const {12, 40, 52, 56, 64, 108, 124}.contains(info)) return 'bmp';
+  }
+  return null;
+}
+
 Future<String?> detectDocumentFormat(
   String path, {
   required String fileName,
@@ -80,6 +112,7 @@ String? detectDocumentFormatBytes(Uint8List bytes, {required String fileName}) {
     return 'djvu';
   }
   if (ascii.startsWith(r'{\rtf')) return 'rtf';
+  if (detectImageFormat(probe) case final image?) return image;
 
   // Legacy .xls is an OLE2/Compound File Binary container, not a ZIP —
   // its signature is this fixed 8-byte header regardless of content.
