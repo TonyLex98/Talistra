@@ -22,8 +22,19 @@ class SearchIndexCache {
 
   static Future<SearchIndexCache> open() async {
     final base = await getApplicationSupportDirectory();
-    final dir = Directory(p.join(base.path, 'search_index_v1'));
+    // v2: the page text is now repaired (or dropped) where a font garbled
+    // it, and read in the page's shown orientation — an index built before
+    // that holds text the reader no longer shows, so it is built again.
+    final dir = Directory(p.join(base.path, 'search_index_v2'));
     if (!await dir.exists()) await dir.create(recursive: true);
+    final old = Directory(p.join(base.path, 'search_index_v1'));
+    if (await old.exists()) {
+      try {
+        await old.delete(recursive: true);
+      } catch (_) {
+        // Stale files only cost space.
+      }
+    }
     return SearchIndexCache._(dir);
   }
 

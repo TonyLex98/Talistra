@@ -5,6 +5,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'page_lines.dart';
 import 'text_join.dart';
 import 'page_rotation.dart';
+import 'text_repair.dart';
 
 /// A word found under a tap, with its PDF-space bounds (page-local points).
 class WordHit {
@@ -317,13 +318,16 @@ _matchSentence(String text, String word, {int? hintOffset}) {
 /// Extracts the text lines for a page; cache the result per page to avoid
 /// re-parsing the content stream on every tap.
 /// A page's text lines, in the orientation the page is shown in (see
-/// `page_rotation.dart`).
+/// `page_rotation.dart`), repaired or dropped when their fonts garbled them
+/// (see `text_repair.dart`).
 List<TextLine> extractPageLines(PdfDocument document, int pageIndex) {
-  return linesAsDisplayed(
-    document.pages[pageIndex],
-    PdfTextExtractor(
-      document,
-    ).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex),
+  return repairPageLines(
+    linesAsDisplayed(
+      document.pages[pageIndex],
+      PdfTextExtractor(
+        document,
+      ).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex),
+    ),
   );
 }
 
