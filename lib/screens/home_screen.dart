@@ -4,23 +4,26 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/djvu_service.dart';
-import '../services/incoming_file_service.dart';
 import '../services/annotation_service.dart';
+import '../services/incoming_file_service.dart';
 import '../services/library_service.dart';
 import '../services/page_image_cache.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
 import '../utils/document_format.dart';
+import '../utils/pdf_unlock.dart';
 import '../widgets/document_tile.dart';
 import '../widgets/model_suggestion_card.dart';
 import 'djvu_reader_screen.dart';
@@ -208,8 +211,15 @@ class _HomeScreenState extends State<HomeScreen> {
         final validation = await DjvuDocument.open(path);
         await validation.close();
       }
+      var source = path;
+      if (format == 'pdf') {
+        final unlocked = await _unlockPdfIfNeeded(path, fileName);
+        // The reader closed the password dialog: nothing to add.
+        if (unlocked == null) return;
+        source = unlocked;
+      }
       final document = format == 'pdf'
-          ? await library.importPdf(sourcePath: path, title: title)
+          ? await library.importPdf(sourcePath: source, title: title)
           : await library.importText(
               sourcePath: path,
               title: title,
@@ -233,6 +243,30 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       if (mounted) setState(() => _importing = false);
     }
+  }
+
+  /// The PDF at [path], or — when it needs a password — an unlocked copy of it
+  /// once the reader has given the password (see `pdf_unlock.dart`). Null when
+  /// they gave up.
+  Future<String?> _unlockPdfIfNeeded(String path, String fileName) async {
+    // Read in the isolate itself: a big PDF isn't worth copying across.
+    final lock = await compute(_pdfLockOfFile, path);
+    if (lock == PdfLock.open) return path;
+    if (!mounted) return null;
+    setState(() => _importing = false);
+    final unlocked = await showDialog<Uint8List>(
+      context: context,
+      builder: (_) => _PdfPasswordDialog(path: path),
+    );
+    if (unlocked == null || !mounted) return null;
+    setState(() => _importing = true);
+    final folder = Directory(
+      p.join((await getTemporaryDirectory()).path, 'unlocked'),
+    );
+    await folder.create(recursive: true);
+    final copy = File(p.join(folder.path, p.basename(fileName)));
+    await copy.writeAsBytes(unlocked, flush: true);
+    return copy.path;
   }
 
   /// Offers a file nothing else could read to be opened as a plain-text
@@ -530,4 +564,94 @@ class _ArchivedBook {
 
 class _UnsupportedDocumentException implements Exception {
   const _UnsupportedDocumentException();
+}
+
+PdfLock _pdfLockOfFile(String path) => pdfLockOf(File(path).readAsBytesSync());
+
+Uint8List? _unlockPdfFile(({String path, String password}) request) =>
+    unlockPdf(File(request.path).readAsBytesSync(), request.password);
+
+/// Asks for a PDF's password, checking it before closing: resolves to the
+/// unlocked bytes, or null when the reader cancels.
+class _PdfPasswordDialog extends StatefulWidget {
+  const _PdfPasswordDialog({required this.path});
+
+  final String path;
+
+  @override
+  State<_PdfPasswordDialog> createState() => _PdfPasswordDialogState();
+}
+
+class _PdfPasswordDialogState extends State<_PdfPasswordDialog> {
+  final _controller = TextEditingController();
+  bool _checking = false;
+  bool _wrong = false;
+  bool _obscured = true;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_checking) return;
+    setState(() {
+      _checking = true;
+      _wrong = false;
+    });
+    final unlocked = await compute(_unlockPdfFile, (
+      path: widget.path,
+      password: _controller.text,
+    ));
+    if (!mounted) return;
+    if (unlocked != null) {
+      Navigator.of(context).pop(unlocked);
+      return;
+    }
+    setState(() {
+      _checking = false;
+      _wrong = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(l10n.pdfPasswordTitle),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        obscureText: _obscured,
+        enabled: !_checking,
+        onSubmitted: (_) => _submit(),
+        decoration: InputDecoration(
+          labelText: l10n.pdfPasswordHint,
+          errorText: _wrong ? l10n.pdfPasswordWrong : null,
+          suffixIcon: IconButton(
+            icon: Icon(_obscured ? Icons.visibility : Icons.visibility_off),
+            tooltip: l10n.pdfPasswordHint,
+            onPressed: () => setState(() => _obscured = !_obscured),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _checking ? null : () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: _checking ? null : _submit,
+          child: _checking
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(l10n.open),
+        ),
+      ],
+    );
+  }
 }
