@@ -53,6 +53,7 @@ dependencies:
   # OLE2/BIFF parsers (package:.../src imports) to reach number formats, so
   # its internals must not drift even within a major version.
   excel2003: 1.0.0
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:

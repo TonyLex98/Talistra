@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/library_service.dart';
+import '../services/read_aloud.dart';
 import '../services/reading_display_service.dart';
 import '../services/settings_service.dart';
 import '../services/statistics_service.dart';
@@ -57,6 +59,13 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
 
   /// The book's chapters, read off its headings once it has loaded.
   List<TocEntry> _contents = const [];
+
+  /// The voice reading the book out, made the first time it is asked for.
+  ReadAloud? _readAloud;
+
+  /// A speech engine for tests to put in place of the device's own.
+  @visibleForTesting
+  static SpeechEngine Function() speechEngine = DeviceSpeechEngine.new;
   double _fontSize = 17;
   bool _searchOpen = false;
 
@@ -137,6 +146,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
 
   @override
   void dispose() {
+    _readAloud?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_readingDisplay.exit());
     _flushDwellTime();
@@ -238,6 +248,12 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
         onSelected: _openContents,
       ),
     if (_pages.isNotEmpty)
+      ReaderMenuAction(
+        icon: _isReadingAloud ? Icons.stop_circle_outlined : Icons.volume_up,
+        label: _isReadingAloud ? l10n.stopReadingAction : l10n.readAloudAction,
+        onSelected: _isReadingAloud ? _stopReadingAloud : _startReadingAloud,
+      ),
+    if (_pages.isNotEmpty)
       ...annotationMenuActions(
         context,
         documentId: widget.documentId,
@@ -245,6 +261,47 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
         goTo: _goTo,
       ),
   ];
+
+  bool get _isReadingAloud => _readAloud?.isReading ?? false;
+
+  /// Reads the book out from the page on screen, the sentence being spoken
+  /// washed over and the pages turning to follow it.
+  Future<void> _startReadingAloud() async {
+    final settings = context.read<SettingsService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context);
+    final readAloud = _readAloud ??= ReadAloud(speechEngine())
+      ..addListener(_onReadAloudChanged);
+    final started = await readAloud.start(
+      languageCode: settings.sourceLanguage.bcpCode,
+      fromPage: _currentPage,
+      pageCount: _pages.length,
+      blocksOf: (page) => _pages[page - 1],
+      onSentence: (page, sentence) {
+        if (!mounted) return;
+        _pageViewKey.currentState?.showSearchHighlight(
+          page,
+          sentence.blockIndex,
+          sentence.start,
+          sentence.end,
+        );
+        _updateCurrentPage(page);
+      },
+      onFinished: () => _pageViewKey.currentState?.clearSearchHighlight(),
+    );
+    if (!started) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.ttsUnavailable)));
+    }
+  }
+
+  Future<void> _stopReadingAloud() async {
+    await _readAloud?.stop();
+    _pageViewKey.currentState?.clearSearchHighlight();
+  }
+
+  void _onReadAloudChanged() {
+    if (mounted) setState(() {});
+  }
 
   Future<void> _openContents() async {
     final page = await showContentsSheet(
@@ -315,6 +372,16 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
             ),
           ),
           _buildFloatingBar(l10n, settings, scheme),
+          if (_isReadingAloud)
+            Positioned(
+              right: 16,
+              bottom: 16 + MediaQuery.paddingOf(context).bottom,
+              child: FloatingActionButton.small(
+                tooltip: l10n.stopReadingAction,
+                onPressed: _stopReadingAloud,
+                child: const Icon(Icons.stop),
+              ),
+            ),
         ],
       ),
     );
