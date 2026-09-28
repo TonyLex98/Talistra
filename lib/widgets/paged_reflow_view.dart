@@ -3,6 +3,16 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/rendering.dart'
+    show
+        ClearSelectionEvent,
+        RenderParagraph,
+        SelectionEdgeUpdateEvent,
+        SelectionHandler,
+        SelectionRegistrar,
+        SelectionStatus,
+        TextGranularity;
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 
@@ -143,6 +153,30 @@ class PagedReflowViewState extends State<PagedReflowView>
   final GlobalKey<ReadingSelectionAreaState> _selectionKey =
       GlobalKey<ReadingSelectionAreaState>();
 
+  // A mark carried across pages. The system's selection only knows the page
+  // on screen, so a reader who drags a mark to the edge of the page has the
+  // page turned under their finger (see [_onGlobalPointer]) and the mark goes
+  // on from where the page begins; [_markAnchor] is where it was started, on
+  // whichever page that was, and [_markFixed] where it stands in for that on
+  // the page now on screen.
+  _TextPos? _markAnchor;
+  _TextPos? _markFixed;
+
+  /// What each paragraph (or table cell) of the page on screen has marked,
+  /// keyed by where its text starts — see [_listen].
+  final Map<String, _SliceMark> _marks = {};
+  bool _listening = false;
+
+  /// The selection region's own registrar and status, read from inside it.
+  SelectionRegistrar? _selectionRegistrar;
+  ValueListenable<SelectableRegionSelectionStatus>? _selectionStatus;
+
+  final GlobalKey _pageAreaKey = GlobalKey();
+  Offset? _pointer;
+  int _pointersDown = 0;
+  Timer? _edgeTimer;
+  int _edgeDirection = 0;
+
   // The search hit the reader is looking at — page, block and the [start,
   // end) range inside the block — and every other hit on that page, keyed by
   // block, washed over fainter.
@@ -174,6 +208,7 @@ class PagedReflowViewState extends State<PagedReflowView>
           ..addListener(_onSettleTick)
           ..addStatusListener(_onSettleStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleTranslation());
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointer);
   }
 
   @override
@@ -201,6 +236,11 @@ class PagedReflowViewState extends State<PagedReflowView>
     }
     _translateDebounce?.cancel();
     _turnController.dispose();
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointer);
+    _edgeTimer?.cancel();
+    for (final mark in _marks.values) {
+      mark.notifier.dispose();
+    }
     super.dispose();
   }
 
@@ -619,7 +659,307 @@ class PagedReflowViewState extends State<PagedReflowView>
     _selectedWordEnd = null;
     _selectedWord = null;
     _selectedSentence = null;
+    _markAnchor = null;
+    _markFixed = null;
     _selectionKey.currentState?.clearSelection();
+  }
+
+  // ---------------------------------------------------------------------
+  // A mark dragged on past the page.
+  // ---------------------------------------------------------------------
+
+  /// How long a finger marking text has to rest by an edge of the page for
+  /// the page to turn under it.
+  static const _edgeDwell = Duration(milliseconds: 550);
+
+  /// [child] (the text of [blockIndex] from [start] to [end] on [pageIndex])
+  /// reporting what of it is marked, when it is on the page being read.
+  Widget _listen(
+    int pageIndex,
+    int blockIndex,
+    int start,
+    int end,
+    Widget child,
+  ) {
+    if (!_listening) return child;
+    final key = '$pageIndex:$blockIndex:$start';
+    final mark = _marks.putIfAbsent(
+      key,
+      () => _SliceMark(
+        notifier: SelectionListenerNotifier(),
+        key: GlobalKey(),
+        page: pageIndex,
+        block: blockIndex,
+        start: start,
+        end: end,
+      ),
+    );
+    return KeyedSubtree(
+      key: mark.key,
+      child: SelectionListener(selectionNotifier: mark.notifier, child: child),
+    );
+  }
+
+  /// The marks of the page on screen, in reading order.
+  List<_SliceMark> _visibleMarks() {
+    final marks = [
+      for (final mark in _marks.values)
+        if (mark.page == _pageIndex &&
+            mark.notifier.registered &&
+            mark.key.currentContext != null)
+          mark,
+    ]..sort((a, b) => a.pos(a.start).compareTo(b.pos(b.start)));
+    return marks;
+  }
+
+  /// Forgets what the paragraphs of pages no longer on screen reported.
+  void _dropStaleMarks() {
+    _marks.removeWhere((_, mark) {
+      if (mark.page == _pageIndex && mark.key.currentContext != null) {
+        return false;
+      }
+      mark.notifier.dispose();
+      return true;
+    });
+  }
+
+  /// The part of the page on screen that is marked, in the page's own terms.
+  ({_TextPos start, _TextPos end})? _visibleMark() {
+    _TextPos? start;
+    _TextPos? end;
+    for (final mark in _visibleMarks()) {
+      final details = mark.notifier.selection;
+      final range = details.range;
+      if (details.status != SelectionStatus.uncollapsed || range == null) {
+        continue;
+      }
+      final from = mark.pos(
+        mark.start + math.min(range.startOffset, range.endOffset),
+      );
+      final to = mark.pos(
+        mark.start + math.max(range.startOffset, range.endOffset),
+      );
+      if (start == null || from.compareTo(start) < 0) start = from;
+      if (end == null || to.compareTo(end) > 0) end = to;
+    }
+    if (start == null || end == null) return null;
+    return (start: start, end: end);
+  }
+
+  /// The text of a mark that runs past the page on screen, from wherever it
+  /// was started to wherever it has been dragged — or null for a mark that
+  /// is all on this page, which the selection region reads for itself.
+  String? _carriedMarkText() {
+    final anchor = _markAnchor;
+    final fixed = _markFixed;
+    if (anchor == null || fixed == null) return null;
+    final visible = _visibleMark();
+    // A mark that no longer reaches the place standing in for its start is a
+    // new one, made on this page.
+    if (visible == null ||
+        visible.start.compareTo(fixed) > 0 ||
+        visible.end.compareTo(fixed) < 0) {
+      _markAnchor = null;
+      _markFixed = null;
+      return null;
+    }
+    final start = anchor.compareTo(visible.start) < 0 ? anchor : visible.start;
+    final end = anchor.compareTo(visible.end) > 0 ? anchor : visible.end;
+    return _textBetween(start, end);
+  }
+
+  /// The book's text from [from] to [to], a blank line between blocks.
+  String _textBetween(_TextPos from, _TextPos to) {
+    final parts = <String>[];
+    for (var page = from.page; page <= to.page; page++) {
+      final blocks = widget.source.blocksFor(page);
+      final first = page == from.page ? from.block : 0;
+      final last = page == to.page ? to.block : blocks.length - 1;
+      for (var i = first; i <= last && i < blocks.length; i++) {
+        final block = blocks[i];
+        if (block.isImage || block.isDivider) continue;
+        final text = block.text;
+        final start = page == from.page && i == from.block
+            ? from.offset.clamp(0, text.length)
+            : 0;
+        final end = page == to.page && i == to.block
+            ? to.offset.clamp(start, text.length)
+            : text.length;
+        final part = text.substring(start, end).trim();
+        if (part.isNotEmpty) parts.add(part);
+      }
+    }
+    return parts.join('\n\n');
+  }
+
+  @visibleForTesting
+  String? get carriedSelectionText => _carriedMarkText();
+
+  void _onGlobalPointer(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      _pointersDown++;
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _pointersDown = math.max(0, _pointersDown - 1);
+    }
+    if (_pointersDown != 1 || event is PointerUpEvent) {
+      _pointer = null;
+      _stopEdgeTimer();
+      return;
+    }
+    _pointer = event.position;
+    final direction = _edgeDirectionAt(event.position);
+    if (direction == 0 || !_markBeingDragged) {
+      _stopEdgeTimer();
+      return;
+    }
+    if (_edgeTimer != null && direction == _edgeDirection) return;
+    _stopEdgeTimer();
+    _edgeDirection = direction;
+    _edgeTimer = Timer(_edgeDwell, _onEdgeDwell);
+  }
+
+  void _stopEdgeTimer() {
+    _edgeTimer?.cancel();
+    _edgeTimer = null;
+    _edgeDirection = 0;
+  }
+
+  /// Whether the reader is dragging a mark (or one of its handles) right now.
+  bool get _markBeingDragged =>
+      _selectionStatus?.value == SelectableRegionSelectionStatus.changing;
+
+  /// +1 when [position] is at the page's end — its right edge, or the
+  /// bottom below the text — -1 at its start, 0 anywhere else.
+  int _edgeDirectionAt(Offset position) {
+    final box = _pageAreaKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return 0;
+    final local = box.globalToLocal(position);
+    final size = box.size;
+    if (local.dx < -20 ||
+        local.dy < -20 ||
+        local.dx > size.width + 20 ||
+        local.dy > size.height + 20) {
+      return 0;
+    }
+    const side = 28.0;
+    final bottom = _footerHeight + _pagePadding.bottom + _cardInset + 6;
+    final top = _pagePadding.top + _cardInset;
+    if (local.dx > size.width - side || local.dy > size.height - bottom) {
+      return 1;
+    }
+    if (local.dx < side || local.dy < top) return -1;
+    return 0;
+  }
+
+  void _onEdgeDwell() {
+    final direction = _edgeDirection;
+    _edgeTimer = null;
+    if (!mounted || !_markBeingDragged || _pointer == null) return;
+    final contentSize = _lastContentSize;
+    if (contentSize.isEmpty || _turnController.isAnimating) return;
+    final target = _neighbour(direction, contentSize);
+    if (target == null) return;
+    final visible = _visibleMark();
+    if (visible == null && _markAnchor == null) return;
+    // Where the mark was started: the end the finger isn't dragging.
+    _markAnchor ??= direction > 0 ? visible!.start : visible!.end;
+    final pageChanged = target.page != _pageIndex;
+    setState(() {
+      _pageIndex = target.page;
+      _subPageIndex = target.subPage;
+      _selectedBlockIndex = null;
+      _selectedWordStart = null;
+      _selectedWordEnd = null;
+    });
+    if (pageChanged) widget.onPageChanged(_pageIndex + 1);
+    // Two frames on: the first lays the new page out, and the selection
+    // region takes in its paragraphs at the end of it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _dropStaleMarks();
+        _continueMark(direction);
+      });
+      WidgetsBinding.instance.scheduleFrame();
+      // Resting there longer turns the next page too.
+      if (_pointer != null && _edgeDirectionAt(_pointer!) == direction) {
+        _edgeDirection = direction;
+        _edgeTimer = Timer(_edgeDwell, _onEdgeDwell);
+      }
+    });
+  }
+
+  /// Marks the page just turned to from where the mark comes into it — its
+  /// start going forward, its end going back, or the mark's own start if
+  /// that is on it — to the finger.
+  void _continueMark(int direction) {
+    final registrar = _selectionRegistrar;
+    final pointer = _pointer;
+    final anchor = _markAnchor;
+    if (registrar is! SelectionHandler || pointer == null || anchor == null) {
+      return;
+    }
+    final handler = registrar as SelectionHandler;
+    final marks = _visibleMarks();
+    if (marks.isEmpty) return;
+    final pageStart = marks.first.pos(marks.first.start);
+    final pageEnd = marks.last.pos(marks.last.end);
+    final fixed = anchor.compareTo(pageStart) < 0
+        ? pageStart
+        : anchor.compareTo(pageEnd) > 0
+        ? pageEnd
+        : anchor;
+    final point = _globalPointOf(fixed, marks);
+    if (point == null) return;
+    _markFixed = fixed;
+    handler.dispatchSelectionEvent(const ClearSelectionEvent());
+    handler.dispatchSelectionEvent(
+      SelectionEdgeUpdateEvent.forStart(globalPosition: point),
+    );
+    handler.dispatchSelectionEvent(
+      SelectionEdgeUpdateEvent.forEnd(
+        globalPosition: pointer,
+        granularity: TextGranularity.word,
+      ),
+    );
+  }
+
+  /// Where on screen character [pos] of the page on screen is drawn: the
+  /// middle of its line, at its left edge.
+  Offset? _globalPointOf(_TextPos pos, List<_SliceMark> marks) {
+    for (final mark in marks) {
+      if (mark.block != pos.block ||
+          pos.offset < mark.start ||
+          pos.offset > mark.end) {
+        continue;
+      }
+      final paragraph = _paragraphIn(mark.key.currentContext);
+      if (paragraph == null || !paragraph.hasSize) return null;
+      final position = TextPosition(offset: pos.offset - mark.start);
+      final caret = paragraph.getOffsetForCaret(position, Rect.zero);
+      final height = paragraph.getFullHeightForCaret(position);
+      // A hair inside the character, so the edge lands before it rather than
+      // after the one it follows.
+      return paragraph.localToGlobal(caret + Offset(1, height / 2));
+    }
+    return null;
+  }
+
+  static RenderParagraph? _paragraphIn(BuildContext? context) {
+    RenderParagraph? found;
+    void visit(RenderObject object) {
+      if (found != null) return;
+      if (object is RenderParagraph) {
+        found = object;
+        return;
+      }
+      object.visitChildren(visit);
+    }
+
+    final root = context?.findRenderObject();
+    if (root != null) visit(root);
+    return found;
   }
 
   /// The reader marked a passage and asked what it says. The card answers
@@ -766,7 +1106,18 @@ class PagedReflowViewState extends State<PagedReflowView>
             onNoteSelection: widget.onNoteSelection,
             allText: () =>
                 reflowBlocksText(widget.source.blocksFor(_pageIndex)),
-            child: _buildTurnableArea(constraints, contentSize, sideMargin),
+            markedText: _carriedMarkText,
+            child: Builder(
+              builder: (inside) {
+                _selectionRegistrar = inside
+                    .getInheritedWidgetOfExactType<SelectionRegistrarScope>()
+                    ?.registrar;
+                _selectionStatus = SelectableRegionSelectionStatusScope.maybeOf(
+                  inside,
+                );
+                return _buildTurnableArea(constraints, contentSize, sideMargin);
+              },
+            ),
           );
           if (!widget.syncTranslationExperimental) return reader;
           return Column(
@@ -834,6 +1185,7 @@ class PagedReflowViewState extends State<PagedReflowView>
             ),
       },
       child: ClipRect(
+        key: _pageAreaKey,
         child: Stack(
           children: [
             // Both cards move by exactly the same amount, so they travel as
@@ -927,6 +1279,27 @@ class PagedReflowViewState extends State<PagedReflowView>
       fontSize: 11,
       color: widget.readingTheme.onBackground.withValues(alpha: 0.45),
     );
+    // Only the page being read reports what is marked on it (see
+    // [_marks]); the one being pulled in behind it during a turn doesn't.
+    final listening = _listening;
+    _listening =
+        pageIndex == _pageIndex &&
+        index == _subPageIndex.clamp(0, subPages.length - 1);
+    final List<Widget> sliceWidgets;
+    try {
+      sliceWidgets = [
+        for (var i = 0; i < slices.length; i++)
+          _buildSlice(
+            pageIndex,
+            blocks,
+            slices[i],
+            contentSize,
+            isFirst: i == 0,
+          ),
+      ];
+    } finally {
+      _listening = listening;
+    }
 
     return Stack(
       children: [
@@ -951,16 +1324,7 @@ class PagedReflowViewState extends State<PagedReflowView>
                         )
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (var i = 0; i < slices.length; i++)
-                              _buildSlice(
-                                pageIndex,
-                                blocks,
-                                slices[i],
-                                contentSize,
-                                isFirst: i == 0,
-                              ),
-                          ],
+                          children: sliceWidgets,
                         ),
                 ),
                 SizedBox(
@@ -1159,25 +1523,32 @@ class PagedReflowViewState extends State<PagedReflowView>
     final isCurrentHit = onHitPage && blockIndex == _hlBlockIndex;
     final selectedHere =
         pageIndex == _pageIndex && blockIndex == _selectedBlockIndex;
-    return TranslatableText(
-      text: table.text,
-      start: cell.start,
-      end: cell.end,
-      settings: widget.settings,
-      fontSize: widget.fontSize,
-      readingTheme: widget.readingTheme,
-      translatorEnabled: widget.translatorEnabled,
-      style: style,
-      formatRuns: table.formatRuns,
-      selectedStart: selectedHere ? _selectedWordStart : null,
-      selectedEnd: selectedHere ? _selectedWordEnd : null,
-      highlight: isCurrentHit && _hlStart != null && _hlEnd != null
-          ? (start: _hlStart!, end: _hlEnd!)
-          : null,
-      otherHighlights: onHitPage
-          ? (_hlOthers[blockIndex] ?? const [])
-          : const [],
-      onWordTap: (start, end, word) => _onWordTap(blockIndex, start, end, word),
+    return _listen(
+      pageIndex,
+      blockIndex,
+      cell.start,
+      cell.end,
+      TranslatableText(
+        text: table.text,
+        start: cell.start,
+        end: cell.end,
+        settings: widget.settings,
+        fontSize: widget.fontSize,
+        readingTheme: widget.readingTheme,
+        translatorEnabled: widget.translatorEnabled,
+        style: style,
+        formatRuns: table.formatRuns,
+        selectedStart: selectedHere ? _selectedWordStart : null,
+        selectedEnd: selectedHere ? _selectedWordEnd : null,
+        highlight: isCurrentHit && _hlStart != null && _hlEnd != null
+            ? (start: _hlStart!, end: _hlEnd!)
+            : null,
+        otherHighlights: onHitPage
+            ? (_hlOthers[blockIndex] ?? const [])
+            : const [],
+        onWordTap: (start, end, word) =>
+            _onWordTap(blockIndex, start, end, word),
+      ),
     );
   }
 
@@ -1194,25 +1565,32 @@ class PagedReflowViewState extends State<PagedReflowView>
     while (end > slice.start && block.text.codeUnitAt(end - 1) == 0x0A) {
       end--;
     }
-    return TranslatableText(
-      text: block.text,
-      start: slice.start,
-      end: end,
-      settings: widget.settings,
-      fontSize: widget.fontSize,
-      readingTheme: widget.readingTheme,
-      translatorEnabled: widget.translatorEnabled,
-      style: _styleFor(block),
-      formatRuns: block.formatRuns,
-      selectedStart: selectedHere ? _selectedWordStart : null,
-      selectedEnd: selectedHere ? _selectedWordEnd : null,
-      highlight: isCurrentHit && _hlStart != null && _hlEnd != null
-          ? (start: _hlStart!, end: _hlEnd!)
-          : null,
-      otherHighlights: onHitPage
-          ? (_hlOthers[blockIndex] ?? const [])
-          : const [],
-      onWordTap: (start, end, word) => _onWordTap(blockIndex, start, end, word),
+    return _listen(
+      pageIndex,
+      blockIndex,
+      slice.start,
+      end,
+      TranslatableText(
+        text: block.text,
+        start: slice.start,
+        end: end,
+        settings: widget.settings,
+        fontSize: widget.fontSize,
+        readingTheme: widget.readingTheme,
+        translatorEnabled: widget.translatorEnabled,
+        style: _styleFor(block),
+        formatRuns: block.formatRuns,
+        selectedStart: selectedHere ? _selectedWordStart : null,
+        selectedEnd: selectedHere ? _selectedWordEnd : null,
+        highlight: isCurrentHit && _hlStart != null && _hlEnd != null
+            ? (start: _hlStart!, end: _hlEnd!)
+            : null,
+        otherHighlights: onHitPage
+            ? (_hlOthers[blockIndex] ?? const [])
+            : const [],
+        onWordTap: (start, end, word) =>
+            _onWordTap(blockIndex, start, end, word),
+      ),
     );
   }
 
@@ -1470,4 +1848,39 @@ class _TableRulesPainter extends CustomPainter {
       old.color != color ||
       old.columnWidths != columnWidths ||
       old.rowHeights.length != rowHeights.length;
+}
+
+/// A place in the book: character [offset] of block [block] on page [page].
+typedef _TextPos = ({int page, int block, int offset});
+
+extension on _TextPos {
+  int compareTo(_TextPos other) {
+    if (page != other.page) return page.compareTo(other.page);
+    if (block != other.block) return block.compareTo(other.block);
+    return offset.compareTo(other.offset);
+  }
+}
+
+/// One paragraph (or table cell) of the page on screen, and what of it is
+/// marked.
+class _SliceMark {
+  _SliceMark({
+    required this.notifier,
+    required this.key,
+    required this.page,
+    required this.block,
+    required this.start,
+    required this.end,
+  });
+
+  final SelectionListenerNotifier notifier;
+  final GlobalKey key;
+  final int page;
+  final int block;
+
+  /// The part of the block's text it shows.
+  final int start;
+  final int end;
+
+  _TextPos pos(int offset) => (page: page, block: block, offset: offset);
 }

@@ -24,8 +24,15 @@ class ReadingSelectionArea extends StatefulWidget {
     required this.onTranslateSelection,
     this.onNoteSelection,
     this.allText,
+    this.markedText,
     required this.child,
   });
+
+  /// The marked text as the reader's own model has it, when that knows more
+  /// than the selection region does — a mark dragged on over several pages,
+  /// of which the region only holds the one on screen. Null (or returning
+  /// null) leaves the region's own reading of it.
+  final String? Function()? markedText;
 
   /// Called with the marked text when the reader wants to keep it as a note.
   /// Without it the menu doesn't offer «Заметка».
@@ -89,7 +96,7 @@ class ReadingSelectionAreaState extends State<ReadingSelectionArea> {
     SelectableRegionState region,
     void Function(String? text) action,
   ) {
-    final text = _marked;
+    final text = widget.markedText?.call() ?? _marked;
     region.hideToolbar();
     region.clearSelection();
     clearMark();
