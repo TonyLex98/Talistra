@@ -194,6 +194,12 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   /// dropped so the pages re-render sharp (see [_pruneImageCache]).
   double _renderedZoomTier = _minZoom;
 
+  /// The part of the page on screen, rendered on its own at exactly the
+  /// zoom it is seen at — so zoomed-in text is as sharp as the screen can
+  /// show, not a whole-page bitmap blown up past the size a phone can hold.
+  /// Asked for once the view comes to rest at a zoom above 1.
+  ({int page, Rect pdfBounds, Uint8List bytes})? _detail;
+
   /// A cheap, low-resolution render of the same pages. Rasterizing a page
   /// at reading sharpness takes long enough to notice, so every page is
   /// asked for twice: this one first (a fraction of the pixels, so it lands
@@ -314,7 +320,55 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
   double get _maxDx => math.max(0.0, _viewportWidth - _viewportWidth / _zoom);
 
+  /// Renders the part of the page on screen at the zoom it is seen at (see
+  /// [_detail]), or drops the one there was when the view is back at 1x.
+  void _requestDetail() {
+    if (_zoom <= 1.01 || _pageHeights.isEmpty || _contentWidth <= 0) {
+      if (_detail != null) setState(() => _detail = null);
+      return;
+    }
+    final page = (_reportedPage - 1).clamp(0, _pageHeights.length - 1);
+    final size = widget.pageSizes[page];
+    if (size.width <= 0 || size.height <= 0) return;
+    final pageRect = Rect.fromLTWH(
+      _pageLeft,
+      _cumulativeY[page],
+      _contentWidth,
+      _pageHeights[page],
+    );
+    final visible = Rect.fromLTWH(
+      _scrollOffset.dx,
+      _scrollOffset.dy,
+      _viewportWidth / _zoom,
+      _viewportHeight / _zoom,
+    ).intersect(pageRect);
+    if (visible.width <= 0 || visible.height <= 0) return;
+    final pageScale = _contentWidth / size.width;
+    final pdfBounds = Rect.fromLTWH(
+      (visible.left - _pageLeft) / pageScale,
+      (visible.top - _cumulativeY[page]) / pageScale,
+      visible.width / pageScale,
+      visible.height / pageScale,
+    );
+    final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.0, 4.0);
+    final image = widget.renderer.renderRegion(
+      pageIndex: page,
+      pdfBounds: pdfBounds,
+      scale: pageScale * dpr * _zoom,
+    );
+    image.then((bytes) {
+      if (!mounted || bytes == null || bytes.isEmpty) return;
+      // Only if the view is still where it was asked for: a tile that lands
+      // after the reader zoomed back out would sit over the page for nothing.
+      if (_zoom <= 1.01) return;
+      setState(
+        () => _detail = (page: page, pdfBounds: pdfBounds, bytes: bytes),
+      );
+    }).ignore();
+  }
+
   void _reportViewSettled() {
+    _requestDetail();
     if (_pageHeights.isEmpty) return;
     final page = (_reportedPage - 1).clamp(0, _pageHeights.length - 1);
     final fraction = _pageHeights[page] > 0
@@ -1016,9 +1070,16 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     double supersample,
     double zoomTier,
   ) {
-    final width = widget.pageSizes[pageIndex].width;
-    if (width <= 0) return dpr * zoomTier;
-    return (_contentWidth / width) * dpr * supersample * zoomTier;
+    final size = widget.pageSizes[pageIndex];
+    if (size.width <= 0) return dpr * zoomTier;
+    final scale = (_contentWidth / size.width) * dpr * supersample * zoomTier;
+    // A whole page at a high zoom is a bitmap bigger than a phone can
+    // decode; past this many pixels the visible part is rendered on its own
+    // instead (see [_detail]), so the page itself can stop here.
+    const maxPixels = 14e6;
+    final pixels = size.width * size.height * scale * scale;
+    if (pixels <= maxPixels) return scale;
+    return scale * math.sqrt(maxPixels / pixels);
   }
 
   /// The zoom level a page's bitmap should be rasterized at, quantized into
@@ -1032,13 +1093,16 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   /// view), so we only re-render when the zoom crosses a tier boundary. The
   /// top tier matches the max zoom, so at full zoom the page is rendered at
   /// exactly the pixels on screen — no upscale at all.
+  ///
+  /// Rounded *up*: a page shown at 1.2x from a bitmap rendered for 1.0x is a
+  /// bitmap stretched by a fifth, and stretched text is soft text. Rendering
+  /// for the next tier up only ever shrinks a bitmap on its way to the screen.
   double _zoomRenderScale() {
-    const tiers = [1.0, 1.5, 2.0, 2.5, 3.0];
-    var tier = tiers.first;
+    const tiers = [1.0, 1.25, 1.5, 2.0];
     for (final t in tiers) {
-      if (_zoom >= t - 0.01) tier = t;
+      if (_zoom <= t + 0.01) return t;
     }
-    return tier;
+    return tiers.last;
   }
 
   Future<Uint8List?> _previewFor(int pageIndex) {
@@ -1283,8 +1347,13 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         // the *square* of this factor, and every page of a big book pays
         // it, which is the difference between a page appearing at once and
         // appearing a second later.
-        final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.5, 3.0);
-        const supersample = 1.25;
+        // The screen's own density, whatever it is: a cap of 3x stretched
+        // every page on the phones denser than that, and stretched text is
+        // blurred text. No supersampling on top of it either — a bitmap
+        // bigger than the screen is shrunk on the way there, and shrinking
+        // thins the strokes of small type into grey.
+        final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.0, 4.0);
+        const supersample = 1.0;
         // The sharp render resolution tracks the zoom tier, so zooming in
         // re-rasterizes at higher resolution instead of just upscaling the
         // fit-width bitmap (which is what made thin lines go soft).
@@ -1423,6 +1492,30 @@ class PdfPageStackViewState extends State<PdfPageStackView>
                             weight: widget.readingWeight,
                           ),
                         ),
+                      if (_detail case final detail?)
+                        if (_contentRectFor(detail.page, detail.pdfBounds)
+                            case final rect?)
+                          Positioned.fromRect(
+                            key: ValueKey(
+                              'detail-${detail.page}-${detail.pdfBounds}',
+                            ),
+                            rect: rect,
+                            child: IgnorePointer(
+                              child: ColorFiltered(
+                                colorFilter: widget.readingTheme
+                                    .pageImageFilter(
+                                      contrast: widget.readingContrast,
+                                      weight: widget.readingWeight,
+                                    ),
+                                child: Image.memory(
+                                  detail.bytes,
+                                  fit: BoxFit.fill,
+                                  gaplessPlayback: true,
+                                  filterQuality: FilterQuality.medium,
+                                ),
+                              ),
+                            ),
+                          ),
                       // Order matters: the sentence wash goes down first,
                       // then the word or the dragged selection on top of
                       // it, so a word inside its own sentence still reads
@@ -1581,11 +1674,11 @@ class _PdfPageImageState extends State<_PdfPageImage> {
         bytes,
         fit: BoxFit.fill,
         gaplessPlayback: true,
-        // Scaling a low-resolution stand-in up to page size looks better
-        // smoothed than blocky.
-        filterQuality: _sharp != null
-            ? FilterQuality.low
-            : FilterQuality.medium,
+        // Medium (mipmapped) for both: the sharp render meets the screen
+        // pixel for pixel at its own zoom tier and is scaled a little either
+        // side of it in between, and bilinear filtering alone drops the
+        // thin strokes of small type when a bitmap is scaled down.
+        filterQuality: FilterQuality.medium,
       ),
     );
   }
