@@ -54,6 +54,7 @@ dependencies:
   # its internals must not drift even within a major version.
   excel2003: 1.0.0
   flutter_tts: ^4.2.5
+  share_plus: ^12.0.2
 
 dev_dependencies:
   flutter_test:

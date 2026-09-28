@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../services/annotation_service.dart';
+import '../services/library_service.dart';
+import '../services/sharing.dart';
 import 'annotations_sheet.dart';
 import 'reader_copy_menu.dart';
 
@@ -22,6 +24,7 @@ List<ReaderMenuAction> annotationMenuActions(
   final annotations = context.watch<AnnotationService>();
   final bookmarked = annotations.isBookmarked(documentId, currentPage);
   return [
+    shareFileMenuAction(context, documentId: documentId),
     ReaderMenuAction(
       icon: bookmarked ? Icons.bookmark_remove_outlined : Icons.bookmark_add,
       label: bookmarked ? l10n.removeBookmarkAction : l10n.addBookmarkAction,
@@ -50,6 +53,26 @@ List<ReaderMenuAction> annotationMenuActions(
       },
     ),
   ];
+}
+
+/// «Отправить файл книги»: the book itself, out through the share sheet.
+ReaderMenuAction shareFileMenuAction(
+  BuildContext context, {
+  required String documentId,
+}) {
+  final l10n = AppLocalizations.of(context);
+  return ReaderMenuAction(
+    icon: Icons.share_outlined,
+    label: l10n.shareFileAction,
+    onSelected: () {
+      final document = context
+          .read<LibraryService>()
+          .documents
+          .where((d) => d.id == documentId)
+          .firstOrNull;
+      if (document != null) shareDocumentFile(document);
+    },
+  );
 }
 
 /// Asks the reader what they make of [quote] and keeps it as a note on

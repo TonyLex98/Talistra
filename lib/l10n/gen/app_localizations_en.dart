@@ -692,4 +692,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get feedbackAttachLogSubtitle =>
       'Technical details of crashes, without any book content';
+
+  @override
+  String get shareAction => 'Share';
+
+  @override
+  String get shareFileAction => 'Send the book file';
 }

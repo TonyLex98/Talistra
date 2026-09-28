@@ -695,4 +695,10 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get feedbackAttachLogSubtitle =>
       'Технические сведения о сбоях, без содержимого книг';
+
+  @override
+  String get shareAction => 'Поделиться';
+
+  @override
+  String get shareFileAction => 'Отправить файл книги';
 }

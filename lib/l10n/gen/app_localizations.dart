@@ -1333,6 +1333,18 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Технические сведения о сбоях, без содержимого книг'**
   String get feedbackAttachLogSubtitle;
+
+  /// No description provided for @shareAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Поделиться'**
+  String get shareAction;
+
+  /// No description provided for @shareFileAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отправить файл книги'**
+  String get shareFileAction;
 }
 
 class _AppLocalizationsDelegate

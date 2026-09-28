@@ -233,5 +233,7 @@
   "pdfPasswordWrong": "Wrong password",
   "open": "Open",
   "feedbackAttachLog": "Attach the error log",
-  "feedbackAttachLogSubtitle": "Technical details of crashes, without any book content"
+  "feedbackAttachLogSubtitle": "Technical details of crashes, without any book content",
+  "shareAction": "Share",
+  "shareFileAction": "Send the book file"
 }

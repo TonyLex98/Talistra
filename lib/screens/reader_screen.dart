@@ -14,6 +14,7 @@ import '../services/page_image_cache.dart';
 import '../services/reading_display_service.dart';
 import '../services/search_index_cache.dart';
 import '../services/settings_service.dart';
+import '../services/sharing.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
 import '../utils/pdf_region_renderer.dart';
@@ -489,6 +490,14 @@ class _ReaderScreenState extends State<ReaderScreen>
         type: ContextMenuButtonType.custom,
         label: l10n.selectionSelectAll,
         onPressed: _selectAllRange,
+      ),
+      ContextMenuButtonItem(
+        type: ContextMenuButtonType.custom,
+        label: l10n.shareAction,
+        onPressed: () {
+          _clearRangeSelection();
+          shareText(text);
+        },
       ),
       ContextMenuButtonItem(
         type: ContextMenuButtonType.custom,

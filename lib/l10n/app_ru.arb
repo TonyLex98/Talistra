@@ -281,5 +281,7 @@
   "pdfPasswordWrong": "Неверный пароль",
   "open": "Открыть",
   "feedbackAttachLog": "Приложить журнал ошибок",
-  "feedbackAttachLogSubtitle": "Технические сведения о сбоях, без содержимого книг"
+  "feedbackAttachLogSubtitle": "Технические сведения о сбоях, без содержимого книг",
+  "shareAction": "Поделиться",
+  "shareFileAction": "Отправить файл книги"
 }

@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../services/sharing.dart';
 
 /// The long-press-to-mark layer every reading surface shares: the system's own
 /// selection (press and hold a word, widen the mark with its handles, drag it
@@ -140,6 +141,12 @@ class ReadingSelectionAreaState extends State<ReadingSelectionArea> {
         type: ContextMenuButtonType.custom,
         label: l10n.selectionSelectAll,
         onPressed: () => _selectAll(region),
+      ),
+      ContextMenuButtonItem(
+        type: ContextMenuButtonType.custom,
+        label: l10n.shareAction,
+        onPressed: () =>
+            _finish(region, (text) => text == null ? null : shareText(text)),
       ),
       if (widget.onNoteSelection case final onNote?)
         ContextMenuButtonItem(

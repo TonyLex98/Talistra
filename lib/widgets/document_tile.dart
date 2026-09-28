@@ -7,6 +7,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/djvu_service.dart';
 import '../services/library_service.dart';
+import '../services/sharing.dart';
 import '../services/page_image_cache.dart';
 import '../utils/pdf_region_renderer.dart';
 
@@ -457,6 +458,14 @@ class _DocumentTileState extends State<DocumentTile> {
       builder: (ctx) => SafeArea(
         child: Wrap(
           children: [
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: Text(l10n.shareFileAction),
+              onTap: () {
+                Navigator.pop(ctx);
+                shareDocumentFile(widget.document);
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: Text(l10n.renameBook),

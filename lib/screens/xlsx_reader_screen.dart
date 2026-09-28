@@ -20,6 +20,7 @@ import '../utils/xlsx_decode.dart';
 import '../utils/xls_decode.dart';
 import '../widgets/book_search_bar.dart';
 import '../widgets/language_picker_sheet.dart';
+import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/spreadsheet_grid_view.dart';
 import '../widgets/spreadsheet_page_view.dart';
@@ -643,6 +644,12 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
                     onPressed: hasPages ? _openSearch : null,
                   ),
                   ReaderCopyMenu(
+                    actions: [
+                      shareFileMenuAction(
+                        context,
+                        documentId: widget.documentId,
+                      ),
+                    ],
                     pageText: () => _pageAt(_currentPage)?.text,
                     bookText: () =>
                         spreadsheetPagesText(_grid?.pages ?? const []),
