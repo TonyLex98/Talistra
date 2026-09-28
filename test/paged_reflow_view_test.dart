@@ -178,4 +178,44 @@ void main() {
     expect(reported, [4]);
     expect(_key.currentState!.currentPage, 4);
   });
+
+  testWidgets('the first page gives a steady third of a drag at the edge', (
+    tester,
+  ) async {
+    await _pump(tester, TextBookSource(_book(3)));
+    final text = find.textContaining('Page 1 paragraph 1', findRichText: true);
+    final before = tester.getTopLeft(text.first);
+    final gesture = await tester.startGesture(const Offset(200, 300));
+    // Right, at the start of the book: there is no page to turn back to.
+    for (var i = 0; i < 20; i++) {
+      await gesture.moveBy(const Offset(10, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final moved = tester.getTopLeft(text.first).dx - before.dx;
+    // 200 px of finger, resisted to about 30% — not shrinking away to
+    // nothing as more events arrive.
+    expect(moved, inInclusiveRange(40, 80));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(_footer(tester), startsWith('1 · 1/'));
+  });
+
+  testWidgets('a sideways swipe never moves the page up or down', (
+    tester,
+  ) async {
+    await _pump(tester, TextBookSource(_book(3)));
+    final text = find.textContaining('Page 1 paragraph 1', findRichText: true);
+    final before = tester.getTopLeft(text.first);
+    final gesture = await tester.startGesture(const Offset(300, 300));
+    // A wobbly finger: mostly left, with the odd twitch up and down.
+    const twitches = [1.0, -2.0, 1.5, -1.0, 2.0, -1.5, 1.0, -2.0];
+    for (var i = 0; i < twitches.length * 3; i++) {
+      await gesture.moveBy(Offset(-12, twitches[i % twitches.length]));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.getTopLeft(text.first).dy, closeTo(before.dy, 0.01));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(_footer(tester), startsWith('1 · 2/'));
+  });
 }

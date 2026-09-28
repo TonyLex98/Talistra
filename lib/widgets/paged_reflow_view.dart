@@ -138,7 +138,12 @@ class PagedReflowViewState extends State<PagedReflowView>
   // snapping it back.
   late final AnimationController _turnController;
   Animation<double>? _settleAnimation;
-  double _dragOffset = 0;
+  // Held in a notifier, not in state: a page follows the finger on every
+  // pointer event, and rebuilding both pages' text for each of them made the
+  // turn stutter. Only the layer that moves listens (see [_movingCard]).
+  final ValueNotifier<double> _dragValue = ValueNotifier<double>(0);
+  double get _dragOffset => _dragValue.value;
+  set _dragOffset(double value) => _dragValue.value = value;
   Axis _dragAxis = Axis.horizontal;
   bool _dragAxisLocked = false;
   ({int page, int subPage})? _incoming;
@@ -236,6 +241,7 @@ class PagedReflowViewState extends State<PagedReflowView>
     }
     _translateDebounce?.cancel();
     _turnController.dispose();
+    _dragValue.dispose();
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointer);
     _edgeTimer?.cancel();
     for (final mark in _marks.values) {
@@ -537,38 +543,56 @@ class PagedReflowViewState extends State<PagedReflowView>
     return (page: page, subPage: subPage);
   }
 
+  /// Movement since the finger started, until it is enough to say which way
+  /// the reader is turning (see [_onDragUpdate]).
+  Offset _axisProbe = Offset.zero;
+
+  /// How far the finger has dragged the page, before the resistance at the
+  /// end of the book is applied to it for showing.
+  double _rawDrag = 0;
+
   void _onDragStart() {
     _turnController.stop();
+    _rawDrag = _dragOffset;
     _dragAxisLocked = false;
+    _axisProbe = Offset.zero;
     _settleAnimation = null;
   }
 
-  /// Moves the page with the finger. The axis is decided by the first bit
-  /// of real movement and then held for the rest of the gesture, so a
-  /// slightly diagonal swipe doesn't wobble between sideways and upwards.
+  /// Moves the page with the finger. The axis is decided once the finger has
+  /// gone a few pixels — by where it has gone in all, not by its first twitch
+  /// — and then held for the rest of the gesture, so a slightly diagonal
+  /// swipe doesn't wobble between sideways and upwards. What the finger did
+  /// while that was being decided is not lost: the page starts under it.
   void _onDragUpdate(Offset delta, Size contentSize, Size viewport) {
     if (!_dragAxisLocked) {
-      if (delta.distance < 0.6) return;
-      _dragAxis = delta.dx.abs() >= delta.dy.abs()
+      _axisProbe += delta;
+      if (_axisProbe.distance < 4) return;
+      _dragAxis = _axisProbe.dx.abs() >= _axisProbe.dy.abs()
           ? Axis.horizontal
           : Axis.vertical;
       _dragAxisLocked = true;
+      delta = _axisProbe;
     }
     final movement = _dragAxis == Axis.horizontal ? delta.dx : delta.dy;
-    var offset = _dragOffset + movement;
+    _rawDrag += movement;
     // Left or up is forward, right or down is back.
-    final direction = offset < 0 ? 1 : -1;
+    final direction = _rawDrag < 0 ? 1 : -1;
     final incoming = _neighbour(direction, contentSize);
-    if (incoming == null) {
-      // Nothing there to turn to: the page still gives a little, so the
-      // edge of the book is something you feel rather than a dead swipe.
-      offset = offset * 0.3;
-    }
+    // Nothing there to turn to: the page still gives a little, so the edge
+    // of the book is something you feel rather than a dead swipe.
+    final offset = incoming == null ? _rawDrag * 0.3 : _rawDrag;
     final extent = _dragExtent(viewport);
-    setState(() {
-      _incoming = incoming;
+    // Only a change of the page pulled in behind (the finger crossing where
+    // it started) rebuilds anything; moving along just moves the layers.
+    if (incoming != _incoming) {
+      setState(() {
+        _incoming = incoming;
+        _dragOffset = offset.clamp(-extent, extent);
+      });
+    } else {
       _dragOffset = offset.clamp(-extent, extent);
-    });
+    }
   }
 
   void _onDragEnd(double velocity, Size viewport) {
@@ -602,7 +626,7 @@ class PagedReflowViewState extends State<PagedReflowView>
   void _onSettleTick() {
     final animation = _settleAnimation;
     if (animation == null) return;
-    setState(() => _dragOffset = animation.value);
+    _dragOffset = animation.value;
   }
 
   void _onSettleStatus(AnimationStatus status) {
@@ -1191,38 +1215,25 @@ class PagedReflowViewState extends State<PagedReflowView>
             // Both cards move by exactly the same amount, so they travel as
             // one strip and never overlap: the page being left slides out as
             // the next one slides in, like cards dealt side by side.
-            Positioned.fill(
-              child: Transform.translate(
-                offset: _offsetFor(_dragOffset),
-                child: _card(
-                  elevation: 0.35,
-                  child: _buildSubPage(
-                    _pageIndex,
-                    _subPageIndex,
-                    contentSize,
-                    sideMargin,
-                  ),
-                ),
+            _movingCard(
+              viewport: viewport,
+              behind: false,
+              child: _buildSubPage(
+                _pageIndex,
+                _subPageIndex,
+                contentSize,
+                sideMargin,
               ),
             ),
             if (_incoming case final incoming?)
-              Positioned.fill(
-                child: Transform.translate(
-                  offset: _offsetFor(
-                    _dragOffset +
-                        (_dragOffset < 0
-                            ? _dragExtent(viewport)
-                            : -_dragExtent(viewport)),
-                  ),
-                  child: _card(
-                    elevation: 0.35 + 0.35 * _turnProgress(viewport),
-                    child: _buildSubPage(
-                      incoming.page,
-                      incoming.subPage,
-                      contentSize,
-                      sideMargin,
-                    ),
-                  ),
+              _movingCard(
+                viewport: viewport,
+                behind: true,
+                child: _buildSubPage(
+                  incoming.page,
+                  incoming.subPage,
+                  contentSize,
+                  sideMargin,
                 ),
               ),
           ],
@@ -1231,10 +1242,42 @@ class PagedReflowViewState extends State<PagedReflowView>
     );
   }
 
-  double _turnProgress(Size viewport) {
-    final extent = _dragExtent(viewport);
-    if (extent <= 0) return 0;
-    return (_dragOffset.abs() / extent).clamp(0.0, 1.0);
+  /// A page card that follows the drag. [child], the page itself, is built
+  /// once and kept on a layer of its own, so a turn only ever moves that
+  /// layer: nothing about the page is laid out or painted again per frame.
+  /// [behind] is the page being pulled in, one screen away from the other.
+  Widget _movingCard({
+    required Size viewport,
+    required bool behind,
+    required Widget child,
+  }) {
+    final card = RepaintBoundary(child: child);
+    final pixel = MediaQuery.devicePixelRatioOf(context);
+    return Positioned.fill(
+      child: ValueListenableBuilder<double>(
+        valueListenable: _dragValue,
+        child: card,
+        builder: (context, drag, page) {
+          final extent = _dragExtent(viewport);
+          final travelled = behind
+              ? drag + (drag < 0 ? extent : -extent)
+              : drag;
+          // Whole device pixels only: between them, text drawn on a layer
+          // is resampled every frame and shimmers.
+          final snapped = (travelled * pixel).roundToDouble() / pixel;
+          final progress = extent <= 0
+              ? 0.0
+              : (drag.abs() / extent).clamp(0.0, 1.0);
+          return Transform.translate(
+            offset: _offsetFor(snapped),
+            child: _card(
+              elevation: behind ? 0.35 + 0.35 * progress : 0.35,
+              child: page!,
+            ),
+          );
+        },
+      ),
+    );
   }
 
   /// One page as a card: its own paper, rounded corners and a shadow that
