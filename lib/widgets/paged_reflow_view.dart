@@ -13,6 +13,7 @@ import '../utils/markdown_blocks.dart';
 import '../utils/reading_text_style.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/reflow_paginator.dart';
+import '../utils/reflow_table.dart';
 import '../utils/sentence_finder.dart';
 import 'reading_selection_area.dart';
 import 'reflow_source.dart';
@@ -103,6 +104,10 @@ class PagedReflowViewState extends State<PagedReflowView>
 
   final Map<int, List<ReflowSubPage>> _subPagesCache = {};
   ReflowLineCache _lineCache = ReflowLineCache();
+
+  /// Each table's grid at the width it is set in, measured once for the
+  /// paginator and read again to paint it. Dropped with [_lineCache].
+  final Map<(ReflowBlock, double), ReflowTableLayout> _tableLayouts = {};
 
   /// The layout the cached sub-pages were measured for: a change of any of
   /// it lays every page out again.
@@ -347,6 +352,52 @@ class PagedReflowViewState extends State<PagedReflowView>
         : style;
   }
 
+  /// The span one cell of [table] is painted as, rooted in the table's own
+  /// style — what [TranslatableText] draws for `[start, end)` of its text.
+  InlineSpan _cellSpan(ReflowBlock table, TextStyle style, int start, int end) {
+    final text = table.text.substring(start, end);
+    return TextSpan(
+      style: style,
+      children: [
+        readingTextSpan(
+          text: text,
+          formatRuns: [
+            for (final run in table.formatRuns)
+              if (run.start < end && run.end > start)
+                FormatRun(
+                  start: math.max(run.start, start) - start,
+                  end: math.min(run.end, end) - start,
+                  bold: run.bold,
+                  italic: run.italic,
+                  code: run.code,
+                  strike: run.strike,
+                  link: run.link,
+                ),
+          ],
+          style: style,
+          settings: widget.settings,
+          readingTheme: widget.readingTheme,
+        ),
+      ],
+    );
+  }
+
+  ReflowTableLayout _tableLayout(ReflowBlock table, double width) =>
+      _tableLayouts.putIfAbsent((table, width), () {
+        final style = _styleFor(table);
+        return layoutReflowTable(
+          cells: [
+            for (final row in table.tableCells!)
+              [
+                for (final cell in row)
+                  _cellSpan(table, style, cell.start, cell.end),
+              ],
+          ],
+          maxWidth: width,
+          textScaler: MediaQuery.textScalerOf(context),
+        );
+      });
+
   List<ReflowSubPage> _subPagesFor(int pageIndex, Size contentSize) {
     final typography = _styleFor(
       const ReflowBlock.paragraph(''),
@@ -361,6 +412,7 @@ class PagedReflowViewState extends State<PagedReflowView>
           widget.fontSize != _paginationFontSize ||
           contentSize.width != _paginationSize.width) {
         _lineCache = ReflowLineCache();
+        _tableLayouts.clear();
       }
       _subPagesCache.clear();
       _paginationSize = contentSize;
@@ -398,6 +450,7 @@ class PagedReflowViewState extends State<PagedReflowView>
         textScaler: textScaler,
         imageSizeFor: (block) =>
             widget.source.figureSize(pageIndex, block, contentSize),
+        tableLayoutFor: _tableLayout,
       );
       // Even a page with nothing on it is one (empty) sub-page, so the
       // page-turn arithmetic never has to special-case zero.
@@ -987,7 +1040,144 @@ class PagedReflowViewState extends State<PagedReflowView>
     return Padding(
       key: ValueKey('${slice.blockIndex}-${slice.start}'),
       padding: EdgeInsets.only(top: gap),
-      child: _framed(block, _buildParagraph(pageIndex, block, slice)),
+      child: _framed(
+        block,
+        block.isTable
+            ? _buildTable(pageIndex, block, slice, contentSize)
+            : _buildParagraph(pageIndex, block, slice),
+      ),
+    );
+  }
+
+  /// The rows of a table that [slice] holds, drawn as a grid at exactly the
+  /// size the paginator gave them — with the header row again on top when
+  /// the slice continues a table from the sub-page before.
+  Widget _buildTable(
+    int pageIndex,
+    ReflowBlock table,
+    ReflowSlice slice,
+    Size contentSize,
+  ) {
+    final insets = markdownBlockInsets(table);
+    final layout = _tableLayout(
+      table,
+      math.max(20.0, contentSize.width - insets.left - insets.right),
+    );
+    final cells = table.tableCells!;
+    final rows = tableRowsIn(table, slice.start, slice.end);
+    final repeatHeader =
+        table.tableHeader && !slice.isFirstOfBlock && rows.from > 0;
+    final shown = [
+      if (repeatHeader) 0,
+      for (var r = rows.from; r < rows.to; r++) r,
+    ];
+    final theme = widget.readingTheme;
+    final ruleColor = theme.onBackground.withValues(alpha: 0.28);
+    final style = _styleFor(table);
+    final alignments = table.tableAlignments ?? const <TextAlign>[];
+
+    final children = <Widget>[];
+    var top = tableRule;
+    for (final r in shown) {
+      final rowHeight = layout.rowHeights[r];
+      if (r == 0 && table.tableHeader) {
+        children.add(
+          Positioned(
+            left: 0,
+            top: top,
+            width: layout.width,
+            height: rowHeight,
+            child: ColoredBox(
+              color: theme.onBackground.withValues(alpha: 0.06),
+            ),
+          ),
+        );
+      }
+      var left = tableRule;
+      for (var c = 0; c < cells[r].length; c++) {
+        final columnWidth = layout.columnWidths[c];
+        final cell = cells[r][c];
+        final align = c < alignments.length ? alignments[c] : TextAlign.left;
+        children.add(
+          Positioned(
+            left: left + tableCellPadX,
+            top: top + tableCellPadY,
+            width: cellTextWidth(columnWidth),
+            height: rowHeight - tableRule - tableCellPadY * 2,
+            child: Align(
+              alignment: switch (align) {
+                TextAlign.center => Alignment.topCenter,
+                TextAlign.right || TextAlign.end => Alignment.topRight,
+                _ => Alignment.topLeft,
+              },
+              child: _buildCell(
+                pageIndex,
+                slice.blockIndex,
+                table,
+                style,
+                cell,
+              ),
+            ),
+          ),
+        );
+        left += columnWidth;
+      }
+      top += rowHeight;
+    }
+    final height = math.min(
+      contentSize.height,
+      layout.heightOf(rows.from, rows.to, repeatHeader: repeatHeader),
+    );
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ClipRect(
+        child: SizedBox(
+          width: layout.width,
+          height: height,
+          child: CustomPaint(
+            foregroundPainter: _TableRulesPainter(
+              columnWidths: layout.columnWidths,
+              rowHeights: [for (final r in shown) layout.rowHeights[r]],
+              color: ruleColor,
+            ),
+            child: Stack(clipBehavior: Clip.none, children: children),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCell(
+    int pageIndex,
+    int blockIndex,
+    ReflowBlock table,
+    TextStyle style,
+    ({int start, int end}) cell,
+  ) {
+    if (cell.start == cell.end) return const SizedBox.shrink();
+    final onHitPage = pageIndex == _hlPage;
+    final isCurrentHit = onHitPage && blockIndex == _hlBlockIndex;
+    final selectedHere =
+        pageIndex == _pageIndex && blockIndex == _selectedBlockIndex;
+    return TranslatableText(
+      text: table.text,
+      start: cell.start,
+      end: cell.end,
+      settings: widget.settings,
+      fontSize: widget.fontSize,
+      readingTheme: widget.readingTheme,
+      translatorEnabled: widget.translatorEnabled,
+      style: style,
+      formatRuns: table.formatRuns,
+      selectedStart: selectedHere ? _selectedWordStart : null,
+      selectedEnd: selectedHere ? _selectedWordEnd : null,
+      highlight: isCurrentHit && _hlStart != null && _hlEnd != null
+          ? (start: _hlStart!, end: _hlEnd!)
+          : null,
+      otherHighlights: onHitPage
+          ? (_hlOthers[blockIndex] ?? const [])
+          : const [],
+      onWordTap: (start, end, word) => _onWordTap(blockIndex, start, end, word),
     );
   }
 
@@ -1235,4 +1425,49 @@ class _PageTurnRecognizer extends PanGestureRecognizer {
   ) =>
       globalDistanceMoved.abs() >
       computeHitSlop(pointerDeviceKind, gestureSettings);
+}
+
+/// The rules of a table's grid: round its edge, under every row and between
+/// every two columns, each [tableRule] wide and inside the room the layout
+/// gave it.
+class _TableRulesPainter extends CustomPainter {
+  _TableRulesPainter({
+    required this.columnWidths,
+    required this.rowHeights,
+    required this.color,
+  });
+
+  final List<double> columnWidths;
+  final List<double> rowHeights;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final height = math.min(
+      size.height,
+      rowHeights.fold<double>(tableRule, (a, b) => a + b),
+    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, tableRule), paint);
+    var y = tableRule;
+    for (final rowHeight in rowHeights) {
+      y += rowHeight;
+      canvas.drawRect(
+        Rect.fromLTWH(0, y - tableRule, size.width, tableRule),
+        paint,
+      );
+    }
+    var x = 0.0;
+    for (final columnWidth in columnWidths) {
+      canvas.drawRect(Rect.fromLTWH(x, 0, tableRule, height), paint);
+      x += columnWidth;
+    }
+    canvas.drawRect(Rect.fromLTWH(x, 0, tableRule, height), paint);
+  }
+
+  @override
+  bool shouldRepaint(_TableRulesPainter old) =>
+      old.color != color ||
+      old.columnWidths != columnWidths ||
+      old.rowHeights.length != rowHeights.length;
 }

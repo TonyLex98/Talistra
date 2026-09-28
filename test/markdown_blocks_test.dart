@@ -1,3 +1,5 @@
+import 'dart:ui' show TextAlign;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transreade/utils/markdown_blocks.dart';
 import 'package:transreade/utils/reflow_builder.dart';
@@ -327,39 +329,111 @@ After
   });
 
   group('markdown tables', () {
-    test('columns are padded and aligned, and the header is bold', () {
-      final blocks = parseMarkdownBlocks('''
-| Item | Qty |
-|:-----|----:|
-| Pen  | 12  |
-| Eraser | 5 |
-''');
-      expect(_shape(blocks), ['code Item   | Qty\nPen    |  12\nEraser |   5']);
-      final block = blocks.single;
-      expect(block.isCode, isTrue);
-      expect(block.formatRuns.single.bold, isTrue);
-      expect(block.formatRuns.single.end, 'Item   | Qty'.length);
-    });
+    String cellText(ReflowBlock table, int row, int column) {
+      final cell = table.tableCells![row][column];
+      return table.text.substring(cell.start, cell.end);
+    }
 
-    test('a table too wide to line up is printed with single spaces', () {
-      final blocks = parseMarkdownBlocks('''
-| column one | column two | column three |
-|---|---|---|
-| a very long value | another long value | third long value |
-''');
-      expect(
-        blocks.single.text.split('\n').last,
-        'a very long value | another long value | third long value',
-      );
+    test(
+      'a table is a grid of cells, its header bold, its columns aligned',
+      () {
+        final table = parseMarkdownBlocks('''
+| Item | Qty | Note |
+|:-----|----:|:----:|
+| Pen  | 12  | blue |
+| Eraser | 5 |
+''').single;
+        expect(table.isTable, isTrue);
+        expect(table.isCode, isFalse);
+        expect(table.text, 'Item | Qty | Note\nPen | 12 | blue\nEraser | 5 | ');
+        expect(table.tableCells!.length, 3);
+        // A short row still has a cell for every column.
+        expect(table.tableCells!.map((row) => row.length), [3, 3, 3]);
+        expect(cellText(table, 2, 0), 'Eraser');
+        expect(cellText(table, 2, 2), '');
+        expect(table.tableAlignments, [
+          TextAlign.left,
+          TextAlign.right,
+          TextAlign.center,
+        ]);
+        expect(
+          table.formatRuns.map(
+            (run) => table.text.substring(run.start, run.end),
+          ),
+          ['Item', 'Qty', 'Note'],
+        );
+        expect(table.formatRuns.every((run) => run.bold), isTrue);
+      },
+    );
+
+    test("a cell's own emphasis is kept", () {
+      final table = parseMarkdownBlocks(
+        '| a | b |\n|---|---|\n| **x** | `y` |',
+      ).single;
+      final code = table.formatRuns.singleWhere((run) => run.code);
+      expect(table.text.substring(code.start, code.end), 'y');
+      final bold = table.formatRuns.where((run) => run.bold).last;
+      expect(table.text.substring(bold.start, bold.end), 'x');
     });
 
     test('an escaped bar stays inside its cell', () {
-      final text = parseMarkdownBlocks(
+      final table = parseMarkdownBlocks(
         '| a | b |\n|---|---|\n| x \\| y | z |',
-      ).single.text;
-      // Two columns, not three: the escaped bar is content. That makes the
-      // first column as wide as `x | y`, so the header pads out to meet it.
-      expect(text.split('\n'), ['a     | b', 'x | y | z']);
+      ).single;
+      // Two columns, not three: the escaped bar is content.
+      expect(cellText(table, 1, 0), 'x | y');
+      expect(cellText(table, 1, 1), 'z');
+    });
+  });
+
+  group('markdown odds and ends', () {
+    test('inline HTML emphasis is set, other tags dropped', () {
+      final block = parseMarkdownBlocks(
+        'a <b>bold</b>, <em>slanted</em>, <code>x()</code> <span>plain</span>',
+      ).single;
+      expect(block.text, 'a bold, slanted, x() plain');
+      expect(
+        block.formatRuns.map(
+          (run) =>
+              '${block.text.substring(run.start, run.end)}:'
+              '${run.bold ? 'B' : ''}${run.italic ? 'I' : ''}${run.code ? 'C' : ''}',
+        ),
+        ['bold:B', 'slanted:I', 'x():C'],
+      );
+    });
+
+    test('named character references are decoded', () {
+      expect(
+        parseMarkdownBlocks(
+          '&copy; 2024 &rarr; &euro;5 &le; &frac12;',
+        ).single.text,
+        '© 2024 → €5 ≤ ½',
+      );
+    });
+
+    test('a backslash line break leaves no backslash behind', () {
+      expect(parseMarkdownBlocks('one\\\ntwo').single.text, 'one\ntwo');
+    });
+
+    test('a comment on its own is no block at all', () {
+      expect(_shape(parseMarkdownBlocks('Before\n\n<!-- note -->\n\nAfter')), [
+        'Before',
+        'After',
+      ]);
+    });
+
+    test('footnotes read as numbers in brackets', () {
+      final blocks = parseMarkdownBlocks('Said so[^1].\n\n[^1]: A source.');
+      expect(blocks.map((b) => b.text), ['Said so[1].', '[1] A source.']);
+    });
+
+    test('text indented four spaces after a blank line is code', () {
+      final blocks = parseMarkdownBlocks(
+        'Intro\n\n    let x = 1;\n      y();\n\nOutro',
+      );
+      expect(blocks[1].isCode, isTrue);
+      expect(blocks[1].text, 'let x = 1;\n  y();');
+      expect(blocks.last.text, 'Outro');
     });
   });
 

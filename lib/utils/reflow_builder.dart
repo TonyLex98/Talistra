@@ -136,6 +136,9 @@ class ReflowBlock {
     this.gapAbove,
     this.sourceTop,
     this.sourceBottom,
+    this.tableCells,
+    this.tableAlignments,
+    this.tableHeader = false,
   }) : imageBounds = null,
        imageBytes = null;
   ReflowBlock.image(Rect bounds)
@@ -150,7 +153,10 @@ class ReflowBlock {
       isDivider = false,
       gapAbove = null,
       sourceTop = bounds.isEmpty ? null : bounds.top,
-      sourceBottom = bounds.isEmpty ? null : bounds.bottom;
+      sourceBottom = bounds.isEmpty ? null : bounds.bottom,
+      tableCells = null,
+      tableAlignments = null,
+      tableHeader = false;
 
   /// A picture a book carries inside itself (an FB2 binary, an EPUB image):
   /// [bytes] is the encoded image and [size] its pixel size, which is all the
@@ -167,7 +173,10 @@ class ReflowBlock {
       isDivider = false,
       gapAbove = null,
       sourceTop = null,
-      sourceBottom = null;
+      sourceBottom = null,
+      tableCells = null,
+      tableAlignments = null,
+      tableHeader = false;
 
   final String text;
 
@@ -224,7 +233,23 @@ class ReflowBlock {
   /// emphasis into one plain style.
   final List<FormatRun> formatRuns;
 
+  /// For a table, where each cell's text sits in [text], row by row: the
+  /// first row is its header. [text] holds the rows one to a line with their
+  /// cells between bars, which is what is copied, searched and read aloud,
+  /// while the reader draws the cells in a grid. Null for anything else.
+  final List<List<({int start, int end})>>? tableCells;
+
+  /// How each column of a table is aligned; missing columns are left
+  /// aligned.
+  final List<TextAlign>? tableAlignments;
+
+  /// Whether a table's first row is its header: set bold and shaded, and
+  /// shown again above the rows of every page the table continues onto.
+  final bool tableHeader;
+
   bool get isImage => imageBounds != null;
+
+  bool get isTable => tableCells != null;
 }
 
 /// The blocks as plain text — one blank line between them, empty ones (an

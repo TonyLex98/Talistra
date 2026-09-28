@@ -1,4 +1,5 @@
 import 'reflow_builder.dart';
+import 'reflow_table.dart';
 
 /// How many characters roughly make up one synthetic "page" of a plain
 /// text file — just enough for progress tracking, the page counter, and
@@ -63,6 +64,10 @@ List<List<ReflowBlock>> buildTxtPagesFromBlocks(List<ReflowBlock> blocks) {
 List<ReflowBlock> _splitOversized(List<ReflowBlock> blocks) {
   final split = <ReflowBlock>[];
   for (final block in blocks) {
+    if (block.isTable) {
+      split.addAll(splitReflowTable(block, _targetPageChars));
+      continue;
+    }
     if (block.isImage ||
         block.isDivider ||
         block.text.length <= _targetPageChars) {

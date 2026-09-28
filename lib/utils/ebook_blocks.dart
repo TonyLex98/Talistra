@@ -7,6 +7,7 @@ import 'package:xml/xml.dart';
 
 import 'image_size.dart';
 import 'reflow_builder.dart';
+import 'reflow_table.dart';
 
 /// Turns the markup of an e-book — FB2's XML, an EPUB chapter's XHTML — into
 /// the [ReflowBlock]s the paginated reader lays out, keeping what the book
@@ -155,8 +156,70 @@ class _BlockSink {
       ..write('\n');
   }
 
+  /// Greater than zero while a table's cell is being read: its paragraphs,
+  /// breaks and pictures are all part of the one cell, not blocks of their
+  /// own.
+  int _inCell = 0;
+
+  /// Reads [cell] (by walking it with [read]) as one cell of a table.
+  TableCellText cell(void Function() read) {
+    _inCell++;
+    try {
+      read();
+    } finally {
+      _inCell--;
+    }
+    final raw = _text.toString();
+    _text.clear();
+    final runs = [..._runs];
+    _runs.clear();
+    // One line of text: the lines of a cell wrap in its column anyway.
+    final flat = raw.replaceAll('\n', ' ');
+    final lead = flat.length - flat.trimLeft().length;
+    final text = flat.trim();
+    return (
+      text: text,
+      runs: [
+        for (final run in runs)
+          if (run.end - lead > 0 && run.start - lead < text.length)
+            FormatRun(
+              start: math.max(0, run.start - lead),
+              end: math.min(text.length, run.end - lead),
+              bold: run.flags.bold,
+              italic: run.flags.italic,
+              code: run.flags.code,
+              strike: run.flags.strike,
+              link: run.flags.link,
+            ),
+      ],
+    );
+  }
+
+  /// A table of [rows] of cells, drawn as a grid; the first row is set as
+  /// its header when [header] says it is one.
+  void table(
+    List<List<TableCellText>> rows, {
+    required bool header,
+    required _Context context,
+  }) {
+    rows.removeWhere((row) => row.every((cell) => cell.text.isEmpty));
+    if (rows.isEmpty) return;
+    blocks.add(
+      reflowTable(
+        rows,
+        header: header,
+        quoteDepth: context.quoteDepth,
+        indent: context.indent,
+      ),
+    );
+  }
+
   /// Closes the block being read, if anything was written into it.
   void flush(_Context context) {
+    if (_inCell > 0) {
+      if (_text.isNotEmpty && !_endsWithSpace) _text.write(' ');
+      return;
+    }
     final raw = _text.toString();
     _text.clear();
     final runs = [..._runs];
@@ -192,7 +255,7 @@ class _BlockSink {
   }
 
   void picture(Uint8List? bytes, _Context context) {
-    if (bytes == null) return;
+    if (bytes == null || _inCell > 0) return;
     final size = imageSizeOf(bytes);
     if (size == null) return;
     flush(context);
@@ -200,6 +263,7 @@ class _BlockSink {
   }
 
   void divider(_Context context) {
+    if (_inCell > 0) return;
     flush(context);
     if (blocks.isEmpty || blocks.last.isDivider) return;
     blocks.add(ReflowBlock.paragraph('', isDivider: true));
@@ -207,6 +271,70 @@ class _BlockSink {
 }
 
 final _whitespace = RegExp(r'\s+');
+
+/// Reads an HTML or FB2 `<table>` into [sink] as a grid: each `<tr>` of its
+/// own (not of a table nested in one of its cells) a row, each `<td>` or
+/// `<th>` a cell. Its first row is its header when it is in a `<thead>` or
+/// made of `<th>` cells. A table inside a table's cell is read as that
+/// cell's text.
+void _readTable(
+  XmlElement table,
+  _BlockSink sink,
+  _Context context,
+  void Function(XmlNode node, _Context context) walk,
+) {
+  if (sink._inCell > 0) {
+    for (final child in table.children) {
+      walk(child, context);
+    }
+    return;
+  }
+  sink.flush(context);
+  final rows = <List<TableCellText>>[];
+  var header = false;
+  final cellContext = context.copyWith(
+    headingLevel: 0,
+    linesJoin: false,
+    preformatted: false,
+  );
+  void visit(XmlElement element) {
+    for (final child in element.childElements) {
+      final name = child.localName.toLowerCase();
+      if (name == 'tr') {
+        final cells = [
+          for (final cell in child.childElements)
+            if (cell.localName.toLowerCase() case 'td' || 'th')
+              sink.cell(() {
+                for (final part in cell.children) {
+                  walk(part, cellContext);
+                }
+              }),
+        ];
+        if (cells.isEmpty) continue;
+        if (rows.isEmpty) {
+          final kinds = child.childElements
+              .map((cell) => cell.localName.toLowerCase())
+              .where((name) => name == 'td' || name == 'th');
+          header =
+              element.localName.toLowerCase() == 'thead' ||
+              kinds.every((name) => name == 'th');
+        }
+        rows.add(cells);
+      } else if (name == 'thead' || name == 'tbody' || name == 'tfoot') {
+        visit(child);
+      } else if (name == 'caption' && rows.isEmpty) {
+        // What the table is of, above it.
+        for (final part in child.children) {
+          walk(part, context.copyWith(flags: context.flags.add(italic: true)));
+        }
+        sink.flush(context);
+      }
+    }
+  }
+
+  visit(table);
+  sink.table(rows, header: header, context: context);
+}
 
 /// The value of an attribute by its local name, whatever namespace prefix a
 /// book gave it — FB2 writes `l:href`, `xlink:href` or a bare `href`.
@@ -321,18 +449,7 @@ List<ReflowBlock> fb2Blocks(
       case 'image':
         sink.picture(imageOf(node), context);
       case 'table':
-        block(context);
-      case 'tr':
-        sink.flush(context);
-        var first = true;
-        for (final cell in node.childElements) {
-          if (!first) sink.text(' | ', context);
-          first = false;
-          for (final child in cell.children) {
-            walk(child, context);
-          }
-        }
-        sink.flush(context);
+        _readTable(node, sink, context, walk);
       case 'emphasis':
         children(context.copyWith(flags: context.flags.add(italic: true)));
       case 'strong':
@@ -503,17 +620,8 @@ List<ReflowBlock>? htmlBlocks(
         sink.text('• ', context);
         children(context);
         sink.flush(context);
-      case 'tr':
-        sink.flush(context);
-        var first = true;
-        for (final cell in node.childElements) {
-          if (!first) sink.text(' | ', context);
-          first = false;
-          for (final child in cell.children) {
-            walk(child, context);
-          }
-        }
-        sink.flush(context);
+      case 'table':
+        _readTable(node, sink, context, walk);
       case 'em' || 'i' || 'cite' || 'dfn' || 'var':
         children(context.copyWith(flags: context.flags.add(italic: true)));
       case 'strong' || 'b':
@@ -558,7 +666,8 @@ List<ReflowBlock>? htmlBlocks(
 List<ReflowBlock> docxBlocks(String documentXml) {
   final xml = XmlDocument.parse(documentXml);
   final sink = _BlockSink();
-  for (final paragraph in xml.findAllElements('p', namespace: '*')) {
+
+  void readParagraph(XmlElement paragraph) {
     var context = const _Context();
     final properties = paragraph.childElements
         .where((e) => e.localName == 'pPr')
@@ -624,6 +733,43 @@ List<ReflowBlock> docxBlocks(String documentXml) {
     }
     sink.flush(context);
   }
+
+  // The body in order: paragraphs, and tables as grids — a table's cells
+  // hold paragraphs of their own, which are the cell's text.
+  void read(XmlElement container) {
+    for (final element in container.childElements) {
+      switch (element.localName) {
+        case 'p':
+          readParagraph(element);
+        case 'tbl' when sink._inCell == 0:
+          final rows = <List<TableCellText>>[];
+          var header = false;
+          for (final row in element.childElements) {
+            if (row.localName != 'tr') continue;
+            final cells = [
+              for (final cell in row.childElements)
+                if (cell.localName == 'tc') sink.cell(() => read(cell)),
+            ];
+            if (cells.isEmpty) continue;
+            if (rows.isEmpty) {
+              header = row
+                  .findElements('trPr', namespace: '*')
+                  .expand((e) => e.childElements)
+                  .any((e) => e.localName == 'tblHeader');
+            }
+            rows.add(cells);
+          }
+          sink.table(rows, header: header, context: const _Context());
+        case 'sectPr' || 'pPr' || 'tblPr' || 'tblGrid' || 'trPr' || 'tcPr':
+          break;
+        default:
+          read(element);
+      }
+    }
+  }
+
+  read(xml.rootElement);
+  sink.flush(const _Context());
   return sink.blocks;
 }
 

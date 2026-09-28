@@ -151,15 +151,81 @@ void main() {
     expect(shown.formatRuns, isEmpty);
   });
 
-  testWidgets('a table is set as preformatted text, header bold', (
+  testWidgets('a table is drawn as a grid of cells, header bold', (
     tester,
   ) async {
-    const markdown = '| Item | Qty |\n|------|-----|\n| Pen  | 12  |';
+    const markdown = '| Item | Qty |\n|------|----:|\n| Pen  | 12  |';
     final table = parseMarkdownBlocks(markdown).single;
     await _pump(tester, markdown);
-    final shown = _shown(tester, table.text);
-    expect(shown.style!.fontFamily, codeFontFamily);
-    expect(shown.formatRuns.single.bold, isTrue);
+    // A cell of its own for each of the four.
+    for (final cell in table.tableCells!.expand((row) => row)) {
+      final shown = tester.widget<TranslatableText>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TranslatableText &&
+              widget.text == table.text &&
+              widget.start == cell.start &&
+              widget.end == cell.end,
+        ),
+      );
+      expect(shown.style!.fontFamily, isNot(codeFontFamily));
+    }
+    // The header's cells sit side by side, above the row under them, and the
+    // right-aligned column's number hugs its right edge.
+    Rect cellRect(int row, int column) {
+      final cell = table.tableCells![row][column];
+      return tester.getRect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TranslatableText &&
+              widget.text == table.text &&
+              widget.start == cell.start,
+        ),
+      );
+    }
+
+    expect(cellRect(0, 1).left, greaterThan(cellRect(0, 0).right));
+    expect(cellRect(1, 0).top, greaterThan(cellRect(0, 0).bottom));
+    expect(cellRect(1, 1).right, closeTo(cellRect(0, 1).right, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a long table is split between rows, its header on each page', (
+    tester,
+  ) async {
+    final rows = [
+      for (var i = 0; i < 60; i++)
+        '| row $i | a cell with enough words in it to wrap onto a second line |',
+    ];
+    final markdown = '| Name | Description |\n|---|---|\n${rows.join('\n')}';
+    await _pump(tester, markdown);
+
+    final seen = <String>{};
+    for (var page = 0; page < 60; page++) {
+      final cells = [
+        for (final widget in tester.widgetList<TranslatableText>(
+          find.byType(TranslatableText),
+        ))
+          widget.text.substring(widget.start, widget.end),
+      ];
+      if (cells.isEmpty) break;
+      // Every page of the table starts with its header.
+      expect(cells.take(2), ['Name', 'Description']);
+      seen.addAll(cells.where((cell) => cell.startsWith('row ')));
+      expect(tester.takeException(), isNull);
+      final before = cells.join();
+      await tester.drag(find.byType(PagedReflowView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      final after = [
+        for (final widget in tester.widgetList<TranslatableText>(
+          find.byType(TranslatableText),
+        ))
+          widget.text.substring(widget.start, widget.end),
+      ].join();
+      if (after == before) break;
+    }
+    // Every row, none lost at a page's edge.
+    expect(seen.length, 60);
   });
 
   testWidgets('inline styling reaches the page as runs over the plain text', (
@@ -213,6 +279,15 @@ void main() {
       // A rule is a hairline, not a piece of text, so no word of it is ever
       // painted.
       if (block.text.isEmpty) continue;
+      if (block.isTable) {
+        // A table's cells are painted each on its own, the bars between
+        // them drawn as rules.
+        expect(slices[block.text], {
+          for (final cell in block.tableCells!.expand((row) => row))
+            if (cell.end > cell.start) (start: cell.start, end: cell.end),
+        });
+        continue;
+      }
       final Set<({int start, int end})> painted =
           slices[block.text] ?? const {};
       // Line breaks don't count: a slice of preformatted text ends on the

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 
 import 'reflow_builder.dart';
+import 'reflow_table.dart';
 
 /// A piece of one [ReflowBlock] placed on a sub-page: either a whole image
 /// or divider block, or the character range `[start, end)` of a paragraph's
@@ -79,6 +80,11 @@ List<ReflowSubPage> paginateReflowBlocks({
   // relative to the page's text. Whatever it says is what is reserved, and
   // the caller paints the figure at exactly that size.
   Size Function(ReflowBlock block)? imageSizeFor,
+  // How a table is laid out in [width] less its insets. A table is split
+  // between its rows, never through one, and a piece that continues it on
+  // the next sub-page shows its header row again. Without this, a table is
+  // measured as the lines of its plain text.
+  ReflowTableLayout Function(ReflowBlock block, double width)? tableLayoutFor,
 }) {
   if (blocks.isEmpty || width <= 0 || height <= 0) return const [];
 
@@ -140,8 +146,56 @@ List<ReflowSubPage> paginateReflowBlocks({
       continue;
     }
 
-    final style = styleFor(block);
     final insets = insetsFor?.call(block) ?? (left: 0.0, right: 0.0);
+    if (block.isTable && tableLayoutFor != null) {
+      final rows = block.tableCells!;
+      if (rows.isEmpty || rows.first.isEmpty) continue;
+      final layout = tableLayoutFor(
+        block,
+        math.max(20.0, width - insets.left - insets.right),
+      );
+      var row = 0;
+      var firstSlice = true;
+      while (row < rows.length) {
+        final spacing = firstSlice && used > 0 ? gap : 0.0;
+        final repeatHeader = block.tableHeader && !firstSlice && row > 0;
+        final available = height - used - spacing - trailingSpacing;
+        final startRow = row;
+        while (row < rows.length &&
+            layout.heightOf(startRow, row + 1, repeatHeader: repeatHeader) <=
+                available) {
+          row++;
+        }
+        if (row == startRow) {
+          if (used > 0) {
+            closePage();
+            continue;
+          }
+          // A row taller than a page goes on one of its own, cut off.
+          row++;
+        }
+        current.add(
+          ReflowSlice(
+            blockIndex: blockIndex,
+            start: rows[startRow].first.start,
+            end: row < rows.length ? rows[row].first.start : block.text.length,
+            isFirstOfBlock: firstSlice,
+          ),
+        );
+        used +=
+            spacing +
+            math.min(
+              height,
+              layout.heightOf(startRow, row, repeatHeader: repeatHeader),
+            ) +
+            trailingSpacing;
+        firstSlice = false;
+        if (row < rows.length) closePage();
+      }
+      continue;
+    }
+
+    final style = styleFor(block);
     // Whatever is left after the block's own inset is the width its lines
     // are laid out in — and have to be measured in, or the painted lines
     // come out one taller than the page was budgeted for.

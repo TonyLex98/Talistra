@@ -1,10 +1,12 @@
 import 'dart:math' as math;
+import 'dart:ui' show TextAlign;
 
 import 'reflow_builder.dart';
+import 'reflow_table.dart';
 
 /// Reads Markdown source into [ReflowBlock]s the paginated reader can lay
 /// out — headings at their real levels, lists and blockquotes indented,
-/// fenced code and tables set in monospace on their own panel, rules drawn
+/// fenced code set in monospace on its own panel, tables drawn as grids, rules drawn
 /// as rules — instead of flattening it to paragraphs the way a .txt file is.
 ///
 /// The output is the same shape every other text format produces, so page
@@ -26,15 +28,6 @@ const double markdownQuoteBarWidth = 3;
 /// The padding inside a code panel, which is also how far its text sits in
 /// from the panel's painted edges.
 const double markdownCodePadding = 11;
-
-/// Where a table stops being narrow enough for its padded columns to stay
-/// lined up across a phone's column and is printed with single spaces
-/// instead, wrapping however it has to.
-///
-/// The column is about 30 monospace characters wide at a normal reading size,
-/// so a wider row would break in the middle of a cell — which reads worse
-/// than the alignment it was meant to keep.
-const int _maxAlignedTableWidth = 30;
 
 /// The visual kind of a block, used to decide the space above it: a list
 /// item after another list item wants far less room than a paragraph after a
@@ -86,9 +79,14 @@ class MarkdownStyle {
 
 final MarkdownStyle _bodyStyle = MarkdownStyle(1.0, 1.0);
 
+/// A table's cells are a touch smaller than prose, so a few columns fit a
+/// phone's width, and tighter, since the rules already set rows apart.
+final MarkdownStyle _tableStyle = MarkdownStyle(0.9, 0.9);
+
 /// The typography one of this file's blocks asks for, or null for a block
 /// that came from anywhere else and wants the reader's plain body style.
 MarkdownStyle? markdownStyle(ReflowBlock block) {
+  if (block.isTable) return _tableStyle;
   if (block.isCode) {
     // Tighter than prose and a little smaller: the panel has to hold lines
     // as their author indented them, and the extra leading is the only
@@ -237,7 +235,41 @@ class _Markdown {
       );
     }
 
+    // Four spaces in, after a blank line and outside any list, is code.
+    if (width >= 4 && (index == 0 || _lines[index - 1].trim().isEmpty)) {
+      return _parseIndentedCode(index);
+    }
+
     return _parseParagraph(index);
+  }
+
+  /// A code block written by indenting it four spaces rather than fencing
+  /// it: its lines run until one that is back at the margin, blank lines in
+  /// between kept.
+  int _parseIndentedCode(int index) {
+    final body = <String>[];
+    var end = index;
+    while (end < _lines.length) {
+      final line = _lines[end];
+      if (line.trim().isNotEmpty && _leadingWidth(line) < 4) break;
+      body.add(line.trim().isEmpty ? '' : _dropColumns(line, 4));
+      end++;
+    }
+    while (body.isNotEmpty && body.last.isEmpty) {
+      body.removeLast();
+    }
+    _levels.clear();
+    _emit(
+      () => ReflowBlock.paragraph(
+        body.join('\n'),
+        isCode: true,
+        quoteDepth: quoteDepth,
+        gapAbove: _gapAbove(_Kind.code, 0),
+      ),
+      _Kind.code,
+      indent: 0,
+    );
+    return end;
   }
 
   /// Whether the first line with anything on it from [index] on belongs to
@@ -427,57 +459,36 @@ class _Markdown {
     return match.group(1)!.startsWith('=') ? 1 : 2;
   }
 
-  /// A GitHub-flavoured pipe table, printed the way its author drew it: rows
-  /// of cells padded to their column's width and separated by a bar, on the
-  /// code panel's monospace face. That is the only way columns can survive a
-  /// page that reflows, and the header row goes bold in place of the
-  /// separator row that said which it was.
+  /// A GitHub-flavoured pipe table, drawn as a grid: its header row bold,
+  /// each column aligned the way its separator row says, and a cell's own
+  /// emphasis and inline code kept.
   int _parseTable(int index) {
     final header = _cells(_lines[index]);
     final separators = _cells(_lines[index + 1]);
-    final aligns = [
+    final alignments = [
       for (var i = 0; i < header.length; i++)
-        _alignmentOf(i < separators.length ? separators[i] : '-'),
+        switch (_alignmentOf(i < separators.length ? separators[i] : '-')) {
+          1 => TextAlign.center,
+          2 => TextAlign.right,
+          _ => TextAlign.left,
+        },
     ];
-    final rows = <List<String>>[header.map(_plainCell).toList()];
+    final rows = <List<TableCellText>>[header.map(_cell).toList()];
     var end = index + 2;
     while (end < _lines.length &&
         _lines[end].trim().isNotEmpty &&
         _lines[end].contains('|')) {
       final cells = _cells(_lines[end]);
       if (cells.isEmpty) break;
-      for (var i = cells.length; i < header.length; i++) {
-        cells.add('');
-      }
-      rows.add(cells.take(header.length).map(_plainCell).toList());
+      rows.add(cells.take(header.length).map(_cell).toList());
       end++;
     }
 
-    final widths = List<int>.filled(header.length, 0);
-    for (final row in rows) {
-      for (var i = 0; i < widths.length; i++) {
-        widths[i] = math.max(widths[i], row[i].length);
-      }
-    }
-    final total =
-        widths.fold<int>(0, (a, b) => a + b) +
-        3 * math.max(0, widths.length - 1);
-    final pad = total <= _maxAlignedTableWidth;
-
-    final lines = [
-      for (final row in rows)
-        [
-          for (var i = 0; i < row.length; i++)
-            pad ? _pad(row[i], widths[i], aligns[i]) : row[i],
-        ].join(' | '),
-    ];
-
     _levels.clear();
     _emit(
-      () => ReflowBlock.paragraph(
-        lines.join('\n'),
-        formatRuns: [FormatRun(start: 0, end: lines.first.length, bold: true)],
-        isCode: true,
+      () => reflowTable(
+        rows,
+        alignments: alignments,
         quoteDepth: quoteDepth,
         gapAbove: _gapAbove(_Kind.code, 0),
       ),
@@ -518,6 +529,11 @@ class _Markdown {
   /// before it, which is what makes a list read as a list.
   void _emit(ReflowBlock Function() build, _Kind kind, {required int indent}) {
     final block = build();
+    // A paragraph with nothing left to read once its markup is gone — an
+    // HTML comment, a tag on a line of its own — is no block at all.
+    if (!block.isDivider && !block.isTable && block.text.trim().isEmpty) {
+      return;
+    }
     _blocks.add(block);
     _previousKind = kind;
     _previousIndent = indent;
@@ -619,6 +635,15 @@ String? _taskMarker(String rest) {
   return null;
 }
 
+/// [line] with its first [columns] columns of indentation taken off.
+String _dropColumns(String line, int columns) {
+  var i = 0;
+  while (i < line.length && i < columns && line[i] == ' ') {
+    i++;
+  }
+  return line.substring(i);
+}
+
 int _leadingWidth(String line) {
   var width = 0;
   for (var i = 0; i < line.length; i++) {
@@ -651,7 +676,12 @@ String _joinLines(List<String> lines) {
   for (var i = 0; i < lines.length; i++) {
     final raw = lines[i];
     final hard = RegExp(r'( {2,}|\\)$').hasMatch(raw);
-    buffer.write(raw.trim());
+    var line = raw.trim();
+    // The backslash is the break's marker, not a character of the line.
+    if (hard && i < lines.length - 1 && line.endsWith(r'\')) {
+      line = line.substring(0, line.length - 1).trimRight();
+    }
+    buffer.write(line);
     if (i == lines.length - 1) break;
     buffer.write(hard ? '\n' : ' ');
   }
@@ -696,20 +726,9 @@ int _alignmentOf(String separator) {
   return 0;
 }
 
-String _plainCell(String cell) => _Inline(cell).parse().text;
-
-String _pad(String cell, int width, int alignment) {
-  if (cell.length >= width) return cell;
-  final gap = ' ' * (width - cell.length);
-  switch (alignment) {
-    case 1:
-      final left = gap.length ~/ 2;
-      return '${gap.substring(0, left)}$cell${gap.substring(left)}';
-    case 2:
-      return '$gap$cell';
-    default:
-      return '$cell$gap';
-  }
+TableCellText _cell(String cell) {
+  final inline = _Inline(cell).parse();
+  return (text: inline.text, runs: inline.runs);
 }
 
 // ---------------------------------------------------------------- inline
@@ -882,6 +901,23 @@ class _Inline {
           continue;
         }
       }
+      if (ch == '[' && source.startsWith('[^', i)) {
+        // A footnote: its mark as a number in brackets, and its note — the
+        // `[^1]:` that opens a paragraph — under the same number.
+        final close = source.indexOf(']', i + 2);
+        final label = close > i + 2 && close < to
+            ? source.substring(i + 2, close)
+            : null;
+        if (label != null && !label.contains(' ')) {
+          // The note itself: `[^1]: text` reads `[1] text`.
+          final opensNote =
+              i == 0 && close + 1 < to && source[close + 1] == ':';
+          flush();
+          _write('[$label]', flags.add(link: true));
+          i = close + (opensNote ? 2 : 1);
+          continue;
+        }
+      }
       if (ch == '[') {
         final link = _linkAt(i, to);
         if (link != null) {
@@ -917,8 +953,20 @@ class _Inline {
             }
             continue;
           }
-          // Any other tag is raw HTML this reader can't honour; the text
+          // The inline tags that say how their words are set are set so;
+          // any other tag is raw HTML this reader can't honour — the text
           // inside it still belongs to the sentence, the tag doesn't.
+          final tag = _inlineTag.firstMatch(inner);
+          final name = tag?.group(1)!.toLowerCase();
+          final styled = name == null ? null : _styleOfTag(name, flags);
+          if (styled != null) {
+            final end = source.toLowerCase().indexOf('</$name>', close + 1);
+            if (end >= 0 && end < to) {
+              _scan(close + 1, end, styled);
+              i = end + name!.length + 3;
+              continue;
+            }
+          }
           i = close + 1;
           continue;
         }
@@ -1043,6 +1091,20 @@ final _autoLink = RegExp(r'^(https?://\S+|mailto:\S+|\S+@\S+\.\S+)$');
 
 final _lineBreakTag = RegExp(r'^/?br\s*/?$', caseSensitive: false);
 
+/// An opening inline tag, its name in group 1.
+final _inlineTag = RegExp(r'^([A-Za-z]+)(?:\s[^<>]*)?$');
+
+/// How the text inside an inline HTML tag named [name] is set, or null for
+/// a tag that says nothing about it.
+_Flags? _styleOfTag(String name, _Flags flags) => switch (name) {
+  'b' || 'strong' => flags.add(bold: true),
+  'i' || 'em' || 'cite' || 'dfn' || 'var' => flags.add(italic: true),
+  'code' || 'kbd' || 'samp' || 'tt' => flags.add(code: true),
+  's' || 'del' || 'strike' => flags.add(strike: true),
+  'u' || 'ins' || 'mark' || 'sub' || 'sup' || 'span' || 'small' => flags,
+  _ => null,
+};
+
 /// What goes between `<` and `>` in an HTML tag or comment: a name that
 /// starts with a letter, then attributes — never a bare space or an arrow.
 final _htmlTag = RegExp(
@@ -1099,4 +1161,52 @@ const Map<String, String> _entities = {
   '&lsquo;': '‘',
   '&times;': '×',
   '&deg;': '°',
+  '&copy;': '©',
+  '&reg;': '®',
+  '&trade;': '™',
+  '&euro;': '€',
+  '&pound;': '£',
+  '&yen;': '¥',
+  '&cent;': '¢',
+  '&sect;': '§',
+  '&para;': '¶',
+  '&middot;': '·',
+  '&bull;': '•',
+  '&plusmn;': '±',
+  '&minus;': '−',
+  '&divide;': '÷',
+  '&le;': '≤',
+  '&ge;': '≥',
+  '&ne;': '≠',
+  '&asymp;': '≈',
+  '&infin;': '∞',
+  '&larr;': '←',
+  '&rarr;': '→',
+  '&uarr;': '↑',
+  '&darr;': '↓',
+  '&harr;': '↔',
+  '&lArr;': '⇐',
+  '&rArr;': '⇒',
+  '&check;': '✓',
+  '&thinsp;': '\u2009',
+  '&ensp;': '\u2002',
+  '&emsp;': '\u2003',
+  '&shy;': '',
+  '&zwj;': '',
+  '&zwnj;': '',
+  '&frac12;': '½',
+  '&frac14;': '¼',
+  '&frac34;': '¾',
+  '&sup2;': '²',
+  '&sup3;': '³',
+  '&micro;': 'µ',
+  '&alpha;': 'α',
+  '&beta;': 'β',
+  '&gamma;': 'γ',
+  '&delta;': 'δ',
+  '&pi;': 'π',
+  '&sigma;': 'σ',
+  '&lambda;': 'λ',
+  '&mu;': 'μ',
+  '&Omega;': 'Ω',
 };
