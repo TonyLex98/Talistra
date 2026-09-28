@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher art, drawn from the copy made for the screen's density
+     (mipmap-*/ic_launcher_foreground.png) rather than one 1254 px bitmap
+     shrunk five times over without mipmaps, which is what left the icon's
+     edges jagged. -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
     android:gravity="fill"
-    android:src="@drawable/litra_launcher_foreground" />
+    android:filter="true"
+    android:antialias="true"
+    android:mipMap="true"
+    android:src="@mipmap/ic_launcher_foreground" />
