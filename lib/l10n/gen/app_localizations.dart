@@ -1057,6 +1057,282 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Не гасить экран выше {percent}% заряда'**
   String keepScreenOnBatteryLabel(Object percent);
+
+  /// No description provided for @contentsAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Оглавление'**
+  String get contentsAction;
+
+  /// No description provided for @contentsEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'В этой книге нет оглавления'**
+  String get contentsEmpty;
+
+  /// No description provided for @addBookmarkAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Добавить закладку'**
+  String get addBookmarkAction;
+
+  /// No description provided for @removeBookmarkAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Убрать закладку'**
+  String get removeBookmarkAction;
+
+  /// No description provided for @bookmarksAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Закладки и заметки'**
+  String get bookmarksAction;
+
+  /// No description provided for @bookmarksEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'Здесь появятся закладки и заметки. Добавьте закладку в меню «Ещё» или выделите текст и выберите «Заметка».'**
+  String get bookmarksEmpty;
+
+  /// No description provided for @bookmarkAdded.
+  ///
+  /// In ru, this message translates to:
+  /// **'Закладка добавлена'**
+  String get bookmarkAdded;
+
+  /// No description provided for @bookmarkRemoved.
+  ///
+  /// In ru, this message translates to:
+  /// **'Закладка убрана'**
+  String get bookmarkRemoved;
+
+  /// No description provided for @bookmarkPage.
+  ///
+  /// In ru, this message translates to:
+  /// **'Стр. {page}'**
+  String bookmarkPage(int page);
+
+  /// No description provided for @selectionNote.
+  ///
+  /// In ru, this message translates to:
+  /// **'Заметка'**
+  String get selectionNote;
+
+  /// No description provided for @noteDialogTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Заметка к отрывку'**
+  String get noteDialogTitle;
+
+  /// No description provided for @noteHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ваша мысль (необязательно)'**
+  String get noteHint;
+
+  /// No description provided for @noteSaved.
+  ///
+  /// In ru, this message translates to:
+  /// **'Заметка сохранена'**
+  String get noteSaved;
+
+  /// No description provided for @editNote.
+  ///
+  /// In ru, this message translates to:
+  /// **'Изменить заметку'**
+  String get editNote;
+
+  /// No description provided for @saveWordAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'В словарь'**
+  String get saveWordAction;
+
+  /// No description provided for @wordSaved.
+  ///
+  /// In ru, this message translates to:
+  /// **'Добавлено в словарь'**
+  String get wordSaved;
+
+  /// No description provided for @wordAlreadySaved.
+  ///
+  /// In ru, this message translates to:
+  /// **'Уже в словаре'**
+  String get wordAlreadySaved;
+
+  /// No description provided for @vocabularyTooltip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Мой словарь'**
+  String get vocabularyTooltip;
+
+  /// No description provided for @vocabularyTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Мой словарь'**
+  String get vocabularyTitle;
+
+  /// No description provided for @vocabularyEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'Словарь пока пуст. Нажмите на слово в книге и затем «В словарь» в карточке перевода.'**
+  String get vocabularyEmpty;
+
+  /// No description provided for @vocabularyDue.
+  ///
+  /// In ru, this message translates to:
+  /// **'К повторению: {count}'**
+  String vocabularyDue(int count);
+
+  /// No description provided for @practiceAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Тренировка'**
+  String get practiceAction;
+
+  /// No description provided for @practiceShowAnswer.
+  ///
+  /// In ru, this message translates to:
+  /// **'Показать перевод'**
+  String get practiceShowAnswer;
+
+  /// No description provided for @practiceKnow.
+  ///
+  /// In ru, this message translates to:
+  /// **'Помню'**
+  String get practiceKnow;
+
+  /// No description provided for @practiceForgot.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не помню'**
+  String get practiceForgot;
+
+  /// No description provided for @practiceDone.
+  ///
+  /// In ru, this message translates to:
+  /// **'На сегодня всё повторено. Возвращайтесь завтра!'**
+  String get practiceDone;
+
+  /// No description provided for @vocabularyExportAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Экспорт в CSV (Anki)'**
+  String get vocabularyExportAction;
+
+  /// No description provided for @vocabularyExported.
+  ///
+  /// In ru, this message translates to:
+  /// **'Словарь сохранён'**
+  String get vocabularyExported;
+
+  /// No description provided for @vocabularyTranslationHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Перевод'**
+  String get vocabularyTranslationHint;
+
+  /// No description provided for @readAloudAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Читать вслух'**
+  String get readAloudAction;
+
+  /// No description provided for @stopReadingAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Остановить чтение'**
+  String get stopReadingAction;
+
+  /// No description provided for @ttsUnavailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Синтез речи для этого языка недоступен на устройстве'**
+  String get ttsUnavailable;
+
+  /// No description provided for @backupSectionTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Резервная копия'**
+  String get backupSectionTitle;
+
+  /// No description provided for @backupExport.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сохранить резервную копию'**
+  String get backupExport;
+
+  /// No description provided for @backupExportSubtitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Прогресс чтения, закладки, заметки, словарь, статистика и настройки'**
+  String get backupExportSubtitle;
+
+  /// No description provided for @backupImport.
+  ///
+  /// In ru, this message translates to:
+  /// **'Восстановить из копии'**
+  String get backupImport;
+
+  /// No description provided for @backupImportSubtitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Книги сопоставляются по файлу: добавьте их в библиотеку заново, и прогресс вернётся'**
+  String get backupImportSubtitle;
+
+  /// No description provided for @backupSaved.
+  ///
+  /// In ru, this message translates to:
+  /// **'Резервная копия сохранена'**
+  String get backupSaved;
+
+  /// No description provided for @backupRestored.
+  ///
+  /// In ru, this message translates to:
+  /// **'Данные восстановлены'**
+  String get backupRestored;
+
+  /// No description provided for @backupFailed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не получилось: {error}'**
+  String backupFailed(String error);
+
+  /// No description provided for @pdfPasswordTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'PDF защищён паролем'**
+  String get pdfPasswordTitle;
+
+  /// No description provided for @pdfPasswordHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пароль'**
+  String get pdfPasswordHint;
+
+  /// No description provided for @pdfPasswordWrong.
+  ///
+  /// In ru, this message translates to:
+  /// **'Неверный пароль'**
+  String get pdfPasswordWrong;
+
+  /// No description provided for @open.
+  ///
+  /// In ru, this message translates to:
+  /// **'Открыть'**
+  String get open;
+
+  /// No description provided for @feedbackAttachLog.
+  ///
+  /// In ru, this message translates to:
+  /// **'Приложить журнал ошибок'**
+  String get feedbackAttachLog;
+
+  /// No description provided for @feedbackAttachLogSubtitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Технические сведения о сбоях, без содержимого книг'**
+  String get feedbackAttachLogSubtitle;
 }
 
 class _AppLocalizationsDelegate

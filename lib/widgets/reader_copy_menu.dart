@@ -15,7 +15,12 @@ class ReaderCopyMenu extends StatelessWidget {
     super.key,
     required this.pageText,
     required this.bookText,
+    this.actions = const [],
   });
+
+  /// What else the reader can do from here — the contents, bookmarks, reading
+  /// aloud — listed above the two copy actions.
+  final List<ReaderMenuAction> actions;
 
   /// The page on screen, already gathered, or null when there is none.
   final String? Function() pageText;
@@ -29,27 +34,42 @@ class ReaderCopyMenu extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.copy_all_outlined),
-              title: Text(l10n.copyPageAction),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _copy(context, pageText());
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.library_books_outlined),
-              title: Text(l10n.copyBookAction),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _copyBook(context);
-              },
-            ),
-          ],
+        // A short phone held sideways has room for fewer rows than the menu
+        // has; it scrolls rather than overflows.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final action in actions)
+                ListTile(
+                  leading: Icon(action.icon),
+                  title: Text(action.label),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    action.onSelected();
+                  },
+                ),
+              if (actions.isNotEmpty) const Divider(height: 8),
+              ListTile(
+                leading: const Icon(Icons.copy_all_outlined),
+                title: Text(l10n.copyPageAction),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _copy(context, pageText());
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.library_books_outlined),
+                title: Text(l10n.copyBookAction),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _copyBook(context);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -101,4 +121,19 @@ class ReaderCopyMenu extends StatelessWidget {
       onPressed: () => _open(context),
     );
   }
+}
+
+/// One entry of the reader's «Ещё» menu.
+class ReaderMenuAction {
+  const ReaderMenuAction({
+    required this.icon,
+    required this.label,
+    required this.onSelected,
+  });
+
+  final IconData icon;
+  final String label;
+
+  /// Called once the menu has closed.
+  final VoidCallback onSelected;
 }

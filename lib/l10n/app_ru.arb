@@ -225,5 +225,61 @@
   ,"readingBrightnessSystemValue": "Системная"
   ,"keepScreenOnTitle": "Не гасить экран при чтении"
   ,"keepScreenOnSubtitle": "Ниже запаса заряда используется системный тайм-аут."
-  ,"keepScreenOnBatteryLabel": "Не гасить экран выше {percent}% заряда"
+  ,"keepScreenOnBatteryLabel": "Не гасить экран выше {percent}% заряда",
+
+  "contentsAction": "Оглавление",
+  "contentsEmpty": "В этой книге нет оглавления",
+  "addBookmarkAction": "Добавить закладку",
+  "removeBookmarkAction": "Убрать закладку",
+  "bookmarksAction": "Закладки и заметки",
+  "bookmarksEmpty": "Здесь появятся закладки и заметки. Добавьте закладку в меню «Ещё» или выделите текст и выберите «Заметка».",
+  "bookmarkAdded": "Закладка добавлена",
+  "bookmarkRemoved": "Закладка убрана",
+  "bookmarkPage": "Стр. {page}",
+  "@bookmarkPage": {
+    "placeholders": { "page": {"type": "int"} }
+  },
+  "selectionNote": "Заметка",
+  "noteDialogTitle": "Заметка к отрывку",
+  "noteHint": "Ваша мысль (необязательно)",
+  "noteSaved": "Заметка сохранена",
+  "editNote": "Изменить заметку",
+  "saveWordAction": "В словарь",
+  "wordSaved": "Добавлено в словарь",
+  "wordAlreadySaved": "Уже в словаре",
+  "vocabularyTooltip": "Мой словарь",
+  "vocabularyTitle": "Мой словарь",
+  "vocabularyEmpty": "Словарь пока пуст. Нажмите на слово в книге и затем «В словарь» в карточке перевода.",
+  "vocabularyDue": "К повторению: {count}",
+  "@vocabularyDue": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "practiceAction": "Тренировка",
+  "practiceShowAnswer": "Показать перевод",
+  "practiceKnow": "Помню",
+  "practiceForgot": "Не помню",
+  "practiceDone": "На сегодня всё повторено. Возвращайтесь завтра!",
+  "vocabularyExportAction": "Экспорт в CSV (Anki)",
+  "vocabularyExported": "Словарь сохранён",
+  "vocabularyTranslationHint": "Перевод",
+  "readAloudAction": "Читать вслух",
+  "stopReadingAction": "Остановить чтение",
+  "ttsUnavailable": "Синтез речи для этого языка недоступен на устройстве",
+  "backupSectionTitle": "Резервная копия",
+  "backupExport": "Сохранить резервную копию",
+  "backupExportSubtitle": "Прогресс чтения, закладки, заметки, словарь, статистика и настройки",
+  "backupImport": "Восстановить из копии",
+  "backupImportSubtitle": "Книги сопоставляются по файлу: добавьте их в библиотеку заново, и прогресс вернётся",
+  "backupSaved": "Резервная копия сохранена",
+  "backupRestored": "Данные восстановлены",
+  "backupFailed": "Не получилось: {error}",
+  "@backupFailed": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+  "pdfPasswordTitle": "PDF защищён паролем",
+  "pdfPasswordHint": "Пароль",
+  "pdfPasswordWrong": "Неверный пароль",
+  "open": "Открыть",
+  "feedbackAttachLog": "Приложить журнал ошибок",
+  "feedbackAttachLogSubtitle": "Технические сведения о сбоях, без содержимого книг"
 }

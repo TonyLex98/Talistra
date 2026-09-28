@@ -545,4 +545,154 @@ class AppLocalizationsRu extends AppLocalizations {
   String keepScreenOnBatteryLabel(Object percent) {
     return 'Не гасить экран выше $percent% заряда';
   }
+
+  @override
+  String get contentsAction => 'Оглавление';
+
+  @override
+  String get contentsEmpty => 'В этой книге нет оглавления';
+
+  @override
+  String get addBookmarkAction => 'Добавить закладку';
+
+  @override
+  String get removeBookmarkAction => 'Убрать закладку';
+
+  @override
+  String get bookmarksAction => 'Закладки и заметки';
+
+  @override
+  String get bookmarksEmpty =>
+      'Здесь появятся закладки и заметки. Добавьте закладку в меню «Ещё» или выделите текст и выберите «Заметка».';
+
+  @override
+  String get bookmarkAdded => 'Закладка добавлена';
+
+  @override
+  String get bookmarkRemoved => 'Закладка убрана';
+
+  @override
+  String bookmarkPage(int page) {
+    return 'Стр. $page';
+  }
+
+  @override
+  String get selectionNote => 'Заметка';
+
+  @override
+  String get noteDialogTitle => 'Заметка к отрывку';
+
+  @override
+  String get noteHint => 'Ваша мысль (необязательно)';
+
+  @override
+  String get noteSaved => 'Заметка сохранена';
+
+  @override
+  String get editNote => 'Изменить заметку';
+
+  @override
+  String get saveWordAction => 'В словарь';
+
+  @override
+  String get wordSaved => 'Добавлено в словарь';
+
+  @override
+  String get wordAlreadySaved => 'Уже в словаре';
+
+  @override
+  String get vocabularyTooltip => 'Мой словарь';
+
+  @override
+  String get vocabularyTitle => 'Мой словарь';
+
+  @override
+  String get vocabularyEmpty =>
+      'Словарь пока пуст. Нажмите на слово в книге и затем «В словарь» в карточке перевода.';
+
+  @override
+  String vocabularyDue(int count) {
+    return 'К повторению: $count';
+  }
+
+  @override
+  String get practiceAction => 'Тренировка';
+
+  @override
+  String get practiceShowAnswer => 'Показать перевод';
+
+  @override
+  String get practiceKnow => 'Помню';
+
+  @override
+  String get practiceForgot => 'Не помню';
+
+  @override
+  String get practiceDone => 'На сегодня всё повторено. Возвращайтесь завтра!';
+
+  @override
+  String get vocabularyExportAction => 'Экспорт в CSV (Anki)';
+
+  @override
+  String get vocabularyExported => 'Словарь сохранён';
+
+  @override
+  String get vocabularyTranslationHint => 'Перевод';
+
+  @override
+  String get readAloudAction => 'Читать вслух';
+
+  @override
+  String get stopReadingAction => 'Остановить чтение';
+
+  @override
+  String get ttsUnavailable =>
+      'Синтез речи для этого языка недоступен на устройстве';
+
+  @override
+  String get backupSectionTitle => 'Резервная копия';
+
+  @override
+  String get backupExport => 'Сохранить резервную копию';
+
+  @override
+  String get backupExportSubtitle =>
+      'Прогресс чтения, закладки, заметки, словарь, статистика и настройки';
+
+  @override
+  String get backupImport => 'Восстановить из копии';
+
+  @override
+  String get backupImportSubtitle =>
+      'Книги сопоставляются по файлу: добавьте их в библиотеку заново, и прогресс вернётся';
+
+  @override
+  String get backupSaved => 'Резервная копия сохранена';
+
+  @override
+  String get backupRestored => 'Данные восстановлены';
+
+  @override
+  String backupFailed(String error) {
+    return 'Не получилось: $error';
+  }
+
+  @override
+  String get pdfPasswordTitle => 'PDF защищён паролем';
+
+  @override
+  String get pdfPasswordHint => 'Пароль';
+
+  @override
+  String get pdfPasswordWrong => 'Неверный пароль';
+
+  @override
+  String get open => 'Открыть';
+
+  @override
+  String get feedbackAttachLog => 'Приложить журнал ошибок';
+
+  @override
+  String get feedbackAttachLogSubtitle =>
+      'Технические сведения о сбоях, без содержимого книг';
 }

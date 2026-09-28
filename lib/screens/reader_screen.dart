@@ -19,6 +19,7 @@ import '../services/translation_service.dart';
 import '../utils/pdf_region_renderer.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/sentence_finder.dart';
+import '../utils/table_of_contents.dart';
 import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/pdf_page_stack_view.dart';
@@ -26,6 +27,7 @@ import '../widgets/reader_copy_menu.dart';
 import '../widgets/reading_selection_area.dart';
 import '../widgets/reflow_view.dart';
 import '../widgets/book_search_bar.dart';
+import '../widgets/contents_sheet.dart';
 import '../widgets/translation_panel.dart';
 
 /// Height of the reader's floating top bar (excluding the status bar
@@ -498,6 +500,42 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
   }
 
+  /// The PDF's own outline, read the first time the reader asks for it.
+  List<TocEntry>? _contents;
+
+  /// What the reader's «Ещё» menu offers besides copying.
+  List<ReaderMenuAction> _menuActions(AppLocalizations l10n) => [
+    if (_pdfDocument != null && _pageCount > 0)
+      ReaderMenuAction(
+        icon: Icons.toc,
+        label: l10n.contentsAction,
+        onSelected: _openContents,
+      ),
+  ];
+
+  Future<void> _openContents() async {
+    final document = _pdfDocument;
+    if (document == null) return;
+    final page = await showContentsSheet(
+      context,
+      entries: _contents ??= pdfOutline(document),
+      currentPage: _currentPage,
+    );
+    if (page == null || !mounted) return;
+    _goTo(page);
+  }
+
+  /// Turns the book to [page] (1-based), in whichever view is showing.
+  void _goTo(int page) {
+    if (page < 1 || page > _pageCount) return;
+    if (_reflowMode) {
+      _reflowKey.currentState?.jumpToPage(page);
+    } else {
+      _pdfViewKey.currentState?.jumpToPage(page);
+    }
+    _updateCurrentPage(page);
+  }
+
   Future<void> _jumpToPage() async {
     final l10n = AppLocalizations.of(context);
     final controller = TextEditingController(text: '$_currentPage');
@@ -523,13 +561,8 @@ class _ReaderScreenState extends State<ReaderScreen>
         ],
       ),
     );
-    if (target == null || target < 1 || target > _pageCount) return;
-    if (_reflowMode) {
-      _reflowKey.currentState?.jumpToPage(target);
-    } else {
-      _pdfViewKey.currentState?.jumpToPage(target);
-    }
-    _updateCurrentPage(target);
+    if (target == null) return;
+    _goTo(target);
   }
 
   /// Opens the inline search bar in the top bar (in place of the title), so
@@ -999,6 +1032,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         onPressed: _pageCount == 0 ? null : _openSearch,
       ),
       ReaderCopyMenu(
+        actions: _menuActions(l10n),
         pageText: () => _pageCount == 0 ? null : _copyPageText(),
         bookText: _copyBookText,
       ),

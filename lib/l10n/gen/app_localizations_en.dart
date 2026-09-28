@@ -542,4 +542,154 @@ class AppLocalizationsEn extends AppLocalizations {
   String keepScreenOnBatteryLabel(Object percent) {
     return 'Keep awake above $percent% battery';
   }
+
+  @override
+  String get contentsAction => 'Contents';
+
+  @override
+  String get contentsEmpty => 'This book has no table of contents';
+
+  @override
+  String get addBookmarkAction => 'Add bookmark';
+
+  @override
+  String get removeBookmarkAction => 'Remove bookmark';
+
+  @override
+  String get bookmarksAction => 'Bookmarks & notes';
+
+  @override
+  String get bookmarksEmpty =>
+      'Bookmarks and notes appear here. Add a bookmark from the More menu, or mark text and choose Note.';
+
+  @override
+  String get bookmarkAdded => 'Bookmark added';
+
+  @override
+  String get bookmarkRemoved => 'Bookmark removed';
+
+  @override
+  String bookmarkPage(int page) {
+    return 'Page $page';
+  }
+
+  @override
+  String get selectionNote => 'Note';
+
+  @override
+  String get noteDialogTitle => 'Note on the passage';
+
+  @override
+  String get noteHint => 'Your thought (optional)';
+
+  @override
+  String get noteSaved => 'Note saved';
+
+  @override
+  String get editNote => 'Edit note';
+
+  @override
+  String get saveWordAction => 'Save word';
+
+  @override
+  String get wordSaved => 'Added to your vocabulary';
+
+  @override
+  String get wordAlreadySaved => 'Already in your vocabulary';
+
+  @override
+  String get vocabularyTooltip => 'My vocabulary';
+
+  @override
+  String get vocabularyTitle => 'My vocabulary';
+
+  @override
+  String get vocabularyEmpty =>
+      'Your vocabulary is empty. Tap a word while reading, then Save word on its translation card.';
+
+  @override
+  String vocabularyDue(int count) {
+    return 'Due for review: $count';
+  }
+
+  @override
+  String get practiceAction => 'Practice';
+
+  @override
+  String get practiceShowAnswer => 'Show translation';
+
+  @override
+  String get practiceKnow => 'I knew it';
+
+  @override
+  String get practiceForgot => 'I forgot';
+
+  @override
+  String get practiceDone => 'All caught up for today. Come back tomorrow!';
+
+  @override
+  String get vocabularyExportAction => 'Export as CSV (Anki)';
+
+  @override
+  String get vocabularyExported => 'Vocabulary saved';
+
+  @override
+  String get vocabularyTranslationHint => 'Translation';
+
+  @override
+  String get readAloudAction => 'Read aloud';
+
+  @override
+  String get stopReadingAction => 'Stop reading';
+
+  @override
+  String get ttsUnavailable =>
+      'Speech for this language isn\'t available on this device';
+
+  @override
+  String get backupSectionTitle => 'Backup';
+
+  @override
+  String get backupExport => 'Save a backup';
+
+  @override
+  String get backupExportSubtitle =>
+      'Reading progress, bookmarks, notes, vocabulary, statistics and settings';
+
+  @override
+  String get backupImport => 'Restore from a backup';
+
+  @override
+  String get backupImportSubtitle =>
+      'Books are matched by file: add them to the library again and their progress comes back';
+
+  @override
+  String get backupSaved => 'Backup saved';
+
+  @override
+  String get backupRestored => 'Data restored';
+
+  @override
+  String backupFailed(String error) {
+    return 'That didn\'t work: $error';
+  }
+
+  @override
+  String get pdfPasswordTitle => 'This PDF is password-protected';
+
+  @override
+  String get pdfPasswordHint => 'Password';
+
+  @override
+  String get pdfPasswordWrong => 'Wrong password';
+
+  @override
+  String get open => 'Open';
+
+  @override
+  String get feedbackAttachLog => 'Attach the error log';
+
+  @override
+  String get feedbackAttachLogSubtitle =>
+      'Technical details of crashes, without any book content';
 }

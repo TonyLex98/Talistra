@@ -19,7 +19,9 @@ import '../utils/text_decode.dart';
 import '../utils/txt_paragraphs.dart';
 import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
+import '../utils/table_of_contents.dart';
 import '../widgets/book_search_bar.dart';
+import '../widgets/contents_sheet.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/txt_page_view.dart';
 
@@ -51,6 +53,9 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
   String? _error;
 
   int _currentPage = 1;
+
+  /// The book's chapters, read off its headings once it has loaded.
+  List<TocEntry> _contents = const [];
   double _fontSize = 17;
   bool _searchOpen = false;
 
@@ -108,6 +113,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
       if (!mounted) return;
       setState(() {
         _pages = pages;
+        _contents = tocFromPages(pages);
         _loading = false;
         // The saved page may be from an older layout of the book with more
         // pages in it; the counter and everything that indexes by it have to
@@ -222,6 +228,33 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     _updateCurrentPage(match.pageIndex + 1);
   }
 
+  /// What the reader's «Ещё» menu offers besides copying.
+  List<ReaderMenuAction> _menuActions(AppLocalizations l10n) => [
+    if (_pages.isNotEmpty)
+      ReaderMenuAction(
+        icon: Icons.toc,
+        label: l10n.contentsAction,
+        onSelected: _openContents,
+      ),
+  ];
+
+  Future<void> _openContents() async {
+    final page = await showContentsSheet(
+      context,
+      entries: _contents,
+      currentPage: _currentPage,
+    );
+    if (page == null || !mounted) return;
+    _goTo(page);
+  }
+
+  /// Turns the book to [page] (1-based), from anywhere but a search.
+  void _goTo(int page) {
+    if (page < 1 || page > _pages.length) return;
+    _pageViewKey.currentState?.jumpToPage(page);
+    _updateCurrentPage(page);
+  }
+
   Future<void> _jumpToPage() async {
     final l10n = AppLocalizations.of(context);
     final controller = TextEditingController(text: '$_currentPage');
@@ -249,9 +282,8 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
         ],
       ),
     );
-    if (target == null || target < 1 || target > _pages.length) return;
-    _pageViewKey.currentState?.jumpToPage(target);
-    _updateCurrentPage(target);
+    if (target == null) return;
+    _goTo(target);
   }
 
   @override
@@ -423,6 +455,7 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                     onPressed: _pages.isEmpty ? null : _openSearch,
                   ),
                   ReaderCopyMenu(
+                    actions: _menuActions(l10n),
                     pageText: () => _pages.isEmpty
                         ? null
                         : reflowBlocksText(
