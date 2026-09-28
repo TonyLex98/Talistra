@@ -17,6 +17,7 @@ import '../services/settings_service.dart';
 import '../services/sharing.dart';
 import '../services/statistics_service.dart';
 import '../services/translation_service.dart';
+import '../utils/page_rotation.dart';
 import '../utils/pdf_region_renderer.dart';
 import '../utils/reflow_builder.dart';
 import '../utils/sentence_finder.dart';
@@ -235,7 +236,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       final pageCount = doc.pages.count;
       final sizes = List.generate(pageCount, (i) {
         try {
-          return doc.pages[i].size;
+          return displayPageSize(doc.pages[i]);
         } catch (_) {
           // A single malformed page shouldn't take down the whole document.
           return Size.zero;

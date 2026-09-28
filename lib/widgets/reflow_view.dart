@@ -10,6 +10,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, TextLine;
 import '../l10n/gen/app_localizations.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
+import '../utils/page_rotation.dart';
 import '../utils/pdf_region_renderer.dart';
 import '../utils/reading_text_style.dart';
 import '../utils/reflow_builder.dart';
@@ -275,14 +276,92 @@ class ReflowPdfViewState extends State<ReflowPdfView>
           pageIndex,
           () => extractPageLines(widget.document, pageIndex),
         );
-        return buildReflowPageBlocks(
-          lines,
-          widget.document.pages[pageIndex].size,
-        );
+        final pageSize = displayPageSize(widget.document.pages[pageIndex]);
+        _textColumnWidths[pageIndex] = _textColumnWidth(lines, pageSize);
+        final blocks = [...buildReflowPageBlocks(lines, pageSize)];
+        _measureFigures(pageIndex, blocks);
+        return blocks;
       } catch (_) {
         return const [];
       }
     });
+  }
+
+  /// How wide the page's text runs, in PDF points: the yardstick a figure's
+  /// width is measured against, so a figure half as wide as the text on its
+  /// page is half as wide as the reflowed text.
+  final Map<int, double> _textColumnWidths = {};
+
+  static double _textColumnWidth(List<TextLine> lines, Size pageSize) {
+    var left = double.infinity;
+    var right = -double.infinity;
+    for (final line in lines) {
+      if (line.text.trim().length < 3) continue;
+      left = math.min(left, line.bounds.left);
+      right = math.max(right, line.bounds.right);
+    }
+    final width = right - left;
+    // No text to measure against (a scan, a full-page plate): the page.
+    if (!width.isFinite || width < pageSize.width * 0.3) return pageSize.width;
+    return width;
+  }
+
+  /// Figures whose real extent is known. A figure starts out as the gap
+  /// between two runs of text — a guess, full-width, often mostly paper —
+  /// and is cropped to what is actually drawn in it before it is laid out
+  /// for good (see [PdfRegionRenderer.renderTrimmedRegion]).
+  final Set<String> _measuredFigures = {};
+
+  /// Crops every figure of [pageIndex] to its ink and lays the page out
+  /// again with the real sizes. The crop's image is kept, so painting the
+  /// figure doesn't render it a second time. A gap that turns out blank
+  /// stays in the list as an empty figure — block indices are what search
+  /// hits point at — and takes no room.
+  void _measureFigures(int pageIndex, List<ReflowBlock> blocks) {
+    for (var i = 0; i < blocks.length; i++) {
+      final block = blocks[i];
+      if (!block.isImage) continue;
+      final key = '$pageIndex-$i';
+      if (!_measuredFigures.add(key)) continue;
+      final region = widget.renderer.renderTrimmedRegion(
+        pageIndex: pageIndex,
+        pdfBounds: block.imageBounds!,
+      );
+      _imageCache[key] = region.then((r) => r?.bytes);
+      region.then((r) {
+        if (!mounted) return;
+        final cached = _blocksCache[pageIndex];
+        if (cached == null || i >= cached.length) return;
+        final trimmed = r?.pdfBounds ?? Rect.zero;
+        if (trimmed == cached[i].imageBounds) return;
+        setState(() {
+          cached[i] = ReflowBlock.image(trimmed);
+          _subPagesCache.remove(pageIndex);
+        });
+      }).ignore();
+    }
+  }
+
+  /// The size a figure is shown at: the width it has relative to its page's
+  /// text, as in the PDF, and never taller than most of the screen.
+  Size _figureSize(int pageIndex, ReflowBlock block, Size contentSize) {
+    final bounds = block.imageBounds!;
+    if (bounds.isEmpty) return Size.zero;
+    final reference =
+        _textColumnWidths[pageIndex] ??
+        displayPageSize(widget.document.pages[pageIndex]).width;
+    final aspect = bounds.height / bounds.width;
+    var width = math.min(
+      contentSize.width,
+      bounds.width * contentSize.width / reference,
+    );
+    var height = width * aspect;
+    final maxHeight = contentSize.height * 0.9;
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height / aspect;
+    }
+    return Size(width, height);
   }
 
   TextStyle _styleFor(ReflowBlock block) {
@@ -336,6 +415,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
         blockSpacing: 16,
         imageSpacing: 20,
         textScaler: textScaler,
+        imageSizeFor: (block) => _figureSize(pageIndex, block, contentSize),
       );
       // Even a page with nothing on it is one (empty) sub-page, so the
       // page-turn arithmetic never has to special-case zero.
@@ -858,7 +938,12 @@ class ReflowPdfViewState extends State<ReflowPdfView>
     if (block.isImage) {
       return Padding(
         padding: EdgeInsets.only(top: isFirst ? 0 : 10, bottom: 10),
-        child: _buildImageBlock(pageIndex, slice.blockIndex, block),
+        child: _buildImageBlock(
+          pageIndex,
+          slice.blockIndex,
+          block,
+          _figureSize(pageIndex, block, _lastContentSize),
+        ),
       );
     }
     return Padding(
@@ -918,6 +1003,8 @@ class ReflowPdfViewState extends State<ReflowPdfView>
   /// (see [PdfRegionRenderer.renderTrimmedRegion]) — a diagram comes across
   /// as the diagram itself rather than a full-page-width band, and a gap
   /// that turned out to hold nothing resolves to null and takes up no room.
+  /// The figure's image — the crop [_measureFigures] already rendered, or a
+  /// fresh one if the cache let it go.
   Future<Uint8List?> _imageFor(int pageIndex, int blockIndex, Rect bounds) {
     final key = '$pageIndex-$blockIndex';
     return _imageCache.putIfAbsent(key, () async {
@@ -929,36 +1016,55 @@ class ReflowPdfViewState extends State<ReflowPdfView>
     });
   }
 
-  Widget _buildImageBlock(int pageIndex, int blockIndex, ReflowBlock block) {
-    return FutureBuilder<Uint8List?>(
-      future: _imageFor(pageIndex, blockIndex, block.imageBounds!),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const SizedBox(
-            height: 120,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          );
-        }
-        final bytes = snapshot.data;
-        if (bytes == null || bytes.isEmpty) return const SizedBox.shrink();
-        return GestureDetector(
-          onTap: () => _openFullscreenImage(bytes),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            // Cropped figures carry the page's own white paper with them,
-            // so they get the same reading-theme filter as a full page —
-            // otherwise every figure is a glaring white patch in sepia or
-            // dark mode.
-            child: ColorFiltered(
-              colorFilter: widget.readingTheme.pageImageFilter(
-                contrast: widget.settings.readingContrast,
-                weight: widget.settings.readingWeight,
+  /// A figure, at exactly the [size] the paginator reserved for it and
+  /// centred in the column — the same room whether it has arrived yet or
+  /// not, so nothing below it moves when it does.
+  Widget _buildImageBlock(
+    int pageIndex,
+    int blockIndex,
+    ReflowBlock block,
+    Size size,
+  ) {
+    if (size.isEmpty) return const SizedBox.shrink();
+    return Center(
+      child: SizedBox.fromSize(
+        size: size,
+        child: FutureBuilder<Uint8List?>(
+          future: _imageFor(pageIndex, blockIndex, block.imageBounds!),
+          builder: (context, snapshot) {
+            final bytes = snapshot.data;
+            if (bytes == null || bytes.isEmpty) {
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  color: widget.readingTheme.onBackground.withValues(
+                    alpha: 0.05,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              );
+            }
+            return GestureDetector(
+              onTap: () => _openFullscreenImage(bytes),
+              // Cropped figures carry the page's own white paper with them,
+              // so they get the same reading-theme filter as a full page —
+              // otherwise every figure is a glaring white patch in sepia or
+              // dark mode.
+              child: ColorFiltered(
+                colorFilter: widget.readingTheme.pageImageFilter(
+                  contrast: widget.settings.readingContrast,
+                  weight: widget.settings.readingWeight,
+                ),
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                ),
               ),
-              child: Image.memory(bytes, fit: BoxFit.contain),
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 

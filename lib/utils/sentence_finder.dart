@@ -4,6 +4,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import 'page_lines.dart';
 import 'text_join.dart';
+import 'page_rotation.dart';
 
 /// A word found under a tap, with its PDF-space bounds (page-local points).
 class WordHit {
@@ -109,11 +110,7 @@ SentenceMatch? findSentenceForWord({
   Rect? wordBounds,
   List<TextLine>? cachedLines,
 }) {
-  final lines =
-      cachedLines ??
-      PdfTextExtractor(
-        document,
-      ).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex);
+  final lines = cachedLines ?? extractPageLines(document, pageIndex);
   if (lines.isEmpty) return null;
 
   // The page's text has to be assembled exactly the way the reflowed view
@@ -127,7 +124,7 @@ SentenceMatch? findSentenceForWord({
   if (ordered.isEmpty) return null;
   Size pageSize;
   try {
-    pageSize = document.pages[pageIndex].size;
+    pageSize = displayPageSize(document.pages[pageIndex]);
   } catch (_) {
     pageSize = Size.zero;
   }
@@ -319,10 +316,15 @@ _matchSentence(String text, String word, {int? hintOffset}) {
 
 /// Extracts the text lines for a page; cache the result per page to avoid
 /// re-parsing the content stream on every tap.
+/// A page's text lines, in the orientation the page is shown in (see
+/// `page_rotation.dart`).
 List<TextLine> extractPageLines(PdfDocument document, int pageIndex) {
-  return PdfTextExtractor(
-    document,
-  ).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex);
+  return linesAsDisplayed(
+    document.pages[pageIndex],
+    PdfTextExtractor(
+      document,
+    ).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex),
+  );
 }
 
 /// Finds the word inside [sentence] that best matches [word], so a

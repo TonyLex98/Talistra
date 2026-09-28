@@ -74,6 +74,11 @@ List<ReflowSubPage> paginateReflowBlocks({
   // its lines wrap more often on screen than they did here. Blocks without
   // runs, and callers that pass nothing, are measured as plain text.
   InlineSpan Function(ReflowBlock block, TextStyle style)? spanFor,
+  // The size a figure is shown at, when the caller knows better than "as
+  // wide as the column" — a PDF figure keeps the width it has on its page,
+  // relative to the page's text. Whatever it says is what is reserved, and
+  // the caller paints the figure at exactly that size.
+  Size Function(ReflowBlock block)? imageSizeFor,
 }) {
   if (blocks.isEmpty || width <= 0 || height <= 0) return const [];
 
@@ -94,10 +99,15 @@ List<ReflowSubPage> paginateReflowBlocks({
 
     if (block.isImage) {
       final bounds = block.imageBounds!;
+      // A figure that turned out to be blank paper takes no room at all.
+      if (bounds.isEmpty) continue;
       final aspect = bounds.width > 0 ? bounds.height / bounds.width : 1.0;
       // A figure is displayed with BoxFit.contain inside the column width,
       // and never taller than the screen it has to fit on.
-      final imageHeight = math.min(width * aspect, height * 0.9) + imageSpacing;
+      final imageHeight =
+          (imageSizeFor?.call(block).height ??
+              math.min(width * aspect, height * 0.9)) +
+          imageSpacing;
       if (used > 0 && used + imageHeight > height) closePage();
       current.add(
         ReflowSlice(

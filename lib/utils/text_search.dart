@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, TextLine;
 
 import '../services/search_index_cache.dart';
+import 'page_rotation.dart';
 import 'page_words.dart';
 import 'reflow_builder.dart';
 import 'sentence_finder.dart';
@@ -160,7 +161,7 @@ List<String> pageBlockTexts(PdfDocument document, int index) {
     final lines = extractPageLines(document, index);
     Size pageSize;
     try {
-      pageSize = document.pages[index].size;
+      pageSize = displayPageSize(document.pages[index]);
     } catch (_) {
       pageSize = Size.zero;
     }
