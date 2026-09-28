@@ -366,6 +366,11 @@ class PdfPageStackViewState extends State<PdfPageStackView>
       pageIndex: page,
       pdfBounds: pdfBounds,
       scale: pageScale * dpr * _zoom,
+      // Ahead of the neighbours' pages, behind nothing: it is what the reader
+      // is looking at. But not worth drawing once they have zoomed out or
+      // moved on while it waited.
+      priority: PdfRegionRenderer.priorityVisible,
+      isStale: () => !mounted || _zoom <= 1.01 || _reportedPage - 1 != page,
     );
     image.then((bytes) {
       if (!mounted || bytes == null || bytes.isEmpty) return;
@@ -1116,42 +1121,62 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     return tiers.last;
   }
 
-  Future<Uint8List?> _previewFor(int pageIndex) {
-    return _previewFutures.putIfAbsent(
-      pageIndex,
-      () => widget.renderer.renderRegion(
-        pageIndex: pageIndex,
-        pdfBounds: Rect.fromLTWH(
-          0,
-          0,
-          widget.pageSizes[pageIndex].width,
-          widget.pageSizes[pageIndex].height,
-        ),
-        // Logical resolution, no device-pixel multiplier: roughly a tenth
-        // of the pixels of the sharp render, and it only has to hold up for
-        // the moment before that arrives.
-        scale: widget.pageSizes[pageIndex].width <= 0
-            ? 1.0
-            : _contentWidth / widget.pageSizes[pageIndex].width,
+  /// Renders [pageIndex] at [scale] into [cache], once. The job is dropped
+  /// unrendered if, by the time its turn comes, the page has been pruned
+  /// from the cache (it has scrolled far away) or the view is gone.
+  Future<Uint8List?> _cachedRender(
+    Map<int, Future<Uint8List?>> cache,
+    int pageIndex, {
+    required double scale,
+    required bool sharp,
+  }) {
+    final known = cache[pageIndex];
+    if (known != null) return known;
+    late final Future<Uint8List?> future;
+    future = widget.renderer.renderRegion(
+      pageIndex: pageIndex,
+      pdfBounds: Rect.fromLTWH(
+        0,
+        0,
+        widget.pageSizes[pageIndex].width,
+        widget.pageSizes[pageIndex].height,
       ),
+      scale: scale,
+      // Worth what the page is worth when its turn comes, not when it was
+      // asked for.
+      livePriority: () => _renderPriority(pageIndex, sharp: sharp),
+      isStale: () => !mounted || !identical(cache[pageIndex], future),
     );
+    return cache[pageIndex] = future;
   }
 
-  Future<Uint8List?> _imageFor(int pageIndex, double renderScale) {
-    return _imageFutures.putIfAbsent(
-      pageIndex,
-      () => widget.renderer.renderRegion(
-        pageIndex: pageIndex,
-        pdfBounds: Rect.fromLTWH(
-          0,
-          0,
-          widget.pageSizes[pageIndex].width,
-          widget.pageSizes[pageIndex].height,
-        ),
-        scale: renderScale,
-      ),
-    );
+  /// Priorities in the renderer's queue: the page being looked at first (its
+  /// quick preview, then its sharp render), then its neighbours, nearest
+  /// first, each preview ahead of its own sharp render.
+  int _renderPriority(int pageIndex, {required bool sharp}) {
+    final distance = ((_reportedPage - 1) - pageIndex).abs();
+    if (distance == 0) {
+      return (sharp ? 1 : 0) + PdfRegionRenderer.priorityVisible;
+    }
+    return PdfRegionRenderer.priorityNear +
+        2 * (distance - 1) +
+        (sharp ? 1 : 0);
   }
+
+  Future<Uint8List?> _previewFor(int pageIndex) => _cachedRender(
+    _previewFutures,
+    pageIndex,
+    // Logical resolution, no device-pixel multiplier: roughly a tenth of the
+    // pixels of the sharp render, and it only has to hold up for the moment
+    // before that arrives.
+    scale: widget.pageSizes[pageIndex].width <= 0
+        ? 1.0
+        : _contentWidth / widget.pageSizes[pageIndex].width,
+    sharp: false,
+  );
+
+  Future<Uint8List?> _imageFor(int pageIndex, double renderScale) =>
+      _cachedRender(_imageFutures, pageIndex, scale: renderScale, sharp: true);
 
   void _pruneImageCache(int lo, int hi, double zoomTier) {
     // A change of zoom tier means every cached bitmap was rasterized at the

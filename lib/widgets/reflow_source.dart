@@ -23,6 +23,17 @@ abstract class ReflowSource {
   /// [onPageChanged].
   List<ReflowBlock> blocksFor(int pageIndex);
 
+  /// Whether page [pageIndex]'s blocks are still being read — [blocksFor]
+  /// then answers with nothing yet and calls [onPageChanged] when it has
+  /// something. The view shows a page like that as loading, rather than as a
+  /// page with no text on it, and does not settle a place on it until it is
+  /// in.
+  bool isLoading(int pageIndex) => false;
+
+  /// The view says which page the reader is on, so a source that reads ahead
+  /// knows where to read from. Called whenever it changes.
+  void focusOn(int pageIndex) {}
+
   /// Set by the view: told which page's blocks changed.
   void Function(int pageIndex)? onPageChanged;
 

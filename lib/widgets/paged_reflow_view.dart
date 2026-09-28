@@ -196,6 +196,7 @@ class PagedReflowViewState extends State<PagedReflowView>
   Size _lastContentSize = Size.zero;
 
   Timer? _translateDebounce;
+  Timer? _warmTimer;
   String? _visibleTranslation;
   bool _translating = false;
 
@@ -240,6 +241,7 @@ class PagedReflowViewState extends State<PagedReflowView>
       widget.source.onPageChanged = null;
     }
     _translateDebounce?.cancel();
+    _warmTimer?.cancel();
     _turnController.dispose();
     _dragValue.dispose();
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointer);
@@ -347,6 +349,17 @@ class PagedReflowViewState extends State<PagedReflowView>
     // Past the last slice of the block: its last sub-page.
     for (var i = subPages.length - 1; i >= 0; i--) {
       if (subPages[i].any((s) => s.blockIndex == blockIndex)) return i;
+    }
+    // A block that takes no room at all — the blank gap at the foot of a PDF
+    // page, a figure that turned out to be paper — is on no sub-page: the
+    // place it stands for is where the text before it ends.
+    for (var b = blockIndex - 1; b >= 0; b--) {
+      for (var i = subPages.length - 1; i >= 0; i--) {
+        if (subPages[i].any((s) => s.blockIndex == b)) return i;
+      }
+    }
+    for (var i = 0; i < subPages.length; i++) {
+      if (subPages[i].any((s) => s.blockIndex > blockIndex)) return i;
     }
     return 0;
   }
@@ -509,6 +522,9 @@ class PagedReflowViewState extends State<PagedReflowView>
   void _applyPendingFraction(Size contentSize) {
     final fraction = _pendingFraction;
     if (fraction == null) return;
+    // Nothing to place a fraction on until the page is in: it is kept, and
+    // applied when the page arrives and lays itself out.
+    if (widget.source.isLoading(_pageIndex)) return;
     _pendingFraction = null;
     final count = _subPagesFor(_pageIndex, contentSize).length;
     // The words that were at the top of the screen, where the page knows
@@ -657,11 +673,33 @@ class PagedReflowViewState extends State<PagedReflowView>
         '$_pageIndex:$_subPageIndex:${contentSize.width}:${contentSize.height}:$_paginationFontSize';
     if (_warmedPosition == position) return;
     _warmedPosition = position;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _warmedPosition != position) return;
-      _neighbour(1, contentSize);
-      _neighbour(-1, contentSize);
-    });
+    _warmTimer?.cancel();
+    // The pages around this one, laid out a page at a time once the reader
+    // has settled on it — each in a step of its own, so that none of them
+    // holds up a frame, and none is laid out at all for a reader who is
+    // already turning on.
+    final steps = <void Function()>[
+      () => _neighbour(1, contentSize),
+      () => _neighbour(-1, contentSize),
+      for (var d = 2; d <= 3; d++)
+        () {
+          final page = _pageIndex + d;
+          if (page < widget.source.pageCount &&
+              !widget.source.isLoading(page)) {
+            _subPagesFor(page, contentSize);
+          }
+        },
+    ];
+    void next(int step, Duration wait) {
+      if (step >= steps.length) return;
+      _warmTimer = Timer(wait, () {
+        if (!mounted || _warmedPosition != position) return;
+        steps[step]();
+        next(step + 1, const Duration(milliseconds: 50));
+      });
+    }
+
+    next(0, const Duration(milliseconds: 120));
   }
 
   /// Turns a page without a drag — the edge tap zones.
@@ -1116,6 +1154,7 @@ class PagedReflowViewState extends State<PagedReflowView>
             return const SizedBox.shrink();
           }
           _lastContentSize = contentSize;
+          widget.source.focusOn(_pageIndex);
           _subPagesFor(_pageIndex, contentSize);
           _applyPendingFraction(contentSize);
           _warmNeighbourPages(contentSize);
@@ -1355,7 +1394,14 @@ class PagedReflowViewState extends State<PagedReflowView>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: blocks.isEmpty
+                  child: blocks.isEmpty && widget.source.isLoading(pageIndex)
+                      ? const Center(
+                          child: SizedBox.square(
+                            dimension: 26,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                        )
+                      : blocks.isEmpty
                       ? Center(
                           child: Text(
                             AppLocalizations.of(context).noTextOnPage,

@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:pdfx/pdfx.dart' as pdfx;
 
 import 'page_ink_bounds.dart';
+import 'priority_queue.dart';
 
 /// Renders a cropped region of a PDF page to PNG bytes, for embedding real
 /// images/diagrams/tables inline in the reflowed reading view. Uses
@@ -15,8 +18,22 @@ import 'page_ink_bounds.dart';
 class PdfRegionRenderer {
   PdfRegionRenderer._(this._document);
 
-  final pdfx.PdfDocument _document;
-  Future<void> _queue = Future<void>.value();
+  /// A renderer with no document behind it, for a test to subclass and
+  /// answer the renders itself.
+  @visibleForTesting
+  PdfRegionRenderer.forTesting() : _document = null;
+
+  final pdfx.PdfDocument? _document;
+
+  /// The renders waiting for their turn. The plugin rasterizes one page at a
+  /// time, so what matters is which one goes next (see [PriorityJobQueue]).
+  final PriorityJobQueue _queue = PriorityJobQueue();
+
+  /// Priorities, for callers to pick from: the page being looked at, the ones
+  /// beside it, and background work that can wait for all of them.
+  static const int priorityVisible = 0;
+  static const int priorityNear = 10;
+  static const int priorityBackground = 100;
 
   static Future<PdfRegionRenderer> open(String filePath) async {
     final document = await pdfx.PdfDocument.openFile(filePath);
@@ -53,14 +70,25 @@ class PdfRegionRenderer {
   /// visible at reading size, and pages appear several times faster. The
   /// paper is rendered opaque anyway, so JPEG's lack of an alpha channel
   /// costs nothing.
+  ///
+  /// [priority] says how soon (lower is sooner; see [priorityVisible]).
+  /// [isStale], asked when the job's turn comes, says the result is no
+  /// longer wanted — the page has scrolled away, the view is gone — and the
+  /// render is skipped: null comes back instead, at no cost.
   Future<Uint8List?> renderRegion({
     required int pageIndex,
     required Rect pdfBounds,
     double scale = 2.0,
+    int priority = priorityVisible,
+    int Function()? livePriority,
+    bool Function()? isStale,
   }) {
-    final result = _queue.then((_) => _renderNow(pageIndex, pdfBounds, scale));
-    _queue = result.then((_) {}, onError: (_) {});
-    return result;
+    return _queue.add<Uint8List?>(
+      () => _renderNow(pageIndex, pdfBounds, scale),
+      priority: priority,
+      livePriority: livePriority,
+      isStale: isStale,
+    );
   }
 
   /// Renders [pdfBounds] cropped down to whatever is actually drawn inside
@@ -80,6 +108,9 @@ class PdfRegionRenderer {
     required Rect pdfBounds,
     double scale = 2.5,
     double probeTargetWidth = 320,
+    int priority = priorityVisible,
+    int Function()? livePriority,
+    bool Function()? isStale,
   }) async {
     if (pdfBounds.width <= 0 || pdfBounds.height <= 0) return null;
     final probeScale = math.min(1.0, probeTargetWidth / pdfBounds.width);
@@ -87,6 +118,9 @@ class PdfRegionRenderer {
       pageIndex: pageIndex,
       pdfBounds: pdfBounds,
       scale: probeScale <= 0 ? 1.0 : probeScale,
+      priority: priority,
+      livePriority: livePriority,
+      isStale: isStale,
     );
     if (probe == null || probe.isEmpty) return null;
 
@@ -119,6 +153,9 @@ class PdfRegionRenderer {
       pageIndex: pageIndex,
       pdfBounds: trimmed,
       scale: scale,
+      priority: priority,
+      livePriority: livePriority,
+      isStale: isStale,
     );
     if (bytes == null || bytes.isEmpty) return null;
     return (bytes: bytes, pdfBounds: trimmed);
@@ -129,14 +166,11 @@ class PdfRegionRenderer {
   /// The page's native size in PDF points, e.g. to compute a render
   /// [scale] for a target pixel width without a separate `syncfusion_flutter_pdf`
   /// document just for sizing.
-  Future<Size> pageSize(int pageIndex) {
-    final result = _queue.then((_) => _pageSizeNow(pageIndex));
-    _queue = result.then((_) {}, onError: (_) {});
-    return result;
-  }
+  Future<Size> pageSize(int pageIndex) async =>
+      await _queue.add(() => _pageSizeNow(pageIndex)) ?? Size.zero;
 
   Future<Size> _pageSizeNow(int pageIndex) async {
-    final page = await _document.getPage(pageIndex + 1);
+    final page = await _document!.getPage(pageIndex + 1);
     try {
       return Size(page.width, page.height);
     } finally {
@@ -149,7 +183,7 @@ class PdfRegionRenderer {
     Rect pdfBounds,
     double scale,
   ) async {
-    final page = await _document.getPage(pageIndex + 1);
+    final page = await _document!.getPage(pageIndex + 1);
     try {
       final fullWidth = page.width * scale;
       final fullHeight = page.height * scale;
@@ -172,5 +206,10 @@ class PdfRegionRenderer {
     }
   }
 
-  Future<void> close() => _queue.then((_) => _document.close());
+  Future<void> close() async {
+    // What is still waiting is not going to be wanted.
+    _queue.cancelAll();
+    await _queue.idle;
+    await _document?.close();
+  }
 }

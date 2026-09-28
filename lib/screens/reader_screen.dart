@@ -11,6 +11,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, TextLine;
 import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/library_service.dart';
+import '../services/pdf_page_worker.dart';
 import '../services/page_image_cache.dart';
 import '../services/reading_display_service.dart';
 import '../services/search_index_cache.dart';
@@ -96,6 +97,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   // searching never re-extracts the book. [_searchOpen] is whether the inline
   // search bar is showing.
   late final PdfSearchIndex _pdfSearchIndex = PdfSearchIndex();
+  Timer? _indexTimer;
   String _searchQuery = '';
   bool _searchOpen = false;
 
@@ -192,6 +194,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     unawaited(_readingDisplay.exit());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _flushDwellTime();
+    _indexTimer?.cancel();
     unawaited(_pdfSearchIndex.cancel());
     _reflowSource?.dispose();
     _pdfDocument?.dispose();
@@ -273,6 +276,18 @@ class _ReaderScreenState extends State<ReaderScreen>
           ),
         );
       });
+      // The compact view reads its pages on an isolate of its own once that
+      // has the document open; until then, and for a file too big to open
+      // twice, it reads them here.
+      final source = _reflowSource;
+      PdfPageWorker.spawn(_document.filePath).then((worker) {
+        if (worker == null) return;
+        if (!mounted || source == null) {
+          worker.close();
+          return;
+        }
+        source.attachWorker(worker);
+      }).ignore();
       // Record that the document was opened even if the user never
       // changes pages (e.g. single-page PDFs, or leaving before scrolling).
       context.read<LibraryService>().updateProgress(
@@ -281,11 +296,19 @@ class _ReaderScreenState extends State<ReaderScreen>
         pageCount: pageCount,
         reflowMode: _reflowMode,
       );
-      _pdfSearchIndex.build(
-        _document.filePath,
-        documentId: widget.documentId,
-        cache: context.read<SearchIndexCache>(),
-      );
+      // The search index reads the whole book in the background, on isolates
+      // that share the phone's cores with the pages being read and rendered
+      // for the reader. It waits until those have had their start; a search
+      // asked for sooner starts it itself.
+      final searchCache = context.read<SearchIndexCache>();
+      _indexTimer = Timer(const Duration(seconds: 8), () {
+        if (!mounted) return;
+        _pdfSearchIndex.build(
+          _document.filePath,
+          documentId: widget.documentId,
+          cache: searchCache,
+        );
+      });
       _cacheCurrentPagePreview();
     } catch (e) {
       if (!mounted) return;
