@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -91,14 +92,19 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
       // Markdown is the exception: its structure *is* its text, so it is
       // parsed into blocks that carry their headings, lists, quotes and code
       // with them instead of being flattened into paragraphs.
-      final pages = _document.isMarkdown
-          ? buildTxtPagesFromBlocks(parseMarkdownBlocks(decodeTextFile(bytes)))
-          : buildTxtPagesFromParagraphs(
-              extractEbookParagraphs(
-                bytes,
-                ebookFormatFromPath(_document.filePath) ?? EbookFormat.txt,
-              ),
-            );
+      final isMarkdown = _document.isMarkdown;
+      final format =
+          ebookFormatFromName(_document.format) ??
+          ebookFormatFromPath(_document.filePath) ??
+          EbookFormat.txt;
+      // Reading a whole book's markup is seconds of work on a big one — off
+      // the UI isolate, or the reader freezes (and Android offers to close
+      // it) before the first page is up.
+      final pages = await compute(_readBook, (
+        bytes: bytes,
+        isMarkdown: isMarkdown,
+        format: format,
+      ));
       if (!mounted) return;
       setState(() {
         _pages = pages;
@@ -486,3 +492,13 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     );
   }
 }
+
+/// A book's bytes read into its synthetic pages — the [compute] entry point,
+/// top-level so nothing of the reader's own state goes to the isolate with it.
+List<List<ReflowBlock>> _readBook(
+  ({Uint8List bytes, bool isMarkdown, EbookFormat format}) book,
+) => buildTxtPagesFromBlocks(
+  book.isMarkdown
+      ? parseMarkdownBlocks(decodeTextFile(book.bytes))
+      : extractEbookBlocks(book.bytes, book.format),
+);

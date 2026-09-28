@@ -360,6 +360,7 @@ class TxtPageViewState extends State<TxtPageView> {
                     final base = DefaultTextStyle.of(context).style;
                     return _TxtPage(
                       key: ValueKey(index),
+                      pageHeight: _pageHeight,
                       blocks: page.blocks,
                       slices: page.slices,
                       fontSize: widget.fontSize,
@@ -596,7 +597,7 @@ class TxtPageViewState extends State<TxtPageView> {
       insetsFor: markdownBlockInsets,
       spanFor: _spanForPagination,
       blockSpacing: 16,
-      imageSpacing: 16,
+      imageSpacing: _pictureSpacing,
       textScaler: _textScaler,
       // The renderer gives every slice a fixed 16px bottom margin (see the
       // per-slice Padding below), plus a little more that scales with font
@@ -614,6 +615,10 @@ class TxtPageViewState extends State<TxtPageView> {
     }
   }
 }
+
+/// The space a picture keeps below itself — budgeted by the paginator and
+/// painted by [_TxtPage] alike.
+const double _pictureSpacing = 16;
 
 class _TextSubPage {
   const _TextSubPage({
@@ -634,6 +639,7 @@ class _TextSubPage {
 class _TxtPage extends StatelessWidget {
   const _TxtPage({
     super.key,
+    required this.pageHeight,
     required this.blocks,
     required this.slices,
     required this.fontSize,
@@ -655,6 +661,10 @@ class _TxtPage extends StatelessWidget {
   final ReadingTheme readingTheme;
   final SettingsService settings;
   final bool translatorEnabled;
+
+  /// The height the paginator filled — a picture is never set taller than
+  /// the share of it the paginator gave the picture.
+  final double pageHeight;
 
   /// The style each block is painted in — the same one it was paginated
   /// with, so this view never has to re-derive the heading sizes or the
@@ -778,7 +788,8 @@ class _TxtPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var i = 0; i < slices.length; i++) _buildSlice(i, slices[i]),
+              for (var i = 0; i < slices.length; i++)
+                _buildSlice(i, slices[i], columnWidth),
             ],
           ),
         );
@@ -786,8 +797,37 @@ class _TxtPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSlice(int index, ReflowSlice slice) {
+  /// A picture the book carries, fitted to the column at the height the
+  /// paginator reserved for it (see `paginateReflowBlocks`), with the same
+  /// spacing below it that it budgeted.
+  Widget _buildPicture(ReflowBlock block, double columnWidth) {
+    final bounds = block.imageBounds!;
+    final aspect = bounds.width > 0 ? bounds.height / bounds.width : 1.0;
+    final height = math.min(columnWidth * aspect, pageHeight * 0.9);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _pictureSpacing),
+      child: SizedBox(
+        height: height,
+        child: Image.memory(
+          block.imageBytes!,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          // Decoded no bigger than it is shown: a cover scanned at print
+          // resolution is tens of megabytes decoded at full size.
+          cacheWidth: (columnWidth * 3).round(),
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlice(int index, ReflowSlice slice, double columnWidth) {
     final block = blocks[slice.blockIndex];
+    if (block.isImage) {
+      return block.imageBytes == null
+          ? const SizedBox.shrink()
+          : _buildPicture(block, columnWidth);
+    }
     // The gap above a block is its own — a Markdown heading wants more air
     // than the next list item does — and is exactly what the paginator
     // reserved for it.

@@ -123,6 +123,23 @@ void main() {
     );
   }
 
+  testWidgets('pictures take the room they were paginated with', (
+    tester,
+  ) async {
+    final header = Uint8List(24)
+      ..setAll(0, [0x89, 0x50, 0x4E, 0x47])
+      ..buffer.asByteData().setUint32(16, 300)
+      ..buffer.asByteData().setUint32(20, 900);
+    final blocks = <ReflowBlock>[
+      for (final (i, text) in _novel().indexed) ...[
+        if (i % 7 == 3) ReflowBlock.picture(header, const Size(300, 900)),
+        ReflowBlock.paragraph(text),
+      ],
+    ];
+    await _pump(tester, buildTxtPagesFromBlocks(blocks), fontSize: 19);
+    await _turnPages(tester, 25);
+  });
+
   testWidgets('a tapped word keeps the width it was paginated at', (
     tester,
   ) async {

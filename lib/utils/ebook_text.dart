@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 
+import 'ebook_blocks.dart';
+import 'reflow_builder.dart';
 import 'text_decode.dart';
 
 /// The document formats the app can read as flowing text.
@@ -12,6 +14,17 @@ import 'text_decode.dart';
 /// are all *text* formats, so they end up in the same paginated reading
 /// view as a plain .txt file, in the reader's own font and colours.
 enum EbookFormat { txt, epub, fb2, rtf, docx }
+
+/// The format a library entry was stored as (its `format` field), or null
+/// for one that isn't read as text.
+EbookFormat? ebookFormatFromName(String format) => switch (format) {
+  'txt' => EbookFormat.txt,
+  'epub' => EbookFormat.epub,
+  'fb2' => EbookFormat.fb2,
+  'rtf' => EbookFormat.rtf,
+  'docx' => EbookFormat.docx,
+  _ => null,
+};
 
 /// Recognizes a format from a file name. Returns null for anything the app
 /// doesn't read as text (a PDF, or something unsupported).
@@ -27,26 +40,37 @@ EbookFormat? ebookFormatFromPath(String path) {
   return null;
 }
 
-/// Extracts a document's text as paragraphs, ready to be paginated.
+/// Extracts a document as the blocks the paginated reader lays out, in
+/// reading order: paragraphs with the emphasis the book gave them, chapter
+/// titles as headings, verse with its line breaks, quotations, lists and the
+/// pictures the book carries (see `ebook_blocks.dart`).
 ///
-/// Deliberately text-only: pictures, tables and layout are dropped. These
-/// formats are reflowable by nature — there is no fixed page to preserve —
-/// so what matters is getting clean paragraphs in reading order, with the
-/// original's own paragraph breaks kept.
-List<String> extractEbookParagraphs(Uint8List bytes, EbookFormat format) {
+/// Plain text and RTF have no structure to keep beyond their paragraphs.
+List<ReflowBlock> extractEbookBlocks(Uint8List bytes, EbookFormat format) {
   switch (format) {
     case EbookFormat.txt:
-      return _splitPlainText(decodeTextFile(bytes));
+      return _plainBlocks(_splitPlainText(decodeTextFile(bytes)));
     case EbookFormat.epub:
-      return _epubParagraphs(bytes);
+      return _epubBlocks(bytes);
     case EbookFormat.fb2:
-      return _fb2Paragraphs(bytes);
+      return fb2Blocks(bytes, decodeTextFile);
     case EbookFormat.rtf:
-      return _rtfParagraphs(bytes);
+      return _plainBlocks(_rtfParagraphs(bytes));
     case EbookFormat.docx:
-      return _docxParagraphs(bytes);
+      return _docxBlocks(bytes);
   }
 }
+
+/// The text of [extractEbookBlocks] alone, one string per block that has
+/// any.
+List<String> extractEbookParagraphs(Uint8List bytes, EbookFormat format) => [
+  for (final block in extractEbookBlocks(bytes, format))
+    if (block.text.isNotEmpty) block.text,
+];
+
+List<ReflowBlock> _plainBlocks(List<String> paragraphs) => [
+  for (final text in paragraphs) ReflowBlock.paragraph(text),
+];
 
 List<String> _splitPlainText(String text) {
   return [
@@ -60,8 +84,9 @@ List<String> _splitPlainText(String text) {
 
 /// EPUB is a zip of XHTML documents plus an OPF manifest listing them in
 /// reading order. The spine is followed rather than the zip's own order,
-/// which is arbitrary, and each document is reduced to its paragraphs.
-List<String> _epubParagraphs(Uint8List bytes) {
+/// which is arbitrary, and each document is read into blocks — or, when it is
+/// too broken to parse, into its bare paragraphs.
+List<ReflowBlock> _epubBlocks(Uint8List bytes) {
   final archive = ZipDecoder().decodeBytes(bytes);
   final files = {
     for (final file in archive.files)
@@ -99,11 +124,27 @@ List<String> _epubParagraphs(Uint8List bytes) {
     );
   }
 
-  final paragraphs = <String>[];
+  final blocks = <ReflowBlock>[];
   for (final name in order) {
-    paragraphs.addAll(_htmlParagraphs(_utf8OfFile(files[name]!)));
+    final html = _utf8OfFile(files[name]!);
+    final folder = name.contains('/')
+        ? name.substring(0, name.lastIndexOf('/') + 1)
+        : '';
+    Uint8List? resolve(String src) {
+      final path = Uri.decodeFull(src.split('#').first.split('?').first);
+      final file = files[_normalizeZipPath('$folder$path')];
+      if (file == null) return null;
+      final content = file.content;
+      return content is Uint8List
+          ? content
+          : Uint8List.fromList(content as List<int>);
+    }
+
+    blocks.addAll(
+      htmlBlocks(html, resolve) ?? _plainBlocks(_htmlParagraphs(html)),
+    );
   }
-  return paragraphs;
+  return blocks;
 }
 
 String? _epubOpfPath(Map<String, ArchiveFile> files) {
@@ -139,47 +180,16 @@ String _normalizeZipPath(String path) {
   return parts.join('/');
 }
 
-// ---------------------------------------------------------------- FB2
-
-/// FB2 is a single XML file; `<p>` inside `<body>` is a paragraph and
-/// `<title>` marks a heading. The description block (metadata) is skipped.
-List<String> _fb2Paragraphs(Uint8List bytes) {
-  // FB2 files are commonly windows-1251 with the encoding in the XML
-  // declaration, which [decodeTextFile] already sniffs for.
-  final xml = XmlDocument.parse(decodeTextFile(bytes));
-  final paragraphs = <String>[];
-  for (final body in xml.findAllElements('body')) {
-    for (final node in body.descendants) {
-      if (node is! XmlElement) continue;
-      if (node.localName != 'p' && node.localName != 'subtitle') continue;
-      final text = _collapse(node.innerText);
-      if (text.isNotEmpty) paragraphs.add(text);
-    }
-  }
-  return paragraphs;
-}
-
 // ---------------------------------------------------------------- DOCX
 
-/// A .docx is a zip whose `word/document.xml` holds the text: `<w:p>` is a
-/// paragraph, `<w:t>` the runs of text inside it.
-List<String> _docxParagraphs(Uint8List bytes) {
+/// A .docx is a zip whose `word/document.xml` holds the text.
+List<ReflowBlock> _docxBlocks(Uint8List bytes) {
   final archive = ZipDecoder().decodeBytes(bytes);
   final document = archive.files.firstWhere(
     (f) => f.isFile && f.name == 'word/document.xml',
     orElse: () => throw const FormatException('word/document.xml not found'),
   );
-  final xml = XmlDocument.parse(_utf8OfFile(document));
-  final paragraphs = <String>[];
-  for (final p in xml.findAllElements('p', namespace: '*')) {
-    final buffer = StringBuffer();
-    for (final t in p.findAllElements('t', namespace: '*')) {
-      buffer.write(t.innerText);
-    }
-    final text = _collapse(buffer.toString());
-    if (text.isNotEmpty) paragraphs.add(text);
-  }
-  return paragraphs;
+  return docxBlocks(_utf8OfFile(document));
 }
 
 // ---------------------------------------------------------------- RTF
@@ -373,7 +383,14 @@ String _unescapeHtml(String text) {
   return result.replaceAllMapped(RegExp(r'&#(x?)([0-9a-fA-F]+);'), (match) {
     final radix = match.group(1)!.isEmpty ? 10 : 16;
     final code = int.tryParse(match.group(2)!, radix: radix);
-    return code == null ? match.group(0)! : String.fromCharCode(code);
+    // Past U+10FFFF, a lone surrogate or NUL is no character to print, and
+    // asking for one would throw and lose the whole chapter.
+    final valid =
+        code != null &&
+        code > 0 &&
+        code <= 0x10FFFF &&
+        (code < 0xD800 || code > 0xDFFF);
+    return valid ? String.fromCharCode(code) : match.group(0)!;
   });
 }
 

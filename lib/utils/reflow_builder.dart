@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -133,10 +134,27 @@ class ReflowBlock {
     this.isCode = false,
     this.isDivider = false,
     this.gapAbove,
-  }) : imageBounds = null;
+  }) : imageBounds = null,
+       imageBytes = null;
   const ReflowBlock.image(Rect bounds)
     : text = '',
       imageBounds = bounds,
+      imageBytes = null,
+      formatRuns = const [],
+      headingLevel = 0,
+      quoteDepth = 0,
+      indent = 0,
+      isCode = false,
+      isDivider = false,
+      gapAbove = null;
+
+  /// A picture a book carries inside itself (an FB2 binary, an EPUB image):
+  /// [bytes] is the encoded image and [size] its pixel size, which is all the
+  /// paginator needs to give it room before it has been decoded.
+  ReflowBlock.picture(Uint8List bytes, Size size)
+    : text = '',
+      imageBounds = Rect.fromLTWH(0, 0, size.width, size.height),
+      imageBytes = bytes,
       formatRuns = const [],
       headingLevel = 0,
       quoteDepth = 0,
@@ -146,7 +164,14 @@ class ReflowBlock {
       gapAbove = null;
 
   final String text;
+
+  /// For a PDF figure, where it sits on the page; for a [ReflowBlock.picture],
+  /// just its size. Either way its aspect ratio is what it is paginated by.
   final Rect? imageBounds;
+
+  /// The encoded picture of a [ReflowBlock.picture]; null for a PDF figure,
+  /// which is rendered from its page instead.
+  final Uint8List? imageBytes;
 
   /// A section heading rather than body text — set from the source PDF's
   /// own typography (a larger type size, or a fully bold line). Headings
