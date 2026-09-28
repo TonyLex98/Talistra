@@ -22,6 +22,7 @@ import '../widgets/language_picker_sheet.dart';
 import '../utils/table_of_contents.dart';
 import '../widgets/book_search_bar.dart';
 import '../widgets/contents_sheet.dart';
+import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/txt_page_view.dart';
 
@@ -235,6 +236,13 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
         icon: Icons.toc,
         label: l10n.contentsAction,
         onSelected: _openContents,
+      ),
+    if (_pages.isNotEmpty)
+      ...annotationMenuActions(
+        context,
+        documentId: widget.documentId,
+        currentPage: _currentPage,
+        goTo: _goTo,
       ),
   ];
 
@@ -522,6 +530,12 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
       settings: settings,
       translatorEnabled: settings.translatorEnabled,
       onPageChanged: _updateCurrentPage,
+      onNoteSelection: (text) => addNoteFromSelection(
+        context,
+        documentId: widget.documentId,
+        page: _currentPage,
+        quote: text,
+      ),
     );
   }
 }

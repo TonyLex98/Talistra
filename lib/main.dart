@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/gen/app_localizations.dart';
 import 'screens/home_screen.dart';
+import 'services/annotation_service.dart';
 import 'services/library_service.dart';
 import 'services/model_download_service.dart';
 import 'services/page_image_cache.dart';
@@ -32,6 +33,7 @@ void main() async {
   final searchIndexCache = await SearchIndexCache.open();
   final statistics = await StatisticsService.load(prefs);
   final readingDisplay = ReadingDisplayService();
+  final annotations = AnnotationService.load(prefs);
 
   if (!settings.instructionsSeeded) {
     await _seedInstructionsPdf(settings, library);
@@ -46,6 +48,7 @@ void main() async {
       searchIndexCache: searchIndexCache,
       statistics: statistics,
       readingDisplay: readingDisplay,
+      annotations: annotations,
     ),
   );
 }
@@ -99,6 +102,7 @@ class TalistraApp extends StatelessWidget {
     required this.searchIndexCache,
     required this.statistics,
     required this.readingDisplay,
+    required this.annotations,
   });
 
   final SettingsService settings;
@@ -108,6 +112,7 @@ class TalistraApp extends StatelessWidget {
   final SearchIndexCache searchIndexCache;
   final StatisticsService statistics;
   final ReadingDisplayService readingDisplay;
+  final AnnotationService annotations;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +124,7 @@ class TalistraApp extends StatelessWidget {
         Provider<PagePreviewCache>.value(value: previewCache),
         Provider<SearchIndexCache>.value(value: searchIndexCache),
         ChangeNotifierProvider<StatisticsService>.value(value: statistics),
+        ChangeNotifierProvider<AnnotationService>.value(value: annotations),
         Provider<ReadingDisplayService>(
           create: (_) => readingDisplay,
           dispose: (_, service) => service.dispose(),

@@ -37,7 +37,11 @@ class TxtPageView extends StatefulWidget {
     required this.settings,
     required this.translatorEnabled,
     required this.onPageChanged,
+    this.onNoteSelection,
   });
+
+  /// The reader asked to keep the passage they marked as a note.
+  final void Function(String text)? onNoteSelection;
 
   final List<List<ReflowBlock>> pages;
   final int initialPage;
@@ -342,6 +346,7 @@ class TxtPageViewState extends State<TxtPageView> {
                 key: _selectionKey,
                 translatorEnabled: widget.translatorEnabled,
                 onTranslateSelection: _translateSelection,
+                onNoteSelection: widget.onNoteSelection,
                 allText: _allText,
                 child: PageView.builder(
                   controller: _pageController,

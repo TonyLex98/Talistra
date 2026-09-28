@@ -340,4 +340,24 @@ void main() {
 
     expect(tapped, 1);
   });
+
+  selectionTest('a mark can be kept as a note', (tester) async {
+    String? noted;
+    await _open(
+      tester,
+      ReadingSelectionArea(
+        translatorEnabled: false,
+        onTranslateSelection: (_) {},
+        onNoteSelection: (text) => noted = text,
+        child: const Center(child: Text('the quick brown fox')),
+      ),
+    );
+
+    await _markLine(tester, 'the quick brown fox', 0.9);
+    await tester.tap(find.text('Заметка'));
+    await tester.pumpAndSettle();
+    expect(noted, 'fox');
+    // The mark is spent once it has been kept.
+    expect(find.text('Заметка'), findsNothing);
+  });
 }

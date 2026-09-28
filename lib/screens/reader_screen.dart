@@ -28,6 +28,7 @@ import '../widgets/reading_selection_area.dart';
 import '../widgets/reflow_view.dart';
 import '../widgets/book_search_bar.dart';
 import '../widgets/contents_sheet.dart';
+import '../widgets/reader_annotations.dart';
 import '../widgets/translation_panel.dart';
 
 /// Height of the reader's floating top bar (excluding the status bar
@@ -388,6 +389,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     });
   }
 
+  /// Keeps a passage the reader marked as a note on the page being read.
+  void _addNote(String text) => addNoteFromSelection(
+    context,
+    documentId: widget.documentId,
+    page: _currentPage,
+    quote: text,
+  );
+
   void _copyRangeSelection() {
     final text = _rangeText;
     if (text == null) return;
@@ -481,6 +490,14 @@ class _ReaderScreenState extends State<ReaderScreen>
         label: l10n.selectionSelectAll,
         onPressed: _selectAllRange,
       ),
+      ContextMenuButtonItem(
+        type: ContextMenuButtonType.custom,
+        label: l10n.selectionNote,
+        onPressed: () {
+          _clearRangeSelection();
+          _addNote(text);
+        },
+      ),
       if (settings.translatorEnabled)
         ContextMenuButtonItem(
           type: ContextMenuButtonType.custom,
@@ -510,6 +527,13 @@ class _ReaderScreenState extends State<ReaderScreen>
         icon: Icons.toc,
         label: l10n.contentsAction,
         onSelected: _openContents,
+      ),
+    if (_pageCount > 0)
+      ...annotationMenuActions(
+        context,
+        documentId: widget.documentId,
+        currentPage: _currentPage,
+        goTo: _goTo,
       ),
   ];
 
@@ -1108,6 +1132,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       syncTranslationExperimental: settings.syncTranslationExperimental,
       onPageChanged: _updateCurrentPage,
       onTapCenter: _onTapEmptyArea,
+      onNoteSelection: _addNote,
     );
   }
 

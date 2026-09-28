@@ -21,9 +21,14 @@ class ReadingSelectionArea extends StatefulWidget {
     super.key,
     required this.translatorEnabled,
     required this.onTranslateSelection,
+    this.onNoteSelection,
     this.allText,
     required this.child,
   });
+
+  /// Called with the marked text when the reader wants to keep it as a note.
+  /// Without it the menu doesn't offer «Заметка».
+  final void Function(String text)? onNoteSelection;
 
   /// Whether the reader may translate what they marked: with the translator
   /// switched off, the menu offers copy alone.
@@ -136,6 +141,13 @@ class ReadingSelectionAreaState extends State<ReadingSelectionArea> {
         label: l10n.selectionSelectAll,
         onPressed: () => _selectAll(region),
       ),
+      if (widget.onNoteSelection case final onNote?)
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.custom,
+          label: l10n.selectionNote,
+          onPressed: () =>
+              _finish(region, (text) => text == null ? null : onNote(text)),
+        ),
       if (widget.translatorEnabled)
         ContextMenuButtonItem(
           type: ContextMenuButtonType.custom,

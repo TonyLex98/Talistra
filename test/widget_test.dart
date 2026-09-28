@@ -6,6 +6,7 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:transreade/main.dart';
+import 'package:transreade/services/annotation_service.dart';
 import 'package:transreade/services/library_service.dart';
 import 'package:transreade/services/page_image_cache.dart';
 import 'package:transreade/services/reading_display_service.dart';
@@ -49,6 +50,7 @@ void main() {
     late final PagePreviewCache previewCache;
     late final SearchIndexCache searchIndexCache;
     late final StatisticsService statistics;
+    late final AnnotationService annotations;
     await tester.runAsync(() async {
       final prefs = await SharedPreferences.getInstance();
       settings = SettingsService.load(prefs);
@@ -57,6 +59,7 @@ void main() {
       previewCache = await PagePreviewCache.create();
       searchIndexCache = await SearchIndexCache.open();
       statistics = await StatisticsService.load(prefs);
+      annotations = AnnotationService.load(prefs);
     });
 
     await tester.pumpWidget(
@@ -68,6 +71,7 @@ void main() {
         searchIndexCache: searchIndexCache,
         statistics: statistics,
         readingDisplay: ReadingDisplayService(),
+        annotations: annotations,
       ),
     );
     await tester.pumpAndSettle();

@@ -20,6 +20,7 @@ import '../utils/text_search.dart';
 import '../widgets/language_picker_sheet.dart';
 import '../widgets/djvu_page_stack_view.dart';
 import '../widgets/book_search_bar.dart';
+import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/translation_panel.dart';
 import '../widgets/txt_page_view.dart';
@@ -304,12 +305,19 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
       ),
     );
     controller.dispose();
-    if (target == null || target < 1 || target > document.pageCount) return;
+    if (target == null) return;
+    _goTo(target);
+  }
+
+  /// Turns the book to [page] (1-based), in whichever view is showing.
+  void _goTo(int page) {
+    final document = _djvu;
+    if (document == null || page < 1 || page > document.pageCount) return;
     if (_reflowMode) {
-      _textPageViewKey.currentState?.jumpToPage(target);
-      _onPageChanged(target - 1);
+      _textPageViewKey.currentState?.jumpToPage(page);
+      _onPageChanged(page - 1);
     } else {
-      _originalStackKey.currentState?.jumpToPage(target);
+      _originalStackKey.currentState?.jumpToPage(page);
     }
   }
 
@@ -812,6 +820,15 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                     onPressed: _textPages == null ? null : _openSearch,
                   ),
                   ReaderCopyMenu(
+                    actions: [
+                      if (_djvu != null)
+                        ...annotationMenuActions(
+                          context,
+                          documentId: widget.documentId,
+                          currentPage: _currentPage,
+                          goTo: _goTo,
+                        ),
+                    ],
                     pageText: _copyPageText,
                     bookText: _copyBookText,
                   ),

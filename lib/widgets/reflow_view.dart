@@ -43,7 +43,11 @@ class ReflowPdfView extends StatefulWidget {
     required this.syncTranslationExperimental,
     required this.onPageChanged,
     required this.onTapCenter,
+    this.onNoteSelection,
   });
+
+  /// The reader asked to keep the passage they marked as a note.
+  final void Function(String text)? onNoteSelection;
 
   final PdfDocument document;
   final PdfRegionRenderer renderer;
@@ -613,6 +617,7 @@ class ReflowPdfViewState extends State<ReflowPdfView>
             key: _selectionKey,
             translatorEnabled: widget.translatorEnabled,
             onTranslateSelection: _translateSelection,
+            onNoteSelection: widget.onNoteSelection,
             allText: () => reflowBlocksText(_blocksFor(_pageIndex)),
             child: _buildTurnableArea(
               context,

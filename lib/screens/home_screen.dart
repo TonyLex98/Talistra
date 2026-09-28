@@ -14,6 +14,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/library_document.dart';
 import '../services/djvu_service.dart';
 import '../services/incoming_file_service.dart';
+import '../services/annotation_service.dart';
 import '../services/library_service.dart';
 import '../services/page_image_cache.dart';
 import '../services/settings_service.dart';
@@ -469,7 +470,9 @@ class _HomeScreenState extends State<HomeScreen> {
     // while the per-book list below them (which can only show documents
     // it can name) quietly leaves it out.
     final statistics = context.read<StatisticsService>();
+    final annotations = context.read<AnnotationService>();
     await library.remove(id);
+    unawaited(annotations.removeDocument(id));
     unawaited(thumbnails.delete(id));
     unawaited(previews.delete(id));
     unawaited(statistics.forget(id));
