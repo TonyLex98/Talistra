@@ -68,6 +68,12 @@ List<ReflowSubPage> paginateReflowBlocks({
   // (a quote, an indented list item). Measuring a block's lines at any
   // wider than they will be painted is how a page overflows at the bottom.
   ReflowInsets Function(ReflowBlock block)? insetsFor,
+  // How a block's text is set once its own emphasis is on it — bold heavier,
+  // inline code in monospace. Those runs are wider than the plain text, so a
+  // block that has them has to be measured the way it will be painted, or
+  // its lines wrap more often on screen than they did here. Blocks without
+  // runs, and callers that pass nothing, are measured as plain text.
+  InlineSpan Function(ReflowBlock block, TextStyle style)? spanFor,
 }) {
   if (blocks.isEmpty || width <= 0 || height <= 0) return const [];
 
@@ -135,9 +141,14 @@ List<ReflowSubPage> paginateReflowBlocks({
     // Measuring every page break by re-laying out the text left over behind
     // it cost a layout pass per break, and a book's worth of breaks made a
     // big document unopenable.
+    final span = block.formatRuns.isEmpty || spanFor == null
+        ? TextSpan(text: block.text, style: style)
+        : spanFor(block, style);
     final lines =
         lineCache?.measure(
           text: block.text,
+          runs: block.formatRuns,
+          span: span,
           style: style,
           width: textWidth,
           textScaler: textScaler,
@@ -145,7 +156,7 @@ List<ReflowSubPage> paginateReflowBlocks({
         ) ??
         _measureLines(
           text: block.text,
-          style: style,
+          span: span,
           width: textWidth,
           textScaler: textScaler,
           fallbackHeight: fontSize * 1.5,
@@ -219,8 +230,17 @@ class ReflowLines {
 /// and not at all on how tall a page has to hold them, which is exactly the
 /// one thing those re-paginations change.
 class ReflowLineCache {
+  // [runs] is compared by identity: a block's runs are one list for as long
+  // as the block lives, and it is only there to tell two blocks with the same
+  // text but different emphasis apart.
   final Map<
-    ({String text, TextStyle style, double width, TextScaler textScaler}),
+    ({
+      String text,
+      List<FormatRun> runs,
+      TextStyle style,
+      double width,
+      TextScaler textScaler,
+    }),
     ReflowLines
   >
   _measured = {};
@@ -231,6 +251,8 @@ class ReflowLineCache {
 
   ReflowLines measure({
     required String text,
+    required List<FormatRun> runs,
+    required InlineSpan span,
     required TextStyle style,
     required double width,
     required TextScaler textScaler,
@@ -238,6 +260,7 @@ class ReflowLineCache {
   }) {
     final shape = (
       text: text,
+      runs: runs,
       style: style,
       width: width,
       textScaler: textScaler,
@@ -246,7 +269,7 @@ class ReflowLineCache {
     if (known != null) return known;
     final lines = _measureLines(
       text: text,
-      style: style,
+      span: span,
       width: width,
       textScaler: textScaler,
       fallbackHeight: fallbackHeight,
@@ -256,17 +279,17 @@ class ReflowLineCache {
   }
 }
 
-/// Lays [text] out once at [width] and reads its line breaks and the height
-/// of each line off the result.
+/// Lays [text] (set as [span]) out once at [width] and reads its line breaks
+/// and the height of each line off the result.
 ReflowLines _measureLines({
   required String text,
-  required TextStyle style,
+  required InlineSpan span,
   required double width,
   required TextScaler textScaler,
   required double fallbackHeight,
 }) {
   final painter = TextPainter(
-    text: TextSpan(text: text, style: style),
+    text: span,
     textDirection: TextDirection.ltr,
     textScaler: textScaler,
   )..layout(maxWidth: width);
@@ -278,10 +301,22 @@ ReflowLines _measureLines({
     // A line's top is a y coordinate inside it, so `top + 1` still lands on
     // that line however the metrics rounded — and the starts have to keep
     // walking forward for the slices built out of them to tile the text.
+    //
+    // A line's height is read as the distance from its top to the next one's
+    // (and the last one's to the bottom of the paragraph), not off
+    // [LineMetrics.height]: that one is rounded, and a page of lines each a
+    // fraction of a pixel taller than it was counted as adds up to a last
+    // line that no longer fits.
     var upTo = 0;
+    var top = 0.0;
     for (var i = 0; i < metrics.length; i++) {
       final line = metrics[i];
-      heights[i] = line.height > 0 ? line.height : fallbackHeight;
+      final bottom = i + 1 < metrics.length
+          ? metrics[i + 1].baseline - metrics[i + 1].ascent
+          : painter.height;
+      final measured = bottom - top;
+      heights[i] = measured > 0 ? measured : fallbackHeight;
+      top = bottom;
       if (i == 0) {
         starts[i] = 0;
         continue;

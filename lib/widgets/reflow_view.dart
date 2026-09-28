@@ -16,6 +16,7 @@ import '../utils/reflow_builder.dart';
 import '../utils/reflow_paginator.dart';
 import '../utils/sentence_finder.dart';
 import 'reading_selection_area.dart';
+import 'translatable_text.dart';
 import 'translation_panel.dart';
 
 /// Phone-friendly reading view: the PDF's text is reflowed for the screen
@@ -94,6 +95,12 @@ class ReflowPdfViewState extends State<ReflowPdfView>
   /// width, height or type size invalidates every paginated page.
   Size _paginationSize = Size.zero;
   double _paginationFontSize = 0;
+
+  /// The typography the cached sub-pages were measured in: a new reading font
+  /// or weight breaks every line somewhere else, so they are laid out again
+  /// rather than painted wider than the page they were cut for.
+  TextStyle? _paginationTypography;
+  TextScaler? _paginationTextScaler;
   String? _warmedPosition;
 
   // Page turning follows the finger: the page is dragged along with it and
@@ -293,11 +300,19 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       DefaultTextStyle.of(context).style.merge(_styleFor(block));
 
   List<ReflowSubPage> _subPagesFor(int pageIndex, Size contentSize) {
+    final typography = _paintedStyleFor(
+      const ReflowBlock.paragraph(''),
+    ).copyWith(color: const Color(0x00000000));
+    final textScaler = MediaQuery.textScalerOf(context);
     if (contentSize != _paginationSize ||
-        widget.fontSize != _paginationFontSize) {
+        widget.fontSize != _paginationFontSize ||
+        typography != _paginationTypography ||
+        textScaler != _paginationTextScaler) {
       _subPagesCache.clear();
       _paginationSize = contentSize;
       _paginationFontSize = widget.fontSize;
+      _paginationTypography = typography;
+      _paginationTextScaler = textScaler;
     }
     return _subPagesCache.putIfAbsent(pageIndex, () {
       final blocks = _blocksFor(pageIndex);
@@ -307,9 +322,16 @@ class ReflowPdfViewState extends State<ReflowPdfView>
         height: contentSize.height,
         fontSize: widget.fontSize,
         styleFor: _paintedStyleFor,
+        spanFor: (block, style) => readingTextSpan(
+          text: block.text,
+          formatRuns: block.formatRuns,
+          style: style,
+          settings: widget.settings,
+          readingTheme: widget.readingTheme,
+        ),
         blockSpacing: 16,
         imageSpacing: 20,
-        textScaler: MediaQuery.textScalerOf(context),
+        textScaler: textScaler,
       );
       // Even a page with nothing on it is one (empty) sub-page, so the
       // page-turn arithmetic never has to special-case zero.
@@ -1016,10 +1038,12 @@ class ReflowPdfViewState extends State<ReflowPdfView>
       var style = baseStyle;
       for (final run in block.formatRuns) {
         if (pos >= run.start && pos < run.end) {
-          style = style.copyWith(
-            fontWeight: run.bold ? FontWeight.w700 : null,
-            fontStyle: run.italic ? FontStyle.italic : null,
-          );
+          // The reader's own bold, through the variable font's weight axis:
+          // a bare FontWeight.w700 is overridden by the axis the base style
+          // already sets, and the run would come out no bolder at all. It is
+          // also the weight the paginator measured this run at.
+          if (run.bold) style = emphasisedReadingStyle(style, widget.settings);
+          if (run.italic) style = style.copyWith(fontStyle: FontStyle.italic);
           break;
         }
       }
@@ -1034,8 +1058,9 @@ class ReflowPdfViewState extends State<ReflowPdfView>
         );
       }
       if (selected) {
+        // No change of weight: a wider word could wrap its line once more
+        // than the paginator measured and push the last line off the page.
         style = style.copyWith(
-          fontWeight: FontWeight.w700,
           color: widget.readingTheme.accent,
           backgroundColor: widget.readingTheme.accent.withValues(alpha: 0.22),
         );

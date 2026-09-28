@@ -160,7 +160,9 @@ void main() {
     final selected = _word(spans, 'quick').style!;
     expect(selected.fontStyle, FontStyle.italic);
     expect(selected.fontFamily, codeFontFamily);
-    expect(selected.fontWeight, FontWeight.w700);
+    // Colour and wash only: a heavier weight would widen the word, and its
+    // line could wrap past what the page was paginated for.
+    expect(selected.fontWeight, isNot(FontWeight.w700));
     expect(selected.color, settings.readingTheme.accent);
     expect(_wash(_word(spans, 'quick')), closeTo(0.16, 0.001));
     // The wash belongs to the chosen word alone.

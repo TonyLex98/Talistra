@@ -60,6 +60,9 @@ class TxtPageViewState extends State<TxtPageView> {
   late final PageController _pageController;
   Size _paginationSize = Size.zero;
   double _paginationFontSize = 0;
+
+  /// The typography the layout was measured in — see [_typography].
+  TextStyle? _paginationTypography;
   List<_TextSubPage> _subPages = <_TextSubPage>[];
 
   // How far into the book the layout has reached. The sub-pages are laid out
@@ -293,6 +296,27 @@ class TxtPageViewState extends State<TxtPageView> {
   TextStyle _codeStyleOn(ReflowBlock block, TextStyle base) =>
       _styledOn(block, base).copyWith(fontFamily: codeFontFamily);
 
+  /// Everything about the body style that decides where its lines break —
+  /// face, weight, size, leading — with the ink taken out, so a new reading
+  /// theme or contrast repaints the book without laying it out again, and a
+  /// new font or weight lays it out again instead of painting it wider than
+  /// the page it was measured for.
+  TextStyle _typography(BuildContext context) => _styledOn(
+    const ReflowBlock.paragraph(''),
+    DefaultTextStyle.of(context).style,
+  ).copyWith(color: const Color(0x00000000));
+
+  /// A block with its own emphasis set on it, for the paginator to measure
+  /// exactly as [TranslatableText] will paint it.
+  InlineSpan _spanForPagination(ReflowBlock block, TextStyle style) =>
+      readingTextSpan(
+        text: block.text,
+        formatRuns: block.formatRuns,
+        style: style,
+        settings: widget.settings,
+        readingTheme: widget.readingTheme,
+      );
+
   /// The style the paginator measures a block with — the same one it will be
   /// painted in.
   TextStyle _styleForPagination(ReflowBlock block) => block.isCode
@@ -451,7 +475,11 @@ class TxtPageViewState extends State<TxtPageView> {
   /// Lays out the part of the book the reader needs right now, and asks for
   /// the rest to keep arriving a chunk per frame.
   void _paginateIfNeeded(Size size, BuildContext context) {
-    if (size == _paginationSize && widget.fontSize == _paginationFontSize) {
+    final typography = _typography(context);
+    if (size == _paginationSize &&
+        widget.fontSize == _paginationFontSize &&
+        typography == _paginationTypography &&
+        MediaQuery.textScalerOf(context) == _textScaler) {
       return;
     }
     _restartPagination(size, context);
@@ -475,6 +503,7 @@ class TxtPageViewState extends State<TxtPageView> {
         : null;
     _paginationSize = size;
     _paginationFontSize = widget.fontSize;
+    _paginationTypography = _typography(context);
     _baseStyle = DefaultTextStyle.of(context).style;
     _textScaler = MediaQuery.textScalerOf(context);
     _columnWidth = math.min(size.width - 40, widget.fontSize * 38);
@@ -482,7 +511,12 @@ class TxtPageViewState extends State<TxtPageView> {
     // The measured line breaks stay valid across a height change — the
     // keyboard, above all, which used to make the reader lay the whole book
     // out again — and are worth nothing once the column or the type changed.
-    final measureKey = Object.hash(_columnWidth, widget.fontSize, _textScaler);
+    final measureKey = Object.hash(
+      _columnWidth,
+      widget.fontSize,
+      _textScaler,
+      _paginationTypography,
+    );
     if (measureKey != _lineCacheKey) {
       _lineCacheKey = measureKey;
       _lineCache = ReflowLineCache();
@@ -560,6 +594,7 @@ class TxtPageViewState extends State<TxtPageView> {
       styleFor: _styleForPagination,
       lineCache: _lineCache,
       insetsFor: markdownBlockInsets,
+      spanFor: _spanForPagination,
       blockSpacing: 16,
       imageSpacing: 16,
       textScaler: _textScaler,

@@ -108,63 +108,17 @@ class TranslatableText extends StatelessWidget {
     // run touch this word?" word by word instead is what a Markdown page
     // with a hundred inline-code spans pays for — twice the time to turn a
     // page over the same text with no styling at all.
-    const boldBit = 1, italicBit = 2, codeBit = 4, strikeBit = 8, linkBit = 16;
-    final emphasis = List<int>.filled(stop - start, 0);
-    for (final run in formatRuns) {
-      if (run.end <= start || run.start >= stop) continue;
-      final from = (run.start < start ? start : run.start) - start;
-      final to = (run.end > stop ? stop : run.end) - start;
-      final bits =
-          (run.bold ? boldBit : 0) |
-          (run.italic ? italicBit : 0) |
-          (run.code ? codeBit : 0) |
-          (run.strike ? strikeBit : 0) |
-          (run.link ? linkBit : 0);
-      for (var i = from; i < to; i++) {
-        emphasis[i] |= bits;
-      }
-    }
+    final emphasis = _emphasisBits(formatRuns, start, stop);
 
     // One style per distinct combination of emphases, and one per
     // combination the selection and the search hits then put on top of it.
     final styles = <int, TextStyle>{};
     TextStyle emphasised(int bits) {
       if (bits == 0) return baseStyle;
-      return styles.putIfAbsent(bits, () {
-        var style = baseStyle;
-        if (bits & boldBit != 0) {
-          style = emphasisedReadingStyle(style, settings);
-        }
-        if (bits & italicBit != 0) {
-          style = style.copyWith(fontStyle: FontStyle.italic);
-        }
-        if (bits & codeBit != 0) {
-          // A faint accent wash rather than a box: the span sits inside a
-          // line of running text, and a panel would push that line apart.
-          style = style.copyWith(
-            fontFamily: codeFontFamily,
-            backgroundColor: readingTheme.accent.withValues(alpha: 0.12),
-          );
-        }
-        if (bits & strikeBit != 0) {
-          style = style.copyWith(
-            decoration: TextDecoration.combine([
-              TextDecoration.lineThrough,
-              style.decoration ?? TextDecoration.none,
-            ]),
-          );
-        }
-        if (bits & linkBit != 0) {
-          style = style.copyWith(
-            color: readingTheme.accent,
-            decoration: TextDecoration.combine([
-              TextDecoration.underline,
-              style.decoration ?? TextDecoration.none,
-            ]),
-          );
-        }
-        return style;
-      });
+      return styles.putIfAbsent(
+        bits,
+        () => _emphasisStyle(baseStyle, bits, settings, readingTheme),
+      );
     }
 
     TextStyle styleAt({
@@ -191,8 +145,10 @@ class TranslatableText extends StatelessWidget {
           (bits << 3) | (selected ? 1 : 0) | (hot ? 2 : 0) | (otherHot ? 4 : 0);
       return styles.putIfAbsent(key + (1 << 30), () {
         if (selected) {
+          // Colour and a wash only: anything that changed the word's width
+          // (a heavier weight, above all) could wrap its line once more than
+          // the paginator measured, and push the page's last line off it.
           return style.copyWith(
-            fontWeight: FontWeight.w700,
             color: readingTheme.accent,
             backgroundColor: readingTheme.accent.withValues(alpha: 0.16),
           );
@@ -245,4 +201,111 @@ class TranslatableText extends StatelessWidget {
           (maxLines == null ? TextOverflow.visible : TextOverflow.ellipsis),
     );
   }
+}
+
+const int _boldBit = 1;
+const int _italicBit = 2;
+const int _codeBit = 4;
+const int _strikeBit = 8;
+const int _linkBit = 16;
+
+/// For each character of `[start, stop)`, the bits of every [FormatRun] that
+/// covers it.
+List<int> _emphasisBits(List<FormatRun> runs, int start, int stop) {
+  final emphasis = List<int>.filled(stop - start, 0);
+  for (final run in runs) {
+    if (run.end <= start || run.start >= stop) continue;
+    final from = (run.start < start ? start : run.start) - start;
+    final to = (run.end > stop ? stop : run.end) - start;
+    final bits =
+        (run.bold ? _boldBit : 0) |
+        (run.italic ? _italicBit : 0) |
+        (run.code ? _codeBit : 0) |
+        (run.strike ? _strikeBit : 0) |
+        (run.link ? _linkBit : 0);
+    for (var i = from; i < to; i++) {
+      emphasis[i] |= bits;
+    }
+  }
+  return emphasis;
+}
+
+/// [base] with the document's own emphases in [bits] put on top of it.
+TextStyle _emphasisStyle(
+  TextStyle base,
+  int bits,
+  SettingsService settings,
+  ReadingTheme readingTheme,
+) {
+  var style = base;
+  if (bits & _boldBit != 0) {
+    style = emphasisedReadingStyle(style, settings);
+  }
+  if (bits & _italicBit != 0) {
+    style = style.copyWith(fontStyle: FontStyle.italic);
+  }
+  if (bits & _codeBit != 0) {
+    // A faint accent wash rather than a box: the span sits inside a line of
+    // running text, and a panel would push that line apart.
+    style = style.copyWith(
+      fontFamily: codeFontFamily,
+      backgroundColor: readingTheme.accent.withValues(alpha: 0.12),
+    );
+  }
+  if (bits & _strikeBit != 0) {
+    style = style.copyWith(
+      decoration: TextDecoration.combine([
+        TextDecoration.lineThrough,
+        style.decoration ?? TextDecoration.none,
+      ]),
+    );
+  }
+  if (bits & _linkBit != 0) {
+    style = style.copyWith(
+      color: readingTheme.accent,
+      decoration: TextDecoration.combine([
+        TextDecoration.underline,
+        style.decoration ?? TextDecoration.none,
+      ]),
+    );
+  }
+  return style;
+}
+
+/// [text] as [TranslatableText] sets it — each run of the document's own
+/// emphasis in the face and weight it is painted in — for measuring.
+///
+/// A paginator that measured the plain text would be measuring narrower
+/// lines than the page shows: inline code is monospace and bold is heavier,
+/// so a paragraph thick with either wraps into more lines than its plain text
+/// does, and the page's last lines end up past its bottom edge.
+InlineSpan readingTextSpan({
+  required String text,
+  required List<FormatRun> formatRuns,
+  required TextStyle style,
+  required SettingsService settings,
+  required ReadingTheme readingTheme,
+}) {
+  if (formatRuns.isEmpty) return TextSpan(text: text, style: style);
+  final emphasis = _emphasisBits(formatRuns, 0, text.length);
+  final styles = <int, TextStyle>{};
+  final spans = <TextSpan>[];
+  var from = 0;
+  for (var i = 1; i <= text.length; i++) {
+    if (i < text.length && emphasis[i] == emphasis[from]) continue;
+    final bits = emphasis[from];
+    spans.add(
+      TextSpan(
+        text: text.substring(from, i),
+        style: bits == 0
+            ? style
+            : styles.putIfAbsent(
+                bits,
+                () => _emphasisStyle(style, bits, settings, readingTheme),
+              ),
+      ),
+    );
+    from = i;
+  }
+  return TextSpan(children: spans);
 }
