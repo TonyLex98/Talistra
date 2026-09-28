@@ -10,6 +10,7 @@ import 'l10n/gen/app_localizations.dart';
 import 'screens/home_screen.dart';
 import 'services/annotation_service.dart';
 import 'services/app_reloader.dart';
+import 'services/error_log.dart';
 import 'services/library_service.dart';
 import 'services/model_download_service.dart';
 import 'services/page_image_cache.dart';
@@ -28,6 +29,8 @@ void main() async {
   // https://www.syncfusion.com/products/communitylicense to remove the
   // trial banner from the PDF viewer, then uncomment the line below:
   // SyncfusionLicense.registerLicense('YOUR_LICENSE_KEY');
+
+  await ErrorLog.install();
 
   final prefs = await SharedPreferences.getInstance();
   final stored = await StoredServices.load(prefs);

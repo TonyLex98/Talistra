@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../services/error_log.dart';
 
 class FeedbackScreen extends StatefulWidget {
   const FeedbackScreen({super.key});
@@ -20,6 +21,32 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   final _contactController = TextEditingController();
   final _messageController = TextEditingController();
   bool _sending = false;
+
+  /// The error log, if the app has one to offer, and whether the reader
+  /// chose to send it along. Off by default: it is theirs to share.
+  String? _errorLog;
+  bool _attachLog = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ErrorLog.read().then((log) {
+      if (mounted && log != null) setState(() => _errorLog = log);
+    });
+  }
+
+  /// The message as sent: the reader's words, then as much of the error log
+  /// as the feedback form's 4000 characters leave room for.
+  String _messageToSend() {
+    final message = _messageController.text.trim();
+    final log = _errorLog;
+    if (!_attachLog || log == null) return message;
+    const separator = '\n\n--- error log ---\n';
+    final room = 4000 - message.length - separator.length;
+    if (room < 200) return message;
+    final tail = log.length > room ? log.substring(log.length - room) : log;
+    return '$message$separator$tail';
+  }
 
   @override
   void dispose() {
@@ -42,7 +69,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         jsonEncode({
           'name': _nameController.text.trim(),
           'contact': _contactController.text.trim(),
-          'message': _messageController.text.trim(),
+          'message': _messageToSend(),
           'source': 'android',
         }),
       );
@@ -159,6 +186,14 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                     ? l10n.feedbackMessageValidation
                     : null,
               ),
+              if (_errorLog != null)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _attachLog,
+                  onChanged: (value) => setState(() => _attachLog = value),
+                  title: Text(l10n.feedbackAttachLog),
+                  subtitle: Text(l10n.feedbackAttachLogSubtitle),
+                ),
               const SizedBox(height: 4),
               Text(
                 l10n.feedbackPrivacyNote,

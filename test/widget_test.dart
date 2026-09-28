@@ -82,5 +82,8 @@ void main() {
 
     expect(find.text('Talistra'), findsOneWidget);
     expect(find.text('Ваша библиотека пуста'), findsOneWidget);
+    // Every control a TalkBack user can land on says what it does.
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
   });
 }

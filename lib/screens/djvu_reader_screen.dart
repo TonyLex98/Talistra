@@ -656,6 +656,7 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.arrow_back),
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
                 if (_searchOpen)

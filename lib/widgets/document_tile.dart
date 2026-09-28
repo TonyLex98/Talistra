@@ -322,6 +322,9 @@ class _DocumentTileState extends State<DocumentTile> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.more_vert),
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).moreButtonTooltip,
                     onPressed: () => _showMenu(context),
                     visualDensity: VisualDensity.compact,
                     padding: _actionPadding,

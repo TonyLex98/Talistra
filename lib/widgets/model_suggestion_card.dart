@@ -109,6 +109,7 @@ class _ModelSuggestionCardState extends State<ModelSuggestionCard> {
                 icon: const Icon(Icons.close, size: 18),
                 visualDensity: VisualDensity.compact,
                 color: scheme.onSecondaryContainer,
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 onPressed: () => setState(() => _dismissed = true),
               ),
           ],
