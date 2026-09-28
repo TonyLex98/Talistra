@@ -24,6 +24,7 @@ import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/translation_panel.dart';
 import '../widgets/txt_page_view.dart';
+import '../widgets/text_prompt_dialog.dart';
 
 const double _barHeight = 50;
 
@@ -277,34 +278,11 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   Future<void> _jumpToPage() async {
     final document = _djvu;
     if (document == null) return;
-    final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController(text: '$_currentPage');
-    final target = await showDialog<int>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.goToPageTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: l10n.goToPageHint(document.pageCount),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, int.tryParse(controller.text)),
-            child: Text(l10n.go),
-          ),
-        ],
-      ),
+    final target = await showGoToPageDialog(
+      context,
+      currentPage: _currentPage,
+      pageCount: document.pageCount,
     );
-    controller.dispose();
     if (target == null) return;
     _goTo(target);
   }

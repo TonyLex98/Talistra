@@ -8,6 +8,7 @@ import '../models/library_document.dart';
 import '../services/djvu_service.dart';
 import '../services/library_service.dart';
 import '../services/sharing.dart';
+import 'text_prompt_dialog.dart';
 import '../services/page_image_cache.dart';
 import '../utils/pdf_region_renderer.dart';
 
@@ -491,35 +492,14 @@ class _DocumentTileState extends State<DocumentTile> {
   Future<void> _renameDocument(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
     final library = context.read<LibraryService>();
-    final controller = TextEditingController(text: widget.document.title);
-    final newTitle = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.renameDocumentTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 1,
-          decoration: InputDecoration(hintText: l10n.renameDocumentHint),
-          onSubmitted: (value) => Navigator.pop(dialogContext, value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: Text(l10n.save),
-          ),
-        ],
-      ),
+    final newTitle = await showTextPrompt(
+      context,
+      title: l10n.renameDocumentTitle,
+      confirmLabel: l10n.save,
+      initial: widget.document.title,
+      hint: l10n.renameDocumentHint,
+      capitalization: TextCapitalization.sentences,
     );
-    // The dialog's own exit transition is still animating the TextField for
-    // a frame or two after showDialog resolves — disposing the controller
-    // synchronously here fights that in-flight rebuild ("used after being
-    // disposed"). A post-frame callback waits for it to actually finish.
-    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
     final trimmed = newTitle?.trim();
     if (trimmed == null || trimmed.isEmpty) return;
     await library.rename(widget.document.id, trimmed);

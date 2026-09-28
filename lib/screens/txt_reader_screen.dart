@@ -27,6 +27,7 @@ import '../widgets/contents_sheet.dart';
 import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/txt_page_view.dart';
+import '../widgets/text_prompt_dialog.dart';
 
 /// Reader for plain .txt files — deliberately much simpler than
 /// [ReaderScreen]: no PDF/reflow mode toggle (there's no "original" to
@@ -321,31 +322,10 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
   }
 
   Future<void> _jumpToPage() async {
-    final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController(text: '$_currentPage');
-    final target = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.goToPageTitle),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: l10n.goToPageHint(_pages.length),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text)),
-            child: Text(l10n.go),
-          ),
-        ],
-      ),
+    final target = await showGoToPageDialog(
+      context,
+      currentPage: _currentPage,
+      pageCount: _pages.length,
     );
     if (target == null) return;
     _goTo(target);

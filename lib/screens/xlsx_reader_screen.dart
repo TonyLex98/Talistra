@@ -24,6 +24,7 @@ import '../widgets/reader_annotations.dart';
 import '../widgets/reader_copy_menu.dart';
 import '../widgets/spreadsheet_grid_view.dart';
 import '../widgets/spreadsheet_page_view.dart';
+import '../widgets/text_prompt_dialog.dart';
 
 /// Height of the floating top bar (excluding the status-bar inset it sits
 /// under) — matched to the other readers'.
@@ -303,29 +304,10 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
   }
 
   Future<void> _jumpToPage() async {
-    final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController(text: '$_currentPage');
-    final target = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.goToPageTitle),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(hintText: l10n.goToPageHint(_pageCount)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text)),
-            child: Text(l10n.go),
-          ),
-        ],
-      ),
+    final target = await showGoToPageDialog(
+      context,
+      currentPage: _currentPage,
+      pageCount: _pageCount,
     );
     if (target == null || target < 1 || target > _pageCount) return;
     if (_reflowMode) {

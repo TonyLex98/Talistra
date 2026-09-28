@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../services/vocabulary_service.dart';
+import '../widgets/text_prompt_dialog.dart';
 
 /// The reader's dictionary: every word they kept while reading, with the
 /// sentence they met it in — reviewed as flashcards, exported for Anki.
@@ -38,29 +39,13 @@ class VocabularyScreen extends StatelessWidget {
     VocabularyEntry entry,
   ) async {
     final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController(text: entry.translation ?? '');
-    final text = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(entry.word),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(hintText: l10n.vocabularyTranslationHint),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text(l10n.save),
-          ),
-        ],
-      ),
+    final text = await showTextPrompt(
+      context,
+      title: entry.word,
+      confirmLabel: l10n.save,
+      initial: entry.translation ?? '',
+      hint: l10n.vocabularyTranslationHint,
     );
-    controller.dispose();
     if (text == null || !context.mounted) return;
     await context.read<VocabularyService>().updateTranslation(entry.id, text);
   }

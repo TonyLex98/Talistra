@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../services/annotation_service.dart';
+import 'text_prompt_dialog.dart';
 
 /// A book's bookmarks and notes as a sheet, in page order. Resolves to the
 /// page the reader picked, or null when they closed it.
@@ -27,44 +28,17 @@ Future<String?> showNoteDialog(
   String? initial,
 }) {
   final l10n = AppLocalizations.of(context);
-  final controller = TextEditingController(text: initial ?? '');
-  return showDialog<String>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(initial == null ? l10n.noteDialogTitle : l10n.editNote),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _Quote(text: quote, maxLines: 6),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              minLines: 2,
-              maxLines: 6,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: l10n.noteHint,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, controller.text),
-          child: Text(l10n.save),
-        ),
-      ],
-    ),
-  ).whenComplete(controller.dispose);
+  return showTextPrompt(
+    context,
+    title: initial == null ? l10n.noteDialogTitle : l10n.editNote,
+    confirmLabel: l10n.save,
+    initial: initial ?? '',
+    hint: l10n.noteHint,
+    header: _Quote(text: quote, maxLines: 6),
+    capitalization: TextCapitalization.sentences,
+    minLines: 2,
+    maxLines: 6,
+  );
 }
 
 class _AnnotationsSheet extends StatelessWidget {
