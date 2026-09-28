@@ -253,8 +253,9 @@ class PdfSearchIndex {
   }
 
   /// Every page's block texts, in reading order, or null until the book has
-  /// been indexed.
-  List<List<String>>? get bookPages => isReady ? _pages : null;
+  /// been indexed. A page a worker could not read is left empty rather than
+  /// holding the rest of the book back.
+  List<List<String>>? get bookPages => _done.isCompleted ? _pages : null;
 
   /// Starts building the index for [filePath] if it isn't already. Idempotent:
   /// calling it again while a build runs (or after it finished) is a no-op, so
@@ -271,6 +272,23 @@ class PdfSearchIndex {
   }) async {
     if (_building || _pages != null) return;
     _building = true;
+    try {
+      await _build(filePath, documentId: documentId, cache: cache);
+    } catch (_) {
+      // A book the index cannot be built for is one search finds nothing in
+      // — never one that leaves a search spinning, or a copy of the whole
+      // book waiting on [done] for good.
+      _building = false;
+      _finish();
+      _finishActiveSearch();
+    }
+  }
+
+  Future<void> _build(
+    String filePath, {
+    String? documentId,
+    SearchIndexCache? cache,
+  }) async {
     if (documentId != null && cache != null) {
       final cached = await cache.read(documentId);
       if (cached != null) {
@@ -327,7 +345,12 @@ class PdfSearchIndex {
             _finish();
             _reportNewPages();
             _finishActiveSearch();
-            if (documentId != null && cache != null && _pages != null) {
+            // Only a whole index is worth keeping: one with a page a worker
+            // failed on would leave that page unsearchable for good.
+            if (documentId != null &&
+                cache != null &&
+                _pages != null &&
+                _filledCount == _totalPages) {
               unawaited(cache.write(documentId, _pages!));
             }
           }
@@ -404,6 +427,8 @@ class PdfSearchIndex {
     _filledCount = 0;
     _totalPages = 0;
     _countKnown = false;
+    // Whoever is waiting for the whole book is not getting it now.
+    _finish();
     for (final isolate in isolates) {
       isolate.kill(priority: Isolate.immediate);
     }
@@ -430,16 +455,21 @@ class PdfSearchIndex {
     final sendPort = args[1] as SendPort;
     final start = args[2] as int;
     final end = args[3] as int;
-    final bytes = await File(filePath).readAsBytes();
-    final document = PdfDocument(inputBytes: bytes);
+    // 'done' goes out however the work ended: a worker that died without it
+    // would leave the index building for ever.
     try {
-      for (var i = start; i < end; i++) {
-        sendPort.send({'page': i, 'blocks': pageBlockTexts(document, i)});
+      final bytes = await File(filePath).readAsBytes();
+      final document = PdfDocument(inputBytes: bytes);
+      try {
+        for (var i = start; i < end; i++) {
+          sendPort.send({'page': i, 'blocks': pageBlockTexts(document, i)});
+        }
+      } finally {
+        document.dispose();
       }
     } finally {
-      document.dispose();
+      sendPort.send('done');
     }
-    sendPort.send('done');
   }
 }
 

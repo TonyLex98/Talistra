@@ -103,10 +103,14 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
       setState(() {
         _pages = pages;
         _loading = false;
+        // The saved page may be from an older layout of the book with more
+        // pages in it; the counter and everything that indexes by it have to
+        // agree with the one being shown.
+        _currentPage = _currentPage.clamp(1, pages.isEmpty ? 1 : pages.length);
       });
       context.read<LibraryService>().updateProgress(
         widget.documentId,
-        lastPage: _currentPage.clamp(1, pages.isEmpty ? 1 : pages.length),
+        lastPage: _currentPage,
         pageCount: pages.length,
       );
     } catch (e) {
@@ -415,7 +419,14 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                   ReaderCopyMenu(
                     pageText: () => _pages.isEmpty
                         ? null
-                        : reflowBlocksText(_pages[_currentPage - 1]),
+                        : reflowBlocksText(
+                            // A page saved before the book was last laid out
+                            // can lie past its end now.
+                            _pages[(_currentPage - 1).clamp(
+                              0,
+                              _pages.length - 1,
+                            )],
+                          ),
                     bookText: () async => reflowPagesText(_pages),
                   ),
                 ],

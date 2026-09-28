@@ -41,6 +41,7 @@ Future<void> _open(
   WidgetTester tester,
   _FakeSearch search, {
   required int readingPage,
+  int Function()? reading,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -55,7 +56,7 @@ Future<void> _open(
       home: Scaffold(
         body: BookSearchBar(
           search: search.run,
-          readingPage: () => readingPage,
+          readingPage: reading ?? () => readingPage,
           onSelect: (match, all) => search.landed.add(match),
           onClose: () {},
         ),
@@ -141,5 +142,26 @@ void main() {
     await tester.pump();
     expect(search.landed.last.pageIndex, 9);
     expect(find.text('2/3'), findsOneWidget);
+  });
+
+  testWidgets('refining the query still searches from where the reader was', (
+    tester,
+  ) async {
+    // The reader is where the last landing put them, not where they were
+    // reading — a query refined one letter at a time must not start from
+    // the hit the shorter one happened to open on.
+    var page = 4;
+    final search = _FakeSearch();
+    await _open(tester, search, readingPage: 4, reading: () => page);
+    search.emit([_match(2), _match(30)]);
+    await tester.pump();
+    expect(search.landed.last.pageIndex, 30);
+    page = 30;
+
+    await tester.enterText(find.byType(TextField), 'ищите');
+    await tester.pump(const Duration(milliseconds: 400));
+    search.emit([_match(2), _match(10), _match(40)]);
+    await tester.pump();
+    expect(search.landed.last.pageIndex, 10);
   });
 }

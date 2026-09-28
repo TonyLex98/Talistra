@@ -62,10 +62,10 @@ class _BookSearchBarState extends State<BookSearchBar> {
   Timer? _debounce;
   int _searchGeneration = 0;
 
-  /// Where the reader was when the running search started. Captured then
-  /// rather than read per batch, because landing on a match moves the reader
-  /// and the next batch would otherwise measure itself against the page the
-  /// previous batch sent them to.
+  /// Where the reader was when the search bar opened (or the page they last
+  /// stepped to). Captured rather than read per batch, because landing on a
+  /// match moves the reader and the next batch would otherwise measure itself
+  /// against the page the previous batch sent them to.
   int _fromPage = 0;
 
   /// Whether the reader has stepped through the matches with the arrows.
@@ -78,6 +78,12 @@ class _BookSearchBarState extends State<BookSearchBar> {
   /// "haven't searched yet" (no query, or still typing) from "searched and
   /// found nothing", which are otherwise the same empty [_matches] list.
   bool _hasSearched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fromPage = widget.readingPage();
+  }
 
   @override
   void dispose() {
@@ -106,7 +112,11 @@ class _BookSearchBarState extends State<BookSearchBar> {
       return;
     }
     final generation = ++_searchGeneration;
-    _fromPage = widget.readingPage();
+    // Only a page the reader chose — by stepping through the last search's
+    // matches — moves where the next one starts. A page the search itself
+    // landed on doesn't: refining a query a letter at a time would otherwise
+    // start each version from wherever the shorter one happened to open.
+    if (_readerMoved) _fromPage = widget.readingPage();
     _readerMoved = false;
     setState(() {
       _searching = true;
