@@ -63,6 +63,12 @@ android {
             // (see docs/PUBLISHING.md); falls back to the debug key so
             // `flutter build --release` still works before you've set one up.
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // R8 rules (see proguard-rules.pro): silence warnings about
+            // optional ML Kit script recognizers that are not bundled.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
