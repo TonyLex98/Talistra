@@ -28,6 +28,7 @@ import 'reader_screen.dart';
 import 'settings_screen.dart';
 import 'statistics_screen.dart';
 import 'txt_reader_screen.dart';
+import 'vocabulary_screen.dart';
 import 'xlsx_reader_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -392,6 +393,16 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const StatisticsScreen())),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.translate,
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+            ),
+            tooltip: l10n.vocabularyTooltip,
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const VocabularyScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),

@@ -13,6 +13,7 @@ import 'package:transreade/services/reading_display_service.dart';
 import 'package:transreade/services/search_index_cache.dart';
 import 'package:transreade/services/settings_service.dart';
 import 'package:transreade/services/statistics_service.dart';
+import 'package:transreade/services/vocabulary_service.dart';
 
 // path_provider has no platform channel handler under `flutter test`, so
 // any call through it hangs forever instead of throwing — point it at a
@@ -51,6 +52,7 @@ void main() {
     late final SearchIndexCache searchIndexCache;
     late final StatisticsService statistics;
     late final AnnotationService annotations;
+    late final VocabularyService vocabulary;
     await tester.runAsync(() async {
       final prefs = await SharedPreferences.getInstance();
       settings = SettingsService.load(prefs);
@@ -60,6 +62,7 @@ void main() {
       searchIndexCache = await SearchIndexCache.open();
       statistics = await StatisticsService.load(prefs);
       annotations = AnnotationService.load(prefs);
+      vocabulary = VocabularyService.load(prefs);
     });
 
     await tester.pumpWidget(
@@ -72,6 +75,7 @@ void main() {
         statistics: statistics,
         readingDisplay: ReadingDisplayService(),
         annotations: annotations,
+        vocabulary: vocabulary,
       ),
     );
     await tester.pumpAndSettle();

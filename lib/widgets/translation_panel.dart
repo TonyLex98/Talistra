@@ -8,6 +8,7 @@ import '../models/app_language.dart';
 import '../services/model_download_service.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
+import '../services/vocabulary_service.dart';
 import '../utils/script_check.dart';
 import '../utils/sentence_finder.dart';
 import 'language_picker_sheet.dart';
@@ -155,9 +156,13 @@ class _TranslationPanelState extends State<TranslationPanel> {
                       ),
                     ),
                   ),
+                  if (_canKeep) _buildSaveButton(context),
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
                     visualDensity: VisualDensity.compact,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
                     onPressed: widget.onClose,
                   ),
                 ],
@@ -169,6 +174,52 @@ class _TranslationPanelState extends State<TranslationPanel> {
         ),
       ),
     );
+  }
+
+  /// Whether what is being translated is a word or a phrase worth a card —
+  /// not a whole marked paragraph.
+  bool get _canKeep =>
+      widget.word.trim().split(RegExp(r'\s+')).length <= 6 &&
+      widget.word.length <= 80;
+
+  Widget _buildSaveButton(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final saved = context.watch<VocabularyService>().contains(
+      widget.word,
+      widget.source.bcpCode,
+    );
+    return IconButton(
+      icon: Icon(
+        saved ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+        size: 20,
+      ),
+      visualDensity: VisualDensity.compact,
+      tooltip: saved ? l10n.wordAlreadySaved : l10n.saveWordAction,
+      onPressed: saved || _status == _Status.loading ? null : _saveWord,
+    );
+  }
+
+  /// Keeps the word in the reader's dictionary with the sentence it was met
+  /// in, and both translations as far as they have come in.
+  Future<void> _saveWord() async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final added = await context.read<VocabularyService>().add(
+      word: widget.word,
+      sourceLanguage: widget.source.bcpCode,
+      targetLanguage: widget.target.bcpCode,
+      translation: _wordTranslation,
+      sentence: widget.sentenceMatch?.sentence,
+      sentenceTranslation: _sentenceTranslation,
+    );
+    messenger
+      ?..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(added ? l10n.wordSaved : l10n.wordAlreadySaved),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   /// True when the text being translated clearly isn't in the language the

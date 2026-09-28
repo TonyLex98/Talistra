@@ -15,6 +15,7 @@ import 'services/search_index_cache.dart';
 import 'services/settings_service.dart';
 import 'services/statistics_service.dart';
 import 'services/translation_service.dart';
+import 'services/vocabulary_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -34,6 +35,7 @@ void main() async {
   final statistics = await StatisticsService.load(prefs);
   final readingDisplay = ReadingDisplayService();
   final annotations = AnnotationService.load(prefs);
+  final vocabulary = VocabularyService.load(prefs);
 
   if (!settings.instructionsSeeded) {
     await _seedInstructionsPdf(settings, library);
@@ -49,6 +51,7 @@ void main() async {
       statistics: statistics,
       readingDisplay: readingDisplay,
       annotations: annotations,
+      vocabulary: vocabulary,
     ),
   );
 }
@@ -103,6 +106,7 @@ class TalistraApp extends StatelessWidget {
     required this.statistics,
     required this.readingDisplay,
     required this.annotations,
+    required this.vocabulary,
   });
 
   final SettingsService settings;
@@ -113,6 +117,7 @@ class TalistraApp extends StatelessWidget {
   final StatisticsService statistics;
   final ReadingDisplayService readingDisplay;
   final AnnotationService annotations;
+  final VocabularyService vocabulary;
 
   @override
   Widget build(BuildContext context) {
@@ -125,6 +130,7 @@ class TalistraApp extends StatelessWidget {
         Provider<SearchIndexCache>.value(value: searchIndexCache),
         ChangeNotifierProvider<StatisticsService>.value(value: statistics),
         ChangeNotifierProvider<AnnotationService>.value(value: annotations),
+        ChangeNotifierProvider<VocabularyService>.value(value: vocabulary),
         Provider<ReadingDisplayService>(
           create: (_) => readingDisplay,
           dispose: (_, service) => service.dispose(),
