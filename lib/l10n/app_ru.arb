@@ -74,8 +74,8 @@
     "placeholders": { "max": {"type": "int"} }
   },
   "go": "Перейти",
-  "smallerText": "Меньше текст",
-  "largerText": "Крупнее текст",
+  "smallerText": "Уменьшить текст",
+  "largerText": "Увеличить текст",
   "originalPdf": "Оригинал PDF",
   "originalDocument": "Оригинал",
   "originalSheet": "Оригинал таблицы",

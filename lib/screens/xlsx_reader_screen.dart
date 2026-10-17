@@ -479,6 +479,10 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
     ColorScheme scheme,
   ) {
     final hasPages = _pageCount > 0;
+    final crowded = readerBarIsCrowded(
+      context,
+      translatorOn: settings.translatorEnabled,
+    );
     return Positioned(
       top: 0,
       left: 0,
@@ -549,20 +553,22 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
                       ),
                     ),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.text_decrease),
-                    tooltip: l10n.smallerText,
-                    onPressed: () => _changeFontSize(-1),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.text_increase),
-                    tooltip: l10n.largerText,
-                    onPressed: () => _changeFontSize(1),
-                  ),
+                  if (!crowded) ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.text_decrease),
+                      tooltip: l10n.smallerText,
+                      onPressed: () => _changeFontSize(-1),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.text_increase),
+                      tooltip: l10n.largerText,
+                      onPressed: () => _changeFontSize(1),
+                    ),
+                  ],
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     iconSize: 21,
@@ -627,6 +633,12 @@ class _XlsxReaderScreenState extends State<XlsxReaderScreen>
                   ),
                   ReaderCopyMenu(
                     actions: [
+                      if (crowded)
+                        ...textSizeMenuActions(
+                          l10n,
+                          smaller: () => _changeFontSize(-1),
+                          larger: () => _changeFontSize(1),
+                        ),
                       shareFileMenuAction(
                         context,
                         documentId: widget.documentId,

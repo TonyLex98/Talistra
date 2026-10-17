@@ -633,6 +633,10 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
   Widget _buildFloatingBar(SettingsService settings, AppLocalizations l10n) {
     final document = _djvu;
     final scheme = Theme.of(context).colorScheme;
+    // The language pair and the text-size buttons do not both fit on a phone.
+    final crowded =
+        _reflowMode &&
+        readerBarIsCrowded(context, translatorOn: settings.translatorEnabled);
     return Positioned(
       top: 0,
       left: 0,
@@ -704,20 +708,22 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                     ),
                   ),
                   if (_reflowMode) ...[
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 22,
-                      icon: const Icon(Icons.text_decrease),
-                      tooltip: l10n.smallerText,
-                      onPressed: () => _changeFontSize(-1),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 22,
-                      icon: const Icon(Icons.text_increase),
-                      tooltip: l10n.largerText,
-                      onPressed: () => _changeFontSize(1),
-                    ),
+                    if (!crowded) ...[
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 22,
+                        icon: const Icon(Icons.text_decrease),
+                        tooltip: l10n.smallerText,
+                        onPressed: () => _changeFontSize(-1),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 22,
+                        icon: const Icon(Icons.text_increase),
+                        tooltip: l10n.largerText,
+                        onPressed: () => _changeFontSize(1),
+                      ),
+                    ],
                   ] else ...[
                     IconButton(
                       visualDensity: VisualDensity.compact,
@@ -816,6 +822,12 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                   ),
                   ReaderCopyMenu(
                     actions: [
+                      if (crowded)
+                        ...textSizeMenuActions(
+                          l10n,
+                          smaller: () => _changeFontSize(-1),
+                          larger: () => _changeFontSize(1),
+                        ),
                       if (_djvu != null)
                         ...annotationMenuActions(
                           context,

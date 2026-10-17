@@ -47,7 +47,7 @@ class ReaderCopyMenu extends StatelessWidget {
                   leading: Icon(action.icon),
                   title: Text(action.label),
                   onTap: () {
-                    Navigator.of(sheetContext).pop();
+                    if (!action.keepOpen) Navigator.of(sheetContext).pop();
                     action.onSelected();
                   },
                 ),
@@ -129,11 +129,43 @@ class ReaderMenuAction {
     required this.icon,
     required this.label,
     required this.onSelected,
+    this.keepOpen = false,
   });
 
   final IconData icon;
   final String label;
 
-  /// Called once the menu has closed.
+  /// Called once the menu has closed — or straight away when [keepOpen].
   final VoidCallback onSelected;
+
+  /// Leaves the menu up after the tap, for an action worth repeating (a
+  /// text size, stepped a size at a time).
+  final bool keepOpen;
 }
+
+/// Whether the reader's top bar has to give up its text-size buttons (and
+/// whatever else is optional) to the «Ещё» menu: with the translator on the
+/// language pair joins the bar, and on a phone-wide screen the icons then
+/// crowd out the page counter — or run off the edge altogether.
+bool readerBarIsCrowded(BuildContext context, {required bool translatorOn}) =>
+    translatorOn && MediaQuery.sizeOf(context).width < 440;
+
+/// The text-size buttons as menu entries, for a [readerBarIsCrowded] bar.
+List<ReaderMenuAction> textSizeMenuActions(
+  AppLocalizations l10n, {
+  required VoidCallback smaller,
+  required VoidCallback larger,
+}) => [
+  ReaderMenuAction(
+    icon: Icons.text_decrease,
+    label: l10n.smallerText,
+    onSelected: smaller,
+    keepOpen: true,
+  ),
+  ReaderMenuAction(
+    icon: Icons.text_increase,
+    label: l10n.largerText,
+    onSelected: larger,
+    keepOpen: true,
+  ),
+];

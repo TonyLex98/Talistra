@@ -329,6 +329,30 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     _reportViewSettled();
   }
 
+  /// Zooms by [delta] about the middle of the screen — what the bar's zoom
+  /// buttons do, for a reader who would rather tap than pinch.
+  void changeZoom(double delta) {
+    if (_viewportWidth <= 0 || _pageHeights.isEmpty) return;
+    final next = (_zoom + delta).clamp(_minZoom, _maxZoom).toDouble();
+    if ((next - _zoom).abs() < 0.001) return;
+    _flingController.stop();
+    final focal = Offset(_viewportWidth / 2, _viewportHeight / 2);
+    final content = _screenToContent(focal);
+    final maxDx = math.max(0.0, _viewportWidth - _viewportWidth / next);
+    final maxDy = math.max(0.0, _totalContentHeight - _viewportHeight / next);
+    setState(() {
+      _zoom = next;
+      _scrollOffset = Offset(
+        (content.dx - focal.dx / next).clamp(0.0, maxDx),
+        (content.dy - focal.dy / next).clamp(0.0, maxDy),
+      );
+    });
+    _maybeReportPageChange();
+    _reanchorSelection();
+    _pokeBubble();
+    _reportViewSettled();
+  }
+
   double get _maxDx => math.max(0.0, _viewportWidth - _viewportWidth / _zoom);
 
   /// Renders the part of the page on screen at the zoom it is seen at (see
