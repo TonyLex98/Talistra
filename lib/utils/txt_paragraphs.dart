@@ -1,5 +1,6 @@
 import 'reflow_builder.dart';
 import 'reflow_table.dart';
+import 'text_join.dart';
 
 /// How many characters roughly make up one synthetic "page" of a plain
 /// text file — just enough for progress tracking, the page counter, and
@@ -8,19 +9,74 @@ import 'reflow_table.dart';
 /// actual on-screen page exactly.
 const _targetPageChars = 2400;
 
-/// Splits raw plain-text content into paragraphs (blank-line separated),
-/// then groups those into synthetic pages of roughly [_targetPageChars]
-/// each, so a .txt document gets the same page-based reading experience —
-/// progress bar, "page X of Y", per-book statistics — as PDF/reflow.
+/// Splits raw plain-text content into paragraphs, then groups those into
+/// synthetic pages of roughly [_targetPageChars] each, so a .txt document gets
+/// the same page-based reading experience — progress bar, "page X of Y",
+/// per-book statistics — as PDF/reflow.
+///
+/// A blank line always ends a paragraph. A single line break is the hard part,
+/// because a text file uses it for two opposite things: a book saved with
+/// every line cut at 70 columns wants its lines joined back into prose, while
+/// a poem, a list, a log or a file with one paragraph per line wants each
+/// break kept. Joining everything — as this once did — poured a whole such
+/// file into one block. See [_splitParagraphs] for how the two are told apart.
 List<List<ReflowBlock>> buildTxtPages(String rawText) {
   final normalized = rawText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-  return buildTxtPagesFromParagraphs(
-    normalized
-        .split(RegExp(r'\n\s*\n+'))
-        .map((paragraph) => paragraph.replaceAll('\n', ' ').trim())
-        .where((paragraph) => paragraph.isNotEmpty)
-        .toList(),
-  );
+  return buildTxtPagesFromParagraphs(_splitParagraphs(normalized));
+}
+
+/// The paragraphs of [text] (line breaks already `\n`).
+///
+/// The width the file was wrapped at is read off the file itself — the 90th
+/// percentile of its line lengths, which ignores the short last line of each
+/// paragraph. A run of lines is hard-wrapped prose when nearly all of them
+/// reach close to that width: then the breaks are joined away. Otherwise they
+/// were put there on purpose: long lines (prose written one paragraph per
+/// line) become paragraphs of their own, short ones (verse, lists) stay one
+/// block with their breaks kept.
+List<String> _splitParagraphs(String text) {
+  final lengths = <int>[
+    for (final line in text.split('\n'))
+      if (line.trim().isNotEmpty) line.trim().length,
+  ]..sort();
+  final wrapWidth = lengths.isEmpty
+      ? 0
+      : lengths[(lengths.length * 0.9).floor().clamp(0, lengths.length - 1)];
+
+  final paragraphs = <String>[];
+  for (final chunk in text.split(RegExp(r'\n\s*\n+'))) {
+    final lines = [
+      for (final line in chunk.split('\n'))
+        if (line.trim().isNotEmpty) line.trim(),
+    ];
+    if (lines.isEmpty) continue;
+    if (lines.length == 1) {
+      paragraphs.add(lines.single);
+    } else if (_isHardWrapped(lines, wrapWidth)) {
+      paragraphs.add(lines.reduce(joinLines));
+    } else if (lines.fold<int>(0, (sum, line) => sum + line.length) >=
+        _proseLineChars * lines.length) {
+      paragraphs.addAll(lines);
+    } else {
+      paragraphs.add(lines.join('\n'));
+    }
+  }
+  return paragraphs;
+}
+
+/// Lines this long on average are prose, not verse or list entries.
+const _proseLineChars = 80;
+
+/// Whether [lines] (two or more) are one paragraph that was cut at about
+/// [wrapWidth] columns: every line but the last runs nearly to that width.
+bool _isHardWrapped(List<String> lines, int wrapWidth) {
+  if (wrapWidth < 40) return false;
+  final full = lines.length - 1;
+  var reaching = 0;
+  for (var i = 0; i < full; i++) {
+    if (lines[i].length >= wrapWidth * 0.75) reaching++;
+  }
+  return reaching >= full * 0.8;
 }
 
 /// Same grouping, for the formats that already hand their text over as

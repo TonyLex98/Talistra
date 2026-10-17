@@ -14,7 +14,11 @@ import '../utils/text_join.dart';
 
 const double _pageSpacing = 4.0;
 const double _minZoom = 1.0;
-const double _maxZoom = 3.0;
+
+/// Far enough to read the small print of a wiring or hydraulic diagram. What
+/// is on screen past the page's own bitmap is re-rasterized for exactly the
+/// pixels shown (see [_detail]), so it stays sharp however far this goes.
+const double _maxZoom = 8.0;
 
 /// How much screen-space horizontal drag is absorbed before a drag starts
 /// panning sideways at all. Below this, small incidental horizontal
@@ -329,11 +333,16 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     _reportViewSettled();
   }
 
-  /// Zooms by [delta] about the middle of the screen — what the bar's zoom
-  /// buttons do, for a reader who would rather tap than pinch.
-  void changeZoom(double delta) {
+  /// One step of the bar's zoom buttons, about the middle of the screen — for
+  /// a reader who would rather tap than pinch. A step is a factor, not a fixed
+  /// amount: from 1x to the maximum is eight times, and an even step would be
+  /// either too small to notice up close or too big to aim at from afar.
+  void zoomStep({required bool zoomIn}) {
     if (_viewportWidth <= 0 || _pageHeights.isEmpty) return;
-    final next = (_zoom + delta).clamp(_minZoom, _maxZoom).toDouble();
+    const factor = 1.5;
+    final next = (zoomIn ? _zoom * factor : _zoom / factor)
+        .clamp(_minZoom, _maxZoom)
+        .toDouble();
     if ((next - _zoom).abs() < 0.001) return;
     _flingController.stop();
     final focal = Offset(_viewportWidth / 2, _viewportHeight / 2);
@@ -1130,9 +1139,10 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   ///
   /// The tiers are deliberately coarse: a continuous scale would re-render on
   /// every pinch frame (rasterizing is the most expensive step in the whole
-  /// view), so we only re-render when the zoom crosses a tier boundary. The
-  /// top tier matches the max zoom, so at full zoom the page is rendered at
-  /// exactly the pixels on screen — no upscale at all.
+  /// view), so we only re-render when the zoom crosses a tier boundary. Past
+  /// the top tier a whole page would be too big a bitmap to hold, so the part
+  /// on screen is rasterized on its own once the view comes to rest (see
+  /// [_detail]): at full zoom it is drawn at exactly the pixels shown.
   ///
   /// Rounded *up*: a page shown at 1.2x from a bitmap rendered for 1.0x is a
   /// bitmap stretched by a fifth, and stretched text is soft text. Rendering

@@ -1023,13 +1023,13 @@ class _ReaderScreenState extends State<ReaderScreen>
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.zoom_out, size: 22),
           tooltip: l10n.zoomOut,
-          onPressed: () => _pdfViewKey.currentState?.changeZoom(-0.5),
+          onPressed: () => _pdfViewKey.currentState?.zoomStep(zoomIn: false),
         ),
         IconButton(
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.zoom_in, size: 22),
           tooltip: l10n.zoomIn,
-          onPressed: () => _pdfViewKey.currentState?.changeZoom(0.5),
+          onPressed: () => _pdfViewKey.currentState?.zoomStep(zoomIn: true),
         ),
       ],
       if (_reflowMode && !crowded) ...[
@@ -1144,13 +1144,15 @@ class _ReaderScreenState extends State<ReaderScreen>
             ReaderMenuAction(
               icon: Icons.zoom_out,
               label: l10n.zoomOut,
-              onSelected: () => _pdfViewKey.currentState?.changeZoom(-0.5),
+              onSelected: () =>
+                  _pdfViewKey.currentState?.zoomStep(zoomIn: false),
               keepOpen: true,
             ),
             ReaderMenuAction(
               icon: Icons.zoom_in,
               label: l10n.zoomIn,
-              onSelected: () => _pdfViewKey.currentState?.changeZoom(0.5),
+              onSelected: () =>
+                  _pdfViewKey.currentState?.zoomStep(zoomIn: true),
               keepOpen: true,
             ),
           ],

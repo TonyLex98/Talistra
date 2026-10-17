@@ -98,4 +98,54 @@ void main() {
       expect(piece.gapAbove, 0);
     }
   });
+
+  group('line breaks in a plain text file', () {
+    List<String> paragraphsOf(String text) => [
+      for (final page in buildTxtPages(text))
+        for (final block in page) block.text,
+    ];
+
+    test('a book cut into 70-column lines is joined back into prose', () {
+      const line =
+          'The quick brown fox jumps over the lazy dog and keeps on running';
+      final text = [
+        '$line\n$line\n$line\nends here.',
+        '$line\n$line\nlast words.',
+      ].join('\n\n');
+      final paragraphs = paragraphsOf(text);
+      expect(paragraphs.length, 2);
+      expect(paragraphs.first.contains('\n'), isFalse);
+      expect(paragraphs.first.startsWith(line), isTrue);
+      expect(paragraphs.first.endsWith('ends here.'), isTrue);
+    });
+
+    test('verse keeps its line breaks', () {
+      const poem =
+          'Roses are red\nViolets are blue\nSugar is sweet\nAnd so are you';
+      final paragraphs = paragraphsOf('$poem\n\nSecond verse\nis here');
+      expect(paragraphs, [poem, 'Second verse\nis here']);
+    });
+
+    test('a file with one paragraph per line is not poured into one block', () {
+      final lines = [
+        for (var i = 0; i < 6; i++)
+          'Paragraph $i ${'with a fair amount of words in it ' * (2 + i)}',
+      ];
+      final paragraphs = paragraphsOf(lines.join('\n'));
+      expect(paragraphs.length, 6);
+      for (var i = 0; i < 6; i++) {
+        expect(paragraphs[i], lines[i].trim());
+      }
+    });
+
+    test('a list keeps one entry to a line', () {
+      final paragraphs = paragraphsOf('Shopping:\n- milk\n- bread\n- eggs');
+      expect(paragraphs, ['Shopping:\n- milk\n- bread\n- eggs']);
+    });
+
+    test('blank lines still separate paragraphs and Windows breaks work', () {
+      final paragraphs = paragraphsOf('One\r\n\r\nTwo\r\n\r\n\r\nThree');
+      expect(paragraphs, ['One', 'Two', 'Three']);
+    });
+  });
 }
