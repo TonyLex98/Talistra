@@ -301,7 +301,7 @@ class SettingsService extends ChangeNotifier {
   static const _appLocaleKey = 'app_locale';
   static const _translatorEnabledKey = 'translator_enabled';
   static const _syncTranslationKey = 'sync_translation_experimental';
-  static const _instructionsSeededKey = 'instructions_seeded_v6';
+  static const _instructionsSeededKey = 'instructions_seeded_v7';
   static const _readingFontKey = 'reading_font';
   static const _readingWeightKey = 'reading_weight';
   static const _readingContrastKey = 'reading_contrast';
