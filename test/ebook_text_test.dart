@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transreade/utils/ebook_text.dart';
@@ -74,5 +76,15 @@ void main() {
     expect(ebookFormatFromPath('/x/y/book.docx'), EbookFormat.docx);
     expect(ebookFormatFromPath('/x/y/book.txt'), EbookFormat.txt);
     expect(ebookFormatFromPath('/x/y/book.pdf'), isNull);
+  });
+
+  test('a plain text file keeps the line breaks of its verse', () {
+    const poem =
+        'Roses are red\nViolets are blue\nSugar is sweet\nAnd so are you';
+    final paragraphs = extractEbookParagraphs(
+      Uint8List.fromList(utf8.encode('$poem\n\nSecond verse\nis here')),
+      EbookFormat.txt,
+    );
+    expect(paragraphs, [poem, 'Second verse\nis here']);
   });
 }

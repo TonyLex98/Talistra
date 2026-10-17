@@ -7,6 +7,7 @@ import 'package:xml/xml.dart';
 import 'ebook_blocks.dart';
 import 'reflow_builder.dart';
 import 'text_decode.dart';
+import 'txt_paragraphs.dart';
 
 /// The document formats the app can read as flowing text.
 ///
@@ -55,7 +56,7 @@ EbookFormat? ebookFormatFromPath(String path) {
 List<ReflowBlock> extractEbookBlocks(Uint8List bytes, EbookFormat format) {
   switch (format) {
     case EbookFormat.txt:
-      return _plainBlocks(_splitPlainText(decodeTextFile(bytes)));
+      return _plainBlocks(splitPlainTextParagraphs(decodeTextFile(bytes)));
     case EbookFormat.epub:
       return _epubBlocks(bytes);
     case EbookFormat.fb2:
@@ -83,14 +84,6 @@ List<String> extractEbookParagraphs(Uint8List bytes, EbookFormat format) => [
 List<ReflowBlock> _plainBlocks(List<String> paragraphs) => [
   for (final text in paragraphs) ReflowBlock.paragraph(text),
 ];
-
-List<String> _splitPlainText(String text) {
-  return [
-    for (final block in text.split(RegExp(r'\n[ \t]*\n')))
-      if (block.trim().isNotEmpty)
-        block.replaceAll(RegExp(r'\s*\n\s*'), ' ').trim(),
-  ];
-}
 
 // ---------------------------------------------------------------- EPUB
 

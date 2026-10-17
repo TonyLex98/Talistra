@@ -19,13 +19,13 @@ const _targetPageChars = 2400;
 /// every line cut at 70 columns wants its lines joined back into prose, while
 /// a poem, a list, a log or a file with one paragraph per line wants each
 /// break kept. Joining everything — as this once did — poured a whole such
-/// file into one block. See [_splitParagraphs] for how the two are told apart.
+/// file into one block. See [splitPlainTextParagraphs] for how the two are told apart.
 List<List<ReflowBlock>> buildTxtPages(String rawText) {
-  final normalized = rawText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-  return buildTxtPagesFromParagraphs(_splitParagraphs(normalized));
+  return buildTxtPagesFromParagraphs(splitPlainTextParagraphs(rawText));
 }
 
-/// The paragraphs of [text] (line breaks already `\n`).
+/// The paragraphs of a plain-text file's [rawText], with its line breaks dealt
+/// with as [buildTxtPages] describes.
 ///
 /// The width the file was wrapped at is read off the file itself — the 90th
 /// percentile of its line lengths, which ignores the short last line of each
@@ -34,7 +34,8 @@ List<List<ReflowBlock>> buildTxtPages(String rawText) {
 /// were put there on purpose: long lines (prose written one paragraph per
 /// line) become paragraphs of their own, short ones (verse, lists) stay one
 /// block with their breaks kept.
-List<String> _splitParagraphs(String text) {
+List<String> splitPlainTextParagraphs(String rawText) {
+  final text = rawText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   final lengths = <int>[
     for (final line in text.split('\n'))
       if (line.trim().isNotEmpty) line.trim().length,
