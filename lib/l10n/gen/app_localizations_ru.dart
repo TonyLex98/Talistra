@@ -159,10 +159,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get go => 'Перейти';
 
   @override
-  String get smallerText => 'Меньше текст';
+  String get smallerText => 'Уменьшить текст';
 
   @override
-  String get largerText => 'Крупнее текст';
+  String get largerText => 'Увеличить текст';
 
   @override
   String get originalPdf => 'Оригинал PDF';

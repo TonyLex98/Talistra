@@ -9,7 +9,7 @@ product decision changes.
 Create and safely back up the Android upload key:
 
 ```powershell
-keytool -genkey -v -keystore android/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+keytool -genkey -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
 ```
 
 Create `android/key.properties` locally; it is ignored by Git:
@@ -18,6 +18,7 @@ Create `android/key.properties` locally; it is ignored by Git:
 storePassword=<store password>
 keyPassword=<key password>
 keyAlias=upload
+# storeFile is relative to android/app/
 storeFile=upload-keystore.jks
 ```
 

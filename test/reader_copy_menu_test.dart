@@ -109,4 +109,80 @@ void main() {
     expect(_copied, isEmpty);
     expect(find.text('Здесь нет текста, который можно скопировать'), findsOne);
   });
+
+  testWidgets('an action that keeps the menu open can be tapped again', (
+    tester,
+  ) async {
+    var larger = 0;
+    var contents = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: ReaderCopyMenu(
+            pageText: _pageText,
+            bookText: _bookText,
+            actions: [
+              ReaderMenuAction(
+                icon: Icons.text_increase,
+                label: 'Крупнее',
+                onSelected: () => larger++,
+                keepOpen: true,
+              ),
+              ReaderMenuAction(
+                icon: Icons.toc,
+                label: 'Содержание',
+                onSelected: () => contents++,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Крупнее'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Крупнее'));
+    await tester.pumpAndSettle();
+    expect(larger, 2);
+    expect(find.text('Копировать страницу'), findsOne);
+
+    await tester.tap(find.text('Содержание'));
+    await tester.pumpAndSettle();
+    expect(contents, 1);
+    expect(find.text('Копировать страницу'), findsNothing);
+  });
+
+  testWidgets('the bar is crowded only with the translator on a phone', (
+    tester,
+  ) async {
+    late BuildContext context;
+    Future<void> at(Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (c) {
+              context = c;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+    }
+
+    addTearDown(tester.view.reset);
+    await at(const Size(360, 800));
+    expect(readerBarIsCrowded(context, translatorOn: true), isTrue);
+    expect(readerBarIsCrowded(context, translatorOn: false), isFalse);
+    await at(const Size(411, 900));
+    expect(readerBarIsCrowded(context, translatorOn: true), isTrue);
+    await at(const Size(800, 1280));
+    expect(readerBarIsCrowded(context, translatorOn: true), isFalse);
+  });
 }

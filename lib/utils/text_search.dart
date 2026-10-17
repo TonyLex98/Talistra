@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, TextLine;
 
+import '../services/error_log.dart';
 import '../services/search_index_cache.dart';
 import 'page_rotation.dart';
 import 'page_words.dart';
@@ -275,10 +276,12 @@ class PdfSearchIndex {
     _building = true;
     try {
       await _build(filePath, documentId: documentId, cache: cache);
-    } catch (_) {
+    } catch (error, stack) {
       // A book the index cannot be built for is one search finds nothing in
       // — never one that leaves a search spinning, or a copy of the whole
-      // book waiting on [done] for good.
+      // book waiting on [done] for good. It is written to the error log:
+      // a search that quietly finds nothing is how this once went unseen.
+      ErrorLog.record(error, stack, context: 'building the PDF search index');
       _building = false;
       _finish();
       _finishActiveSearch();
@@ -305,7 +308,7 @@ class PdfSearchIndex {
         return;
       }
     }
-    final total = await Isolate.run(() => _pageCount(filePath));
+    final total = await _pageCountInIsolate(filePath);
     if (!_building) return; // cancelled while the count was in flight
     _totalPages = total;
     _countKnown = true;
@@ -437,6 +440,12 @@ class PdfSearchIndex {
       port.close();
     }
   }
+
+  /// Static on purpose: a closure built inside an instance method shares its
+  /// context with the method's other closures and so drags `this` (with its
+  /// ports and completers, which cannot cross isolates) into the message.
+  static Future<int> _pageCountInIsolate(String filePath) =>
+      Isolate.run(() => _pageCount(filePath));
 
   static Future<int> _pageCount(String filePath) async {
     final bytes = await File(filePath).readAsBytes();

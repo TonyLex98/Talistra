@@ -380,6 +380,10 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
     SettingsService settings,
     ColorScheme scheme,
   ) {
+    final crowded = readerBarIsCrowded(
+      context,
+      translatorOn: settings.translatorEnabled,
+    );
     return Positioned(
       top: 0,
       left: 0,
@@ -450,20 +454,22 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                       ),
                     ),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.text_decrease),
-                    tooltip: l10n.smallerText,
-                    onPressed: () => _changeFontSize(-1),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 22,
-                    icon: const Icon(Icons.text_increase),
-                    tooltip: l10n.largerText,
-                    onPressed: () => _changeFontSize(1),
-                  ),
+                  if (!crowded) ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.text_decrease),
+                      tooltip: l10n.smallerText,
+                      onPressed: () => _changeFontSize(-1),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 22,
+                      icon: const Icon(Icons.text_increase),
+                      tooltip: l10n.largerText,
+                      onPressed: () => _changeFontSize(1),
+                    ),
+                  ],
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     iconSize: 21,
@@ -516,7 +522,15 @@ class _TxtReaderScreenState extends State<TxtReaderScreen>
                     onPressed: _pages.isEmpty ? null : _openSearch,
                   ),
                   ReaderCopyMenu(
-                    actions: _menuActions(l10n),
+                    actions: [
+                      if (crowded)
+                        ...textSizeMenuActions(
+                          l10n,
+                          smaller: () => _changeFontSize(-1),
+                          larger: () => _changeFontSize(1),
+                        ),
+                      ..._menuActions(l10n),
+                    ],
                     pageText: () => _pages.isEmpty
                         ? null
                         : reflowBlocksText(

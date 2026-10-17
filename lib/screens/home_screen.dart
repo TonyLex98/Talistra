@@ -157,14 +157,27 @@ class _HomeScreenState extends State<HomeScreen> {
   };
 
   Future<void> _importFile() async {
-    final result = await FilePicker.pickFiles(
-      // Android's document picker maps custom extensions to MIME types.
-      // DjVu/DJV are missing from that mapping on some devices, so valid
-      // books disappear from the picker. Keep the picker permissive and let
-      // our signature-aware importer validate the selected document instead.
-      type: FileType.any,
-      withData: false,
-    );
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        // Android's document picker maps custom extensions to MIME types.
+        // DjVu/DJV are missing from that mapping on some devices, so valid
+        // books disappear from the picker. Keep the picker permissive and let
+        // our signature-aware importer validate the selected document instead.
+        type: FileType.any,
+        withData: false,
+      );
+    } catch (e) {
+      // A phone with no document picker, or one that fails copying the file
+      // out of it, must say so — not leave the button looking dead.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).openFailed('$e')),
+        ),
+      );
+      return;
+    }
     final picked = result?.files.single;
     if (picked?.path == null) return;
     if (!mounted) return;

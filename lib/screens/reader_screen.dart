@@ -1001,34 +1001,49 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
   }
 
+  void _changeReflowFontSize(int delta) {
+    setState(() => _reflowFontSize = (_reflowFontSize + delta).clamp(13, 26));
+    _saveReflowFontSize();
+  }
+
   List<Widget> _buildBarActions(
     AppLocalizations l10n,
     SettingsService settings,
     ColorScheme scheme,
   ) {
+    // With the translator on, the language pair joins the bar and a phone
+    // has no room left for everything: the optional buttons go to the menu.
+    final crowded = readerBarIsCrowded(
+      context,
+      translatorOn: settings.translatorEnabled,
+    );
     return [
-      if (_reflowMode) ...[
+      if (!_reflowMode && !crowded) ...[
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.zoom_out, size: 22),
+          tooltip: l10n.zoomOut,
+          onPressed: () => _pdfViewKey.currentState?.changeZoom(-0.5),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.zoom_in, size: 22),
+          tooltip: l10n.zoomIn,
+          onPressed: () => _pdfViewKey.currentState?.changeZoom(0.5),
+        ),
+      ],
+      if (_reflowMode && !crowded) ...[
         IconButton(
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.text_decrease, size: 22),
           tooltip: l10n.smallerText,
-          onPressed: () {
-            setState(
-              () => _reflowFontSize = (_reflowFontSize - 1).clamp(13, 26),
-            );
-            _saveReflowFontSize();
-          },
+          onPressed: () => _changeReflowFontSize(-1),
         ),
         IconButton(
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.text_increase, size: 22),
           tooltip: l10n.largerText,
-          onPressed: () {
-            setState(
-              () => _reflowFontSize = (_reflowFontSize + 1).clamp(13, 26),
-            );
-            _saveReflowFontSize();
-          },
+          onPressed: () => _changeReflowFontSize(1),
         ),
       ],
       // Translator on/off and the language pair sit right here on the bar:
@@ -1088,7 +1103,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       ),
       // The experimental split view is the only thing left that used to
       // need a menu, and it only applies in compact mode.
-      if (_reflowMode && settings.translatorEnabled)
+      if (_reflowMode && settings.translatorEnabled && !crowded)
         IconButton(
           visualDensity: VisualDensity.compact,
           iconSize: 21,
@@ -1110,7 +1125,37 @@ class _ReaderScreenState extends State<ReaderScreen>
         onPressed: _pageCount == 0 ? null : _openSearch,
       ),
       ReaderCopyMenu(
-        actions: _menuActions(l10n),
+        actions: [
+          if (crowded && _reflowMode) ...[
+            ...textSizeMenuActions(
+              l10n,
+              smaller: () => _changeReflowFontSize(-1),
+              larger: () => _changeReflowFontSize(1),
+            ),
+            ReaderMenuAction(
+              icon: Icons.splitscreen,
+              label: l10n.syncTranslationTooltip,
+              onSelected: () => settings.setSyncTranslationExperimental(
+                !settings.syncTranslationExperimental,
+              ),
+            ),
+          ],
+          if (crowded && !_reflowMode) ...[
+            ReaderMenuAction(
+              icon: Icons.zoom_out,
+              label: l10n.zoomOut,
+              onSelected: () => _pdfViewKey.currentState?.changeZoom(-0.5),
+              keepOpen: true,
+            ),
+            ReaderMenuAction(
+              icon: Icons.zoom_in,
+              label: l10n.zoomIn,
+              onSelected: () => _pdfViewKey.currentState?.changeZoom(0.5),
+              keepOpen: true,
+            ),
+          ],
+          ..._menuActions(l10n),
+        ],
         pageText: () => _pageCount == 0 ? null : _copyPageText(),
         bookText: _copyBookText,
       ),

@@ -359,13 +359,13 @@ abstract class AppLocalizations {
   /// No description provided for @smallerText.
   ///
   /// In ru, this message translates to:
-  /// **'Меньше текст'**
+  /// **'Уменьшить текст'**
   String get smallerText;
 
   /// No description provided for @largerText.
   ///
   /// In ru, this message translates to:
-  /// **'Крупнее текст'**
+  /// **'Увеличить текст'**
   String get largerText;
 
   /// No description provided for @originalPdf.
