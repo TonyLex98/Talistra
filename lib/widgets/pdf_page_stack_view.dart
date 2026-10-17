@@ -13,12 +13,33 @@ import '../utils/sentence_finder.dart';
 import '../utils/text_join.dart';
 
 const double _pageSpacing = 4.0;
-const double _minZoom = 1.0;
+
+/// Scroll speed (content pixels a second) above which pages are not worth a
+/// sharp render yet, only a preview.
+const double _flingSharpSpeed = 900;
+
+/// Past this zoom only the page being looked at is rendered sharp: its
+/// neighbours are out of sight.
+const double _neighbourSharpMaxZoom = 2.01;
+
+/// How long the view holds still before the detail of what is on screen is
+/// asked for, and the most pixels one tile may have (a screen and its margin).
+const Duration _detailDelay = Duration(milliseconds: 140);
+const double _detailMaxPixels = 5e6;
+
+/// The page fitted to the width: where every document starts and what a
+/// «go to page» jump returns to.
+const double _fitZoom = 1.0;
+
+/// Far enough out to see a whole run of pages at once, or a drawing sheet
+/// the size of a wall in one piece. Below [_fitZoom] a page is narrower than
+/// the screen and sits in its middle (see [_clampDx]).
+const double _minZoom = 0.25;
 
 /// Far enough to read the small print of a wiring or hydraulic diagram. What
 /// is on screen past the page's own bitmap is re-rasterized for exactly the
 /// pixels shown (see [_detail]), so it stays sharp however far this goes.
-const double _maxZoom = 8.0;
+const double _maxZoom = 16.0;
 
 /// How much screen-space horizontal drag is absorbed before a drag starts
 /// panning sideways at all. Below this, small incidental horizontal
@@ -28,6 +49,9 @@ const double _maxZoom = 8.0;
 /// past it, picking up exactly where the frozen position left off (no
 /// jump at the threshold).
 const double _horizontalDeadZone = 56.0;
+
+/// How far a drag that is mostly sideways goes before it is let go.
+const double _horizontalIntent = 12.0;
 
 /// How long after the last scroll, drag or tap the page-number scrubber
 /// stays up before fading away. Long enough to read the page number and
@@ -166,7 +190,7 @@ class PdfPageStackView extends StatefulWidget {
 
 class PdfPageStackViewState extends State<PdfPageStackView>
     with SingleTickerProviderStateMixin {
-  double _zoom = _minZoom;
+  double _zoom = _fitZoom;
   Offset _scrollOffset = Offset.zero;
 
   double _viewportWidth = 0;
@@ -196,13 +220,37 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   /// resolution that tracks the zoom (see [_renderScaleFor]); whenever the
   /// quantized zoom moves past a tier, the stale lower-resolution bitmaps are
   /// dropped so the pages re-render sharp (see [_pruneImageCache]).
-  double _renderedZoomTier = _minZoom;
+  double _renderedZoomTier = _fitZoom;
 
   /// The part of the page on screen, rendered on its own at exactly the
   /// zoom it is seen at — so zoomed-in text is as sharp as the screen can
   /// show, not a whole-page bitmap blown up past the size a phone can hold.
   /// Asked for once the view comes to rest at a zoom above 1.
-  ({int page, Rect pdfBounds, Uint8List bytes})? _detail;
+  ({int page, Rect pdfBounds, double scale, ImageProvider image})? _detail;
+
+  /// What the newest [_requestDetail] asked for: a request that is still
+  /// waiting when a newer one is made is not worth rasterizing, and one for
+  /// exactly what is already asked for (or shown) is not worth repeating.
+  int _detailToken = 0;
+  ({int page, Rect pdfBounds, double scale})? _detailAsked;
+
+  /// A pinch or a pan in progress is not worth rasterizing for: the detail is
+  /// asked for once the view has held still for a moment (or a gesture ends).
+  Timer? _detailTimer;
+
+  void _requestDetailSoon() {
+    _detailTimer?.cancel();
+    if (_zoom <= 1.01) return;
+    _detailTimer = Timer(_detailDelay, () {
+      if (mounted) _requestDetail();
+    });
+  }
+
+  /// The pages on screen (without the margin of pages kept ready beside
+  /// them), as of the last build. What a queued render is worth is decided
+  /// against this when its turn comes, not when it was asked for.
+  int _viewLo = 0;
+  int _viewHi = 0;
 
   /// A cheap, low-resolution render of the same pages. Rasterizing a page
   /// at reading sharpness takes long enough to notice, so every page is
@@ -215,6 +263,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   Offset _gestureStartFocalScreen = Offset.zero;
   Offset _gestureStartFocalContent = Offset.zero;
   bool _horizontalUnlocked = false;
+  double _horizontalHeldAt = 0;
   double _totalMoveDistance = 0;
   DateTime? _gestureStartTime;
   int _activePointerCount = 0;
@@ -257,9 +306,10 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   @override
   void initState() {
     super.initState();
-    _zoom = widget.initialZoom;
+    _zoom = widget.initialZoom.clamp(_minZoom, _maxZoom);
     _flingController = AnimationController.unbounded(vsync: this)
-      ..addListener(_onFlingTick);
+      ..addListener(_onFlingTick)
+      ..addStatusListener(_onFlingStatus);
     _pokeBubble();
   }
 
@@ -283,6 +333,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
   @override
   void dispose() {
+    _detailTimer?.cancel();
     _hideBubbleTimer?.cancel();
     _autoScrollTimer?.cancel();
     _flingController.dispose();
@@ -317,7 +368,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
       // not something that should reset just because a different page
       // number came into view.
       final dx = resetZoom ? 0.0 : _scrollOffset.dx;
-      if (resetZoom) _zoom = _minZoom;
+      if (resetZoom) _zoom = _fitZoom;
       final maxDy = math.max(
         0.0,
         _totalContentHeight - _viewportHeight / _zoom,
@@ -335,7 +386,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
   /// One step of the bar's zoom buttons, about the middle of the screen — for
   /// a reader who would rather tap than pinch. A step is a factor, not a fixed
-  /// amount: from 1x to the maximum is eight times, and an even step would be
+  /// amount: from 1x to the maximum is sixteen times, and an even step would be
   /// either too small to notice up close or too big to aim at from afar.
   void zoomStep({required bool zoomIn}) {
     if (_viewportWidth <= 0 || _pageHeights.isEmpty) return;
@@ -347,12 +398,11 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     _flingController.stop();
     final focal = Offset(_viewportWidth / 2, _viewportHeight / 2);
     final content = _screenToContent(focal);
-    final maxDx = math.max(0.0, _viewportWidth - _viewportWidth / next);
     final maxDy = math.max(0.0, _totalContentHeight - _viewportHeight / next);
     setState(() {
       _zoom = next;
       _scrollOffset = Offset(
-        (content.dx - focal.dx / next).clamp(0.0, maxDx),
+        _clampDx(content.dx - focal.dx / next, next),
         (content.dy - focal.dy / next).clamp(0.0, maxDy),
       );
     });
@@ -364,10 +414,27 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
   double get _maxDx => math.max(0.0, _viewportWidth - _viewportWidth / _zoom);
 
+  /// [dx], the content-space left edge of the screen, brought into the range
+  /// the view may be panned to at [zoom]. Zoomed in, that is the page's own
+  /// width; zoomed out, the page is narrower than the screen and there is
+  /// nothing to pan across, so it stays in the middle.
+  double _clampDx(double dx, double zoom) {
+    final visible = _viewportWidth / zoom;
+    if (visible > _viewportWidth) return (_viewportWidth - visible) / 2;
+    return dx.clamp(0.0, _viewportWidth - visible).toDouble();
+  }
+
   /// Renders the part of the page on screen at the zoom it is seen at (see
   /// [_detail]), or drops the one there was when the view is back at 1x.
+  ///
+  /// The tile is made a little larger than the screen, so a small pan stays
+  /// inside it instead of uncovering the soft picture beneath; and a view the
+  /// tile already covers at this zoom is not asked for again.
   void _requestDetail() {
+    _detailTimer?.cancel();
     if (_zoom <= 1.01 || _pageHeights.isEmpty || _contentWidth <= 0) {
+      _detailAsked = null;
+      _detailToken++;
       if (_detail != null) setState(() => _detail = null);
       return;
     }
@@ -380,38 +447,88 @@ class PdfPageStackViewState extends State<PdfPageStackView>
       _contentWidth,
       _pageHeights[page],
     );
-    final visible = Rect.fromLTWH(
+    final screen = Rect.fromLTWH(
       _scrollOffset.dx,
       _scrollOffset.dy,
       _viewportWidth / _zoom,
       _viewportHeight / _zoom,
-    ).intersect(pageRect);
+    );
+    final visible = screen.intersect(pageRect);
     if (visible.width <= 0 || visible.height <= 0) return;
     final pageScale = _contentWidth / size.width;
-    final pdfBounds = Rect.fromLTWH(
-      (visible.left - _pageLeft) / pageScale,
-      (visible.top - _cumulativeY[page]) / pageScale,
-      visible.width / pageScale,
-      visible.height / pageScale,
-    );
     final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.0, 4.0);
+    final scale = pageScale * dpr * _zoom;
+
+    final shown = _detail;
+    if (shown != null &&
+        shown.page == page &&
+        shown.scale >= scale * 0.97 &&
+        _contentRectFor(page, shown.pdfBounds)!.contains(visible.topLeft) &&
+        _contentRectFor(page, shown.pdfBounds)!.contains(
+          visible.bottomRight - const Offset(0.01, 0.01),
+        )) {
+      return;
+    }
+
+    // As much margin as the pixel budget allows: the screen's own pixels are
+    // what has to be sharp, and the margin is a bonus.
+    final pixelsPerUnit = scale / pageScale;
+    var wanted = visible;
+    for (final margin in const [0.25, 0.12, 0.0]) {
+      wanted = Rect.fromLTRB(
+        visible.left - screen.width * margin,
+        visible.top - screen.height * margin,
+        visible.right + screen.width * margin,
+        visible.bottom + screen.height * margin,
+      ).intersect(pageRect);
+      if (wanted.width * wanted.height * pixelsPerUnit * pixelsPerUnit <=
+          _detailMaxPixels) {
+        break;
+      }
+    }
+    final pdfBounds = Rect.fromLTWH(
+      (wanted.left - _pageLeft) / pageScale,
+      (wanted.top - _cumulativeY[page]) / pageScale,
+      wanted.width / pageScale,
+      wanted.height / pageScale,
+    );
+    // Asked for already: settling is reported by every gesture, scroll and
+    // zoom step, and most of them leave the view where it was.
+    final asked = (page: page, pdfBounds: pdfBounds, scale: scale);
+    if (_detailAsked == asked) return;
+    _detailAsked = asked;
+    final token = ++_detailToken;
     final image = widget.renderer.renderRegion(
       pageIndex: page,
       pdfBounds: pdfBounds,
-      scale: pageScale * dpr * _zoom,
+      scale: scale,
       // Ahead of the neighbours' pages, behind nothing: it is what the reader
-      // is looking at. But not worth drawing once they have zoomed out or
-      // moved on while it waited.
+      // is looking at. But not worth drawing once they have zoomed out, moved
+      // on, or asked for something newer while it waited.
       priority: PdfRegionRenderer.priorityVisible,
-      isStale: () => !mounted || _zoom <= 1.01 || _reportedPage - 1 != page,
+      isStale: () => !mounted || _zoom <= 1.01 || token != _detailToken,
     );
-    image.then((bytes) {
+    image.then((bytes) async {
       if (!mounted || bytes == null || bytes.isEmpty) return;
+      // Decoded before it is swapped in, so the tile that replaces the one on
+      // screen is there on the very next frame instead of a few frames later
+      // (a blank, or the old tile stretched into the new place, in between).
+      final provider = MemoryImage(bytes);
+      try {
+        await precacheImage(provider, context);
+      } catch (_) {
+        return;
+      }
       // Only if the view is still where it was asked for: a tile that lands
       // after the reader zoomed back out would sit over the page for nothing.
-      if (_zoom <= 1.01) return;
+      if (!mounted || _zoom <= 1.01 || token != _detailToken) return;
       setState(
-        () => _detail = (page: page, pdfBounds: pdfBounds, bytes: bytes),
+        () => _detail = (
+          page: page,
+          pdfBounds: pdfBounds,
+          scale: scale,
+          image: provider,
+        ),
       );
     }).ignore();
   }
@@ -501,7 +618,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         capturedFraction != null &&
         capturedPage < _pageHeights.length) {
       _scrollOffset = Offset(
-        capturedFractionX * _maxDx,
+        _clampDx(capturedFractionX * _maxDx, _zoom),
         _cumulativeY[capturedPage] +
             capturedFraction * _pageHeights[capturedPage],
       );
@@ -586,24 +703,34 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         (details.localFocalPoint - _gestureStartFocalScreen).distance;
     if (_totalMoveDistance > 14) _longPressTimer?.cancel();
 
-    double effectiveFocalX;
-    if (_horizontalUnlocked) {
-      final sign = totalDx >= 0 ? 1 : -1;
-      effectiveFocalX = details.localFocalPoint.dx - sign * _horizontalDeadZone;
-    } else if (totalDx.abs() >= _horizontalDeadZone) {
-      _horizontalUnlocked = true;
-      final sign = totalDx >= 0 ? 1 : -1;
-      effectiveFocalX = details.localFocalPoint.dx - sign * _horizontalDeadZone;
-    } else {
-      effectiveFocalX = _gestureStartFocalScreen.dx;
+    // Sideways movement is held back while the finger is scrolling down (see
+    // [_horizontalDeadZone]) and let go as soon as it plainly means to go
+    // sideways: past the dead zone, or earlier when the drag is mostly across
+    // — and from the first moment of a pinch, which has no use for it. Held
+    // for a flat 56 pixels regardless, a diagonal pan across a drawing sat
+    // still and then lurched.
+    if (!_horizontalUnlocked) {
+      final across = totalDx.abs();
+      final down = (details.localFocalPoint.dy - _gestureStartFocalScreen.dy)
+          .abs();
+      if (across >= _horizontalDeadZone ||
+          (across >= _horizontalIntent && across >= down * 0.6) ||
+          _activePointerCount > 1) {
+        _horizontalUnlocked = true;
+        // Where the drag stood when it was let go: from here the page follows
+        // the finger from exactly that point, so nothing jumps.
+        _horizontalHeldAt = totalDx;
+      }
     }
+    final effectiveFocalX = _horizontalUnlocked
+        ? details.localFocalPoint.dx - _horizontalHeldAt
+        : _gestureStartFocalScreen.dx;
 
     var newDx = _gestureStartFocalContent.dx - effectiveFocalX / newZoom;
     var newDy =
         _gestureStartFocalContent.dy - details.localFocalPoint.dy / newZoom;
 
-    final maxDx = math.max(0.0, _viewportWidth - _viewportWidth / newZoom);
-    newDx = newDx.clamp(0.0, maxDx);
+    newDx = _clampDx(newDx, newZoom);
     final maxDy = math.max(
       0.0,
       _totalContentHeight - _viewportHeight / newZoom,
@@ -615,6 +742,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
       _scrollOffset = Offset(newDx, newDy);
     });
     _maybeReportPageChange();
+    _requestDetailSoon();
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
@@ -669,6 +797,15 @@ class PdfPageStackViewState extends State<PdfPageStackView>
     _flingController.animateWith(simulation);
   }
 
+  /// A fling that runs its course ends here, not at the edge of the document
+  /// (see [_onFlingTick]): the view is at rest, so the pages it stopped on get
+  /// their sharp render, and the part on screen its detail.
+  void _onFlingStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    setState(() {});
+    _reportViewSettled();
+  }
+
   void _onFlingTick() {
     final maxDy = math.max(0.0, _totalContentHeight - _viewportHeight / _zoom);
     final newDy = _flingController.value.clamp(0.0, maxDy);
@@ -676,6 +813,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
       setState(() => _scrollOffset = Offset(_scrollOffset.dx, newDy));
       _maybeReportPageChange();
       _reanchorSelection();
+      _requestDetailSoon();
     }
     if (newDy <= 0 || newDy >= maxDy) {
       _flingController.stop();
@@ -1148,7 +1286,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
   /// bitmap stretched by a fifth, and stretched text is soft text. Rendering
   /// for the next tier up only ever shrinks a bitmap on its way to the screen.
   double _zoomRenderScale() {
-    const tiers = [1.0, 1.25, 1.5, 2.0];
+    const tiers = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
     for (final t in tiers) {
       if (_zoom <= t + 0.01) return t;
     }
@@ -1157,7 +1295,9 @@ class PdfPageStackViewState extends State<PdfPageStackView>
 
   /// Renders [pageIndex] at [scale] into [cache], once. The job is dropped
   /// unrendered if, by the time its turn comes, the page has been pruned
-  /// from the cache (it has scrolled far away) or the view is gone.
+  /// from the cache or has scrolled out of the pages kept ready (a fling
+  /// crosses dozens, and each one used to be rasterized for nothing after the
+  /// view had long moved on), or the view is gone.
   Future<Uint8List?> _cachedRender(
     Map<int, Future<Uint8List?>> cache,
     int pageIndex, {
@@ -1179,22 +1319,30 @@ class PdfPageStackViewState extends State<PdfPageStackView>
       // Worth what the page is worth when its turn comes, not when it was
       // asked for.
       livePriority: () => _renderPriority(pageIndex, sharp: sharp),
-      isStale: () => !mounted || !identical(cache[pageIndex], future),
+      isStale: () {
+        if (!mounted || !identical(cache[pageIndex], future)) return true;
+        if (pageIndex >= _viewLo - 2 && pageIndex <= _viewHi + 2) return false;
+        // Out of reach now. Forget it too, so that coming back to the page
+        // asks again instead of finding this dropped job's empty answer.
+        cache.remove(pageIndex);
+        return true;
+      },
     );
     return cache[pageIndex] = future;
   }
 
-  /// Priorities in the renderer's queue: the page being looked at first (its
-  /// quick preview, then its sharp render), then its neighbours, nearest
-  /// first, each preview ahead of its own sharp render.
+  /// Priorities in the renderer's queue: the pages on screen first, the one
+  /// being read ahead of the others, each preview ahead of its own sharp
+  /// render; then the pages beside them, nearest first.
   int _renderPriority(int pageIndex, {required bool sharp}) {
-    final distance = ((_reportedPage - 1) - pageIndex).abs();
-    if (distance == 0) {
-      return (sharp ? 1 : 0) + PdfRegionRenderer.priorityVisible;
+    final int distance = ((_reportedPage - 1) - pageIndex).abs();
+    final int rank = sharp ? 1 : 0;
+    if (pageIndex >= _viewLo && pageIndex <= _viewHi) {
+      final int nearest = distance < 4 ? distance : 4;
+      return PdfRegionRenderer.priorityVisible + 2 * nearest + rank;
     }
-    return PdfRegionRenderer.priorityNear +
-        2 * (distance - 1) +
-        (sharp ? 1 : 0);
+    final int away = distance < 1 ? 0 : (distance > 41 ? 40 : distance - 1);
+    return PdfRegionRenderer.priorityNear + 2 * away + rank;
   }
 
   Future<Uint8List?> _previewFor(int pageIndex) => _cachedRender(
@@ -1404,7 +1552,7 @@ class PdfPageStackViewState extends State<PdfPageStackView>
           final fraction = widget.initialScrollFraction.clamp(0.0, 1.0);
           final fractionX = widget.initialScrollFractionX.clamp(0.0, 1.0);
           _scrollOffset = Offset(
-            fractionX * _maxDx,
+            _clampDx(fractionX * _maxDx, _zoom),
             _cumulativeY[index] + fraction * _pageHeights[index],
           );
           _reportedPage = index + 1;
@@ -1440,6 +1588,8 @@ class PdfPageStackViewState extends State<PdfPageStackView>
           if (_cumulativeY[i] > viewportBottom) break;
           hi = i;
         }
+        _viewLo = lo;
+        _viewHi = hi;
         lo = math.max(0, lo - 1);
         hi = math.min(_pageHeights.length - 1, hi + 1);
         _pruneImageCache(lo, hi, zoomTier);
@@ -1459,18 +1609,32 @@ class PdfPageStackViewState extends State<PdfPageStackView>
         // its turn. Nothing is requested until the drag settles.
         final visibleIndex = (_reportedPage - 1).clamp(lo, hi);
         if (!_scrubbing) {
+          // A page flying past at fling speed is on screen for a fraction of
+          // a second: it gets its quick preview, and the sharp render waits
+          // for the view to slow down (see [_onFlingStatus]). Rasterizing
+          // every page of a long fling sharp was what kept the page the
+          // reader finally stopped on waiting behind a backlog of passed ones.
+          final flying = _flingController.isAnimating &&
+              _flingController.velocity.abs() > _flingSharpSpeed;
+          // Zoomed in, the pages beside the one on screen are off it — only
+          // the visible one is worth a full bitmap.
+          final neighboursSharp = !flying && _zoom <= _neighbourSharpMaxZoom;
           // Order is everything, since the plugin rasterizes one page at a
           // time: the page being looked at gets its quick preview first,
           // then its sharp render, and only then do the neighbours queue up.
           _previewFor(visibleIndex);
-          _imageFor(
-            visibleIndex,
-            _renderScaleFor(visibleIndex, dpr, supersample, zoomTier),
-          );
+          if (!flying) {
+            _imageFor(
+              visibleIndex,
+              _renderScaleFor(visibleIndex, dpr, supersample, zoomTier),
+            );
+          }
           for (var i = lo; i <= hi; i++) {
             if (i == visibleIndex) continue;
             _previewFor(i);
-            _imageFor(i, _renderScaleFor(i, dpr, supersample, zoomTier));
+            if (neighboursSharp) {
+              _imageFor(i, _renderScaleFor(i, dpr, supersample, zoomTier));
+            }
           }
         }
 
@@ -1546,46 +1710,54 @@ class PdfPageStackViewState extends State<PdfPageStackView>
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      for (var i = lo; i <= hi; i++)
-                        Positioned(
-                          key: ValueKey(i),
-                          left: _pageLeft,
-                          top: _cumulativeY[i],
-                          width: _contentWidth,
-                          height: _pageHeights[i],
-                          child: _PdfPageImage(
-                            key: ValueKey('page-$i'),
-                            future: _imageFutures[i],
-                            previewFuture: _previewFutures[i],
-                            readingTheme: widget.readingTheme,
-                            contrast: widget.readingContrast,
-                            weight: widget.readingWeight,
-                          ),
+                      // The reading theme recolours the finished page
+                      // pictures, once for all of them: a filter on each page
+                      // and on the detail tile was a full-screen offscreen
+                      // layer apiece, every frame, and the thing that held a
+                      // zoomed-in scroll to under 40 frames a second. The
+                      // marks below stay outside it, in their own colours.
+                      ColorFiltered(
+                        colorFilter: widget.readingTheme.pageImageFilter(
+                          contrast: widget.readingContrast,
+                          weight: widget.readingWeight,
                         ),
-                      if (_detail case final detail?)
-                        if (_contentRectFor(detail.page, detail.pdfBounds)
-                            case final rect?)
-                          Positioned.fromRect(
-                            key: ValueKey(
-                              'detail-${detail.page}-${detail.pdfBounds}',
-                            ),
-                            rect: rect,
-                            child: IgnorePointer(
-                              child: ColorFiltered(
-                                colorFilter: widget.readingTheme
-                                    .pageImageFilter(
-                                      contrast: widget.readingContrast,
-                                      weight: widget.readingWeight,
-                                    ),
-                                child: Image.memory(
-                                  detail.bytes,
-                                  fit: BoxFit.fill,
-                                  gaplessPlayback: true,
-                                  filterQuality: FilterQuality.medium,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            for (var i = lo; i <= hi; i++)
+                              Positioned(
+                                key: ValueKey(i),
+                                left: _pageLeft,
+                                top: _cumulativeY[i],
+                                width: _contentWidth,
+                                height: _pageHeights[i],
+                                child: _PdfPageImage(
+                                  key: ValueKey('page-$i'),
+                                  future: _imageFutures[i],
+                                  previewFuture: _previewFutures[i],
                                 ),
                               ),
-                            ),
-                          ),
+                            if (_detail case final detail?)
+                              if (_contentRectFor(detail.page, detail.pdfBounds)
+                                  case final rect?)
+                                Positioned.fromRect(
+                                  // One element for every tile, so that the
+                                  // next one replaces this one without a
+                                  // frame in between.
+                                  key: const ValueKey('detail'),
+                                  rect: rect,
+                                  child: IgnorePointer(
+                                    child: Image(
+                                      image: detail.image,
+                                      fit: BoxFit.fill,
+                                      gaplessPlayback: true,
+                                      filterQuality: FilterQuality.medium,
+                                    ),
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
                       // Order matters: the sentence wash goes down first,
                       // then the word or the dragged selection on top of
                       // it, so a word inside its own sentence still reads
@@ -1678,9 +1850,6 @@ class _PdfPageImage extends StatefulWidget {
     super.key,
     required this.future,
     required this.previewFuture,
-    required this.readingTheme,
-    required this.contrast,
-    required this.weight,
   });
 
   /// The sharp render, and the quick low-resolution one that stands in
@@ -1689,9 +1858,6 @@ class _PdfPageImage extends StatefulWidget {
   /// reading surface.
   final Future<Uint8List?>? future;
   final Future<Uint8List?>? previewFuture;
-  final ReadingTheme readingTheme;
-  final double contrast;
-  final int weight;
 
   @override
   State<_PdfPageImage> createState() => _PdfPageImageState();
@@ -1731,25 +1897,21 @@ class _PdfPageImageState extends State<_PdfPageImage> {
   @override
   Widget build(BuildContext context) {
     final bytes = _sharp ?? _preview;
-    if (bytes == null) return ColoredBox(color: widget.readingTheme.background);
+    // White, not the theme's paper: it goes through the same filter as the
+    // pictures, which turns white paper into exactly that.
+    if (bytes == null) return const ColoredBox(color: Colors.white);
     // The page arrives as opaque white paper with the file's own colors on
-    // it; the reading theme is applied here, to the finished image (see
-    // [ReadingThemeStyle.pageImageFilterAt]).
-    return ColorFiltered(
-      colorFilter: widget.readingTheme.pageImageFilter(
-        contrast: widget.contrast,
-        weight: widget.weight,
-      ),
-      child: Image.memory(
-        bytes,
-        fit: BoxFit.fill,
-        gaplessPlayback: true,
-        // Medium (mipmapped) for both: the sharp render meets the screen
-        // pixel for pixel at its own zoom tier and is scaled a little either
-        // side of it in between, and bilinear filtering alone drops the
-        // thin strokes of small type when a bitmap is scaled down.
-        filterQuality: FilterQuality.medium,
-      ),
+    // it; the reading theme is applied over all the pages together, by the
+    // view that holds them (see [ReadingThemeStyle.pageImageFilter]).
+    return Image.memory(
+      bytes,
+      fit: BoxFit.fill,
+      gaplessPlayback: true,
+      // Medium (mipmapped) for both: the sharp render meets the screen
+      // pixel for pixel at its own zoom tier and is scaled a little either
+      // side of it in between, and bilinear filtering alone drops the
+      // thin strokes of small type when a bitmap is scaled down.
+      filterQuality: FilterQuality.medium,
     );
   }
 }

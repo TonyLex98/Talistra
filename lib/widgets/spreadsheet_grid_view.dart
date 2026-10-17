@@ -77,8 +77,8 @@ class SpreadsheetGridView extends StatefulWidget {
   /// panning.
   final ValueChanged<SheetCell> onViewChanged;
 
-  static const double minScale = 0.5;
-  static const double maxScale = 4;
+  static const double minScale = 0.25;
+  static const double maxScale = 8;
 
   /// How far the sheet may be dragged past its own edges — enough that the
   /// last row or column can be brought clear of the screen edge, not so much

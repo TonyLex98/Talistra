@@ -158,10 +158,24 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (mounted && bytes != null) setState(() => _previewBytes = bytes);
   }
 
+  Timer? _previewCacheTimer;
+
   /// Fire-and-forget: re-renders whichever page is current and caches it
   /// to disk, so the NEXT time this document opens, [_loadPreview] has
   /// something to show immediately instead of a blank loading screen.
+  ///
+  /// Only once the reader has stayed on a page for a moment, and behind
+  /// everything on screen: it used to run at once, at the top priority, for
+  /// every page that went by, so scrolling a book rasterized each page twice
+  /// and the second copy stood in the way of the pages being looked at.
   void _cacheCurrentPagePreview() {
+    _previewCacheTimer?.cancel();
+    _previewCacheTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) _renderPagePreview();
+    });
+  }
+
+  void _renderPagePreview() {
     final renderer = _renderer;
     final pageIndex = _currentPage - 1;
     if (renderer == null || pageIndex < 0 || pageIndex >= _pageSizes.length) {
@@ -177,6 +191,8 @@ class _ReaderScreenState extends State<ReaderScreen>
           pageIndex: pageIndex,
           pdfBounds: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
           scale: scale,
+          priority: PdfRegionRenderer.priorityBackground,
+          isStale: () => !mounted || _currentPage - 1 != pageIndex,
         )
         .then((bytes) {
           if (bytes != null && mounted) {
@@ -191,6 +207,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     // The reader may have hidden the system bars for full-screen reading;
     // the rest of the app expects them back.
     WidgetsBinding.instance.removeObserver(this);
+    _previewCacheTimer?.cancel();
     unawaited(_readingDisplay.exit());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _flushDwellTime();
@@ -1018,20 +1035,6 @@ class _ReaderScreenState extends State<ReaderScreen>
       translatorOn: settings.translatorEnabled,
     );
     return [
-      if (!_reflowMode && !crowded) ...[
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.zoom_out, size: 22),
-          tooltip: l10n.zoomOut,
-          onPressed: () => _pdfViewKey.currentState?.zoomStep(zoomIn: false),
-        ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.zoom_in, size: 22),
-          tooltip: l10n.zoomIn,
-          onPressed: () => _pdfViewKey.currentState?.zoomStep(zoomIn: true),
-        ),
-      ],
       if (_reflowMode && !crowded) ...[
         IconButton(
           visualDensity: VisualDensity.compact,
@@ -1140,7 +1143,9 @@ class _ReaderScreenState extends State<ReaderScreen>
               ),
             ),
           ],
-          if (crowded && !_reflowMode) ...[
+          // Pinching is how a page is zoomed; these are for a hand that cannot
+          // pinch, and no longer take room in the bar.
+          if (!_reflowMode) ...[
             ReaderMenuAction(
               icon: Icons.zoom_out,
               label: l10n.zoomOut,

@@ -1,9 +1,9 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
-import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/services.dart';
 import 'package:pdfx/pdfx.dart' as pdfx;
 
 import 'page_ink_bounds.dart';
@@ -16,14 +16,29 @@ import 'priority_queue.dart';
 /// tier. Calls are serialized because native PDF rendering on Android
 /// doesn't support opening a second page before the previous one closes.
 class PdfRegionRenderer {
-  PdfRegionRenderer._(this._document);
+  PdfRegionRenderer._(this._document, this._path);
 
   /// A renderer with no document behind it, for a test to subclass and
   /// answer the renders itself.
   @visibleForTesting
-  PdfRegionRenderer.forTesting() : _document = null;
+  PdfRegionRenderer.forTesting() : _document = null, _path = null;
 
   final pdfx.PdfDocument? _document;
+
+  /// The file behind [_document], for the native region renderer (see
+  /// [_renderNative]); null when there is none to hand it.
+  final String? _path;
+
+  /// Renders a rectangle straight into a bitmap of its own size, which `pdfx`
+  /// cannot: it draws the *whole page* at the requested scale and crops after,
+  /// so a zoomed-in view needs a bitmap of the whole page at that zoom (tens or
+  /// hundreds of megapixels), and its crop also reads the width from the wrong
+  /// field and fails for any region not flush with the left edge.
+  static const MethodChannel _native = MethodChannel('litra/pdf_region');
+
+  /// Set once the platform has no native renderer (iOS, a test), so it is not
+  /// asked again.
+  bool _nativeMissing = false;
 
   /// The renders waiting for their turn. The plugin rasterizes one page at a
   /// time, so what matters is which one goes next (see [PriorityJobQueue]).
@@ -37,7 +52,7 @@ class PdfRegionRenderer {
 
   static Future<PdfRegionRenderer> open(String filePath) async {
     final document = await pdfx.PdfDocument.openFile(filePath);
-    return PdfRegionRenderer._(document);
+    return PdfRegionRenderer._(document, filePath);
   }
 
   /// The page color rasterized *behind* the PDF's own content.
@@ -183,6 +198,48 @@ class PdfRegionRenderer {
     Rect pdfBounds,
     double scale,
   ) async {
+    final native = await _renderNative(pageIndex, pdfBounds, scale);
+    if (native != null) return native;
+    return _renderWithPdfx(pageIndex, pdfBounds, scale);
+  }
+
+  /// [pdfBounds] drawn at [scale] pixels per point into a bitmap of just that
+  /// size. Null when this platform can't (or the file wouldn't open there), and
+  /// the caller falls back to `pdfx`.
+  Future<Uint8List?> _renderNative(
+    int pageIndex,
+    Rect pdfBounds,
+    double scale,
+  ) async {
+    final path = _path;
+    if (path == null || _nativeMissing || !Platform.isAndroid) return null;
+    final width = math.max(1, (pdfBounds.width * scale).round());
+    final height = math.max(1, (pdfBounds.height * scale).round());
+    try {
+      return await _native.invokeMethod<Uint8List>('render', {
+        'path': path,
+        'page': pageIndex,
+        'left': pdfBounds.left,
+        'top': pdfBounds.top,
+        'width': width,
+        'height': height,
+        'scale': scale,
+        'quality': _jpegQuality,
+      });
+    } on MissingPluginException {
+      _nativeMissing = true;
+      return null;
+    } on PlatformException {
+      // The file wouldn't open there (or the bitmap was too big): pdfx's turn.
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _renderWithPdfx(
+    int pageIndex,
+    Rect pdfBounds,
+    double scale,
+  ) async {
     final page = await _document!.getPage(pageIndex + 1);
     try {
       final fullWidth = page.width * scale;
@@ -210,6 +267,16 @@ class PdfRegionRenderer {
     // What is still waiting is not going to be wanted.
     _queue.cancelAll();
     await _queue.idle;
+    final path = _path;
+    if (path != null && !_nativeMissing && Platform.isAndroid) {
+      try {
+        await _native.invokeMethod<void>('close', {'path': path});
+      } on PlatformException {
+        // Best effort: the file is going away anyway.
+      } on MissingPluginException {
+        // Nothing was opened.
+      }
+    }
     await _document?.close();
   }
 }

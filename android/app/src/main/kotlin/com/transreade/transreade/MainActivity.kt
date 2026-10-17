@@ -31,11 +31,16 @@ class MainActivity : FlutterActivity() {
         const val INCOMING_CHANNEL = "transread/incoming_file"
         const val DJVU_CHANNEL = "litra/djvu"
         const val READING_DISPLAY_CHANNEL = "litra/reading_display"
+        const val PDF_REGION_CHANNEL = "litra/pdf_region"
     }
 
     private var channel: MethodChannel? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val djvuWorkers = Executors.newFixedThreadPool(2)
+
+    /** One thread: a PdfRenderer opens one page at a time (see [PdfRegionNative]). */
+    private val pdfWorker = Executors.newSingleThreadExecutor()
+    private val pdfRegions = PdfRegionNative()
 
     /** A file that arrived before Dart was listening. */
     private var pendingPath: String? = null
@@ -113,6 +118,50 @@ class MainActivity : FlutterActivity() {
                                 DjvuNative.close(handle)
                                 null
                             }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PDF_REGION_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "render" -> {
+                        val path = call.argument<String>("path")
+                        val page = call.argument<Number>("page")?.toInt()
+                        val left = call.argument<Number>("left")?.toDouble()
+                        val top = call.argument<Number>("top")?.toDouble()
+                        val width = call.argument<Number>("width")?.toInt()
+                        val height = call.argument<Number>("height")?.toInt()
+                        val scale = call.argument<Number>("scale")?.toDouble()
+                        val quality = call.argument<Number>("quality")?.toInt() ?: 92
+                        if (path == null || page == null || left == null || top == null ||
+                            width == null || height == null || scale == null
+                        ) {
+                            result.error("bad_arguments", "Missing PDF region argument", null)
+                        } else {
+                            pdfWorker.execute {
+                                try {
+                                    val bytes = pdfRegions.render(
+                                        path, page, left, top, width, height, scale, quality,
+                                    )
+                                    mainHandler.post { result.success(bytes) }
+                                } catch (error: Throwable) {
+                                    val message = error.message ?: error.javaClass.simpleName
+                                    mainHandler.post { result.error("pdf_region_error", message, null) }
+                                }
+                            }
+                        }
+                    }
+                    "close" -> {
+                        val path = call.argument<String>("path")
+                        pdfWorker.execute {
+                            try {
+                                if (path != null) pdfRegions.close(path)
+                            } catch (error: Throwable) {
+                                // Closing is best effort: the file is going away.
+                            }
+                            mainHandler.post { result.success(null) }
                         }
                     }
                     else -> result.notImplemented()

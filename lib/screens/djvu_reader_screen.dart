@@ -257,8 +257,8 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
     );
   }
 
-  void _changeOriginalZoom(double delta) {
-    _originalStackKey.currentState?.changeZoom(delta);
+  void _stepOriginalZoom({required bool zoomIn}) {
+    _originalStackKey.currentState?.zoomStep(zoomIn: zoomIn);
   }
 
   /// The scan view settles (a gesture ends, a jump lands): persist the
@@ -724,21 +724,6 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                         onPressed: () => _changeFontSize(1),
                       ),
                     ],
-                  ] else ...[
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 22,
-                      icon: const Icon(Icons.zoom_out),
-                      tooltip: l10n.zoomOut,
-                      onPressed: () => _changeOriginalZoom(-0.5),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 22,
-                      icon: const Icon(Icons.zoom_in),
-                      tooltip: l10n.zoomIn,
-                      onPressed: () => _changeOriginalZoom(0.5),
-                    ),
                   ],
                   IconButton(
                     visualDensity: VisualDensity.compact,
@@ -828,6 +813,22 @@ class _DjvuReaderScreenState extends State<DjvuReaderScreen>
                           smaller: () => _changeFontSize(-1),
                           larger: () => _changeFontSize(1),
                         ),
+                      // Pinching is how a page is zoomed; these are for a hand
+                      // that cannot pinch, and no longer take room in the bar.
+                      if (!_reflowMode) ...[
+                        ReaderMenuAction(
+                          icon: Icons.zoom_out,
+                          label: l10n.zoomOut,
+                          onSelected: () => _stepOriginalZoom(zoomIn: false),
+                          keepOpen: true,
+                        ),
+                        ReaderMenuAction(
+                          icon: Icons.zoom_in,
+                          label: l10n.zoomIn,
+                          onSelected: () => _stepOriginalZoom(zoomIn: true),
+                          keepOpen: true,
+                        ),
+                      ],
                       if (_djvu != null)
                         ...annotationMenuActions(
                           context,

@@ -109,4 +109,47 @@ void main() {
     await Future.wait([two, nine]);
     expect(order, ['page 9', 'page 2']);
   });
+
+  test('two lanes run two jobs at once, still most urgent first', () async {
+    final queue = PriorityJobQueue(concurrency: 2);
+    final gates = [Completer<void>(), Completer<void>()];
+    final started = <String>[];
+    final running = <Future<void>>[
+      queue.add(() async {
+        started.add('a');
+        await gates[0].future;
+      }),
+      queue.add(() async {
+        started.add('b');
+        await gates[1].future;
+      }),
+    ];
+    await _started();
+    final visibleGate = Completer<void>();
+    final later = [
+      queue.add(() async => started.add('background'), priority: 100),
+      queue.add(() async {
+        started.add('visible');
+        await visibleGate.future;
+      }, priority: 0),
+    ];
+    await _started();
+    // Both lanes are busy: nothing else has started (and among equals the
+    // latest asked-for goes first, so which of the two is first is not the
+    // point).
+    expect(started.toSet(), {'a', 'b'});
+    expect(started, hasLength(2));
+
+    gates[0].complete();
+    await running[0];
+    await _started();
+    // The freed lane takes the most urgent of what waits.
+    expect(started, hasLength(3));
+    expect(started.last, 'visible');
+
+    visibleGate.complete();
+    gates[1].complete();
+    await Future.wait([...running, ...later]);
+    expect(started.last, 'background');
+  });
 }

@@ -43,6 +43,12 @@ fn encode_png(pixmap: Pixmap) -> Result<Vec<u8>, String> {
         let mut encoder = png::Encoder::new(&mut output, pixmap.width, pixmap.height);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
+        // Fast, not the default: the page is shown once and thrown away, and
+        // squeezing a multi-megapixel scan with the default compressor took
+        // an order of magnitude longer than decoding the DjVu itself (about
+        // 500 ms against 60 for a 2400 px page on a desktop, several times
+        // that on a phone) — the biggest part of a page turn.
+        encoder.set_compression(png::Compression::Fast);
         let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
         writer
             .write_image_data(&pixmap.data)

@@ -5,10 +5,29 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../services/djvu_service.dart';
+import '../utils/priority_queue.dart';
 
 const double _pageSpacing = 4.0;
-const double _minZoom = 1.0;
-const double _maxZoom = 3.0;
+
+/// The page fitted to the width: where every document starts and what a
+/// «go to page» jump returns to.
+const double _fitZoom = 1.0;
+
+/// Out far enough to see a run of pages at once, and in far enough to read
+/// the small print of a scan. Below [_fitZoom] a page is narrower than the
+/// screen and sits in its middle (see [DjvuPageStackViewState._clampDx]).
+const double _minZoom = 0.25;
+const double _maxZoom = 8.0;
+
+/// Scroll speed (content pixels a second) above which pages are not worth a
+/// full-resolution decode yet, only a preview.
+const double _flingSharpSpeed = 900;
+
+/// How many pages decode at once: the native side has two threads.
+const int _decodeLanes = 2;
+
+/// How far a drag that is mostly sideways goes before it is let go.
+const double _horizontalIntent = 12.0;
 
 /// How much screen-space horizontal drag is absorbed before a drag starts
 /// panning sideways at all. Below this, small incidental horizontal
@@ -108,25 +127,41 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
   /// margins either side, which is how a book actually reads across.
   double _contentWidth = 0;
   double _pageLeft = 0;
-  double _zoom = _minZoom;
+  double _zoom = _fitZoom;
   Offset _scrollOffset = Offset.zero;
   bool _initialPositioned = false;
   int _reportedPage = 1;
 
-  double _gestureStartZoom = _minZoom;
+  double _gestureStartZoom = _fitZoom;
   Offset _gestureStartFocalScreen = Offset.zero;
   Offset _gestureStartFocalContent = Offset.zero;
   bool _horizontalUnlocked = false;
+  double _horizontalHeldAt = 0;
   int _activePointerCount = 0;
 
   late final AnimationController _flingController;
 
+  /// Decoding is queued here rather than handed to the native threads at
+  /// once, so that what is waiting can still be re-ordered or dropped: a
+  /// fling asks for dozens of pages, and the decoder cannot be told to stop
+  /// once it has started one.
+  final PriorityJobQueue _decodeQueue = PriorityJobQueue(
+    concurrency: _decodeLanes,
+  );
+
+  /// The pages on screen (without the margin kept ready beside them), as of
+  /// the last build. What a queued decode is worth is judged against this
+  /// when its turn comes, not when it was asked for.
+  int _viewLo = 0;
+  int _viewHi = 0;
+
   @override
   void initState() {
     super.initState();
-    _zoom = widget.initialZoom;
+    _zoom = widget.initialZoom.clamp(_minZoom, _maxZoom);
     _flingController = AnimationController.unbounded(vsync: this)
-      ..addListener(_onFlingTick);
+      ..addListener(_onFlingTick)
+      ..addStatusListener(_onFlingStatus);
     _pokeBubble();
   }
 
@@ -179,7 +214,7 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
       // zoom untouched.
       final dx = resetZoom ? 0.0 : _scrollOffset.dx;
       _scrollOffset = Offset(dx, _cumulativeY[index]);
-      if (resetZoom) _zoom = _minZoom;
+      if (resetZoom) _zoom = _fitZoom;
       _bubbleVisible = true;
     });
     _reportedPage = index + 1;
@@ -189,20 +224,27 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
     _reportViewSettled();
   }
 
-  void changeZoom(double delta) {
-    final next = (_zoom + delta).clamp(_minZoom, _maxZoom).toDouble();
+  /// One step of the zoom buttons, about the middle of the screen. A step is
+  /// a factor, not a fixed amount: from the far end of the range to the near
+  /// one is thirty-two times, and an even step would be either too small to
+  /// notice up close or too big to aim at from afar.
+  void zoomStep({required bool zoomIn}) {
+    if (_viewportWidth <= 0 || _pageHeights.isEmpty) return;
+    final next = (zoomIn ? _zoom * 1.5 : _zoom / 1.5)
+        .clamp(_minZoom, _maxZoom)
+        .toDouble();
     if ((next - _zoom).abs() < 0.001) return;
+    _flingController.stop();
     final focal = Offset(_viewportWidth / 2, _viewportHeight / 2);
     final content = Offset(
       focal.dx / _zoom + _scrollOffset.dx,
       focal.dy / _zoom + _scrollOffset.dy,
     );
-    final maxDx = math.max(0.0, _viewportWidth - _viewportWidth / next);
     final maxDy = math.max(0.0, _totalHeight - _viewportHeight / next);
     setState(() {
       _zoom = next;
       _scrollOffset = Offset(
-        (content.dx - focal.dx / next).clamp(0, maxDx),
+        _clampDx(content.dx - focal.dx / next, next),
         (content.dy - focal.dy / next).clamp(0, maxDy),
       );
       _bubbleVisible = true;
@@ -210,6 +252,15 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
     widget.onZoomChanged(next > 1.015);
     _pokeBubble();
     _reportViewSettled();
+  }
+
+  /// [dx], the content-space left edge of the screen, brought into the range
+  /// the view may be panned to at [zoom]: the page's own width when zoomed
+  /// in, and in the middle when the page is narrower than the screen.
+  double _clampDx(double dx, double zoom) {
+    final visible = _viewportWidth / zoom;
+    if (visible > _viewportWidth) return (_viewportWidth - visible) / 2;
+    return dx.clamp(0.0, _viewportWidth - visible).toDouble();
   }
 
   double get _maxDx => math.max(0.0, _viewportWidth - _viewportWidth / _zoom);
@@ -298,7 +349,7 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
 
     if (capturedPage != null && capturedFraction != null) {
       _scrollOffset = Offset(
-        capturedFractionX * _maxDx,
+        _clampDx(capturedFractionX * _maxDx, _zoom),
         _cumulativeY[capturedPage] +
             capturedFraction * _pageHeights[capturedPage],
       );
@@ -308,13 +359,13 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
       final fraction = widget.initialScrollFraction.clamp(0.0, 1.0);
       final fractionX = widget.initialScrollFractionX.clamp(0.0, 1.0);
       _scrollOffset = Offset(
-        fractionX * _maxDx,
+        _clampDx(fractionX * _maxDx, _zoom),
         _cumulativeY[index] + fraction * _pageHeights[index],
       );
       _reportedPage = index + 1;
     } else {
       _scrollOffset = Offset(
-        _scrollOffset.dx.clamp(0, _maxDx),
+        _clampDx(_scrollOffset.dx, _zoom),
         _scrollOffset.dy.clamp(
           0,
           math.max(0, _totalHeight - _viewportHeight / _zoom),
@@ -377,26 +428,31 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
         .toDouble();
     final totalDx = details.localFocalPoint.dx - _gestureStartFocalScreen.dx;
 
-    double effectiveFocalX;
-    if (_horizontalUnlocked) {
-      final sign = totalDx >= 0 ? 1 : -1;
-      effectiveFocalX = details.localFocalPoint.dx - sign * _horizontalDeadZone;
-    } else if (totalDx.abs() >= _horizontalDeadZone) {
-      _horizontalUnlocked = true;
-      final sign = totalDx >= 0 ? 1 : -1;
-      effectiveFocalX = details.localFocalPoint.dx - sign * _horizontalDeadZone;
-    } else {
-      effectiveFocalX = _gestureStartFocalScreen.dx;
+    // Sideways movement is held back while the finger is scrolling down (see
+    // [_horizontalDeadZone]) and let go as soon as it plainly means to go
+    // sideways, or from the first moment of a pinch.
+    if (!_horizontalUnlocked) {
+      final across = totalDx.abs();
+      final down = (details.localFocalPoint.dy - _gestureStartFocalScreen.dy)
+          .abs();
+      if (across >= _horizontalDeadZone ||
+          (across >= _horizontalIntent && across >= down * 0.6) ||
+          _activePointerCount > 1) {
+        _horizontalUnlocked = true;
+        _horizontalHeldAt = totalDx;
+      }
     }
+    final effectiveFocalX = _horizontalUnlocked
+        ? details.localFocalPoint.dx - _horizontalHeldAt
+        : _gestureStartFocalScreen.dx;
 
-    final maxDx = math.max(0.0, _viewportWidth - _viewportWidth / nextZoom);
     final maxDy = math.max(0.0, _totalHeight - _viewportHeight / nextZoom);
     setState(() {
       _zoom = nextZoom;
       _scrollOffset = Offset(
-        (_gestureStartFocalContent.dx - effectiveFocalX / nextZoom).clamp(
-          0.0,
-          maxDx,
+        _clampDx(
+          _gestureStartFocalContent.dx - effectiveFocalX / nextZoom,
+          nextZoom,
         ),
         (_gestureStartFocalContent.dy - details.localFocalPoint.dy / nextZoom)
             .clamp(0.0, maxDy),
@@ -428,6 +484,15 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
       velocity: contentVelocity,
     );
     _flingController.animateWith(simulation);
+  }
+
+  /// A fling that runs its course ends here, not at the edge of the document
+  /// (see [_onFlingTick]): the view is at rest, so the pages it stopped on get
+  /// their full-resolution decode.
+  void _onFlingStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    setState(() {});
+    _reportViewSettled();
   }
 
   void _onFlingTick() {
@@ -466,22 +531,40 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
   /// paper), then the sharp one, which quietly replaces it.
   Future<Uint8List?> _previewFor(int pageIndex, int width) {
     final key = pageIndex * _keyStride + width;
-    return _previewFutures.putIfAbsent(key, () => _render(pageIndex, width));
+    return _previewFutures[key] ??= _render(pageIndex, width, sharp: false, key: key);
   }
 
   Future<Uint8List?> _imageFor(int pageIndex, int width) {
     final key = pageIndex * _keyStride + width;
-    return _imageFutures.putIfAbsent(key, () => _render(pageIndex, width));
+    return _imageFutures[key] ??= _render(pageIndex, width, sharp: true, key: key);
+  }
+
+  /// How far out the zoom is, in the steps a page's resolution follows (see
+  /// [_widthFor]): re-decoding on every frame of a pinch would be the most
+  /// expensive thing the view could do.
+  double get _zoomTier => _zoom < 0.4 ? 0.25 : (_zoom < 0.7 ? 0.5 : 1.0);
+
+  /// The raster width for a page, at most [ceiling] and at least what the
+  /// zoom needs: zoomed out a page is a few hundred pixels wide on screen,
+  /// and decoding a whole scan at its native 2400 for that is a decode whose
+  /// result is thrown away.
+  int _widthFor(int page, {required int ceiling, required double dpr}) {
+    final tier = _zoomTier;
+    if (tier >= 1.0) return ceiling;
+    final needed = (_contentWidth * dpr * tier * 2).round();
+    return needed.clamp(_minRenderWidth, ceiling).toInt();
   }
 
   /// The raster width for the page the reader is actually looking at: the
   /// scan's own pixel width, clamped to what the decoder takes. See the
   /// comment in [build] about why a scanned page wants its native
   /// resolution rather than a screen-fit one.
-  int _sharpWidthFor(int page) {
+  int _sharpWidthFor(int page, double dpr) {
     final native = _infos![page].width;
-    if (native <= 0) return 1200;
-    return native.clamp(_minRenderWidth, _maxRenderWidth).toInt();
+    final ceiling = native <= 0
+        ? 1200
+        : native.clamp(_minRenderWidth, _maxRenderWidth).toInt();
+    return _widthFor(page, ceiling: ceiling, dpr: dpr);
   }
 
   /// Neighbour pages are only glimpsed while scrolling, so they queue up at
@@ -489,29 +572,66 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
   /// the time. The moment one of them becomes the page being looked at, it
   /// is re-asked for at full resolution and quietly swapped in over the
   /// cheap one.
-  int _neighborWidthFor(int page) {
+  int _neighborWidthFor(int page, double dpr) {
     final native = _infos![page].width;
-    if (native <= 0) return 900;
-    return math
-        .min(native, _neighborWidthCap)
-        .clamp(_minRenderWidth, _maxRenderWidth)
-        .toInt();
+    final ceiling = native <= 0
+        ? 900
+        : math
+              .min(native, _neighborWidthCap)
+              .clamp(_minRenderWidth, _maxRenderWidth)
+              .toInt();
+    return _widthFor(page, ceiling: ceiling, dpr: dpr);
   }
 
-  Future<Uint8List?> _render(int pageIndex, int width) async {
+  /// Priorities in the decode queue: the pages on screen first, the one being
+  /// read ahead of the others, each preview ahead of its own full render; then
+  /// the pages beside them, nearest first.
+  int _decodePriority(int pageIndex, {required bool sharp}) {
+    final int distance = ((_reportedPage - 1) - pageIndex).abs();
+    final int rank = sharp ? 1 : 0;
+    if (pageIndex >= _viewLo && pageIndex <= _viewHi) {
+      final int nearest = distance < 4 ? distance : 4;
+      return 2 * nearest + rank;
+    }
+    final int away = distance < 1 ? 0 : (distance > 41 ? 40 : distance - 1);
+    return 10 + 2 * away + rank;
+  }
+
+  Future<Uint8List?> _render(
+    int pageIndex,
+    int width, {
+    required bool sharp,
+    required int key,
+  }) {
     final info = _infos![pageIndex];
     final aspect = info.aspectRatio.isFinite && info.aspectRatio > 0
         ? info.aspectRatio
         : 0.7;
-    try {
-      return await widget.document.renderPage(
-        pageIndex,
-        width: width,
-        height: (width / aspect).round().clamp(1, 4000),
-      );
-    } catch (_) {
-      return null;
-    }
+    final cache = sharp ? _imageFutures : _previewFutures;
+    late final Future<Uint8List?> future;
+    future = _decodeQueue.add<Uint8List?>(
+      () async {
+        try {
+          return await widget.document.renderPage(
+            pageIndex,
+            width: width,
+            height: (width / aspect).round().clamp(1, 4000),
+          );
+        } catch (_) {
+          return null;
+        }
+      },
+      livePriority: () => _decodePriority(pageIndex, sharp: sharp),
+      isStale: () {
+        if (!mounted || !identical(cache[key], future)) return true;
+        if (pageIndex >= _viewLo - 2 && pageIndex <= _viewHi + 2) return false;
+        // Out of reach now. Forget it too, so that coming back to the page
+        // asks again instead of finding this dropped job's empty answer.
+        cache.remove(key);
+        return true;
+      },
+    );
+    return future;
   }
 
   void _pruneImageCache(int lo, int hi) {
@@ -638,9 +758,12 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
               if (_cumulativeY[i] > viewportBottom) break;
               hi = i;
             }
+            _viewLo = lo;
+            _viewHi = hi;
             lo = math.max(0, lo - 1);
             hi = math.min(_pageHeights.length - 1, hi + 1);
             _pruneImageCache(lo, hi);
+            final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.0, 4.0);
 
             // A DjVu page is a photograph of paper: it has a fixed amount
             // of detail in it, and the page's own pixel width (from
@@ -670,17 +793,28 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
             // settles.
             final visibleIndex = (_reportedPage - 1).clamp(lo, hi);
             if (!_scrubbing) {
-              // Order is everything, since the plugin rasterizes one page at
-              // a time: the page being looked at gets its quick preview
-              // first, then its full-resolution render, and only then do the
-              // neighbours queue up (at a reduced width — see
+              // A page flying past at fling speed is on screen for a fraction
+              // of a second: it gets its quick preview, and the full decode
+              // waits for the view to slow down (see [_onFlingStatus]).
+              // Decoding every page of a long fling at native size kept the
+              // page the reader finally stopped on waiting behind a backlog.
+              final flying =
+                  _flingController.isAnimating &&
+                  _flingController.velocity.abs() > _flingSharpSpeed;
+              // Order is everything: the page being looked at gets its quick
+              // preview first, then its full-resolution render, and only then
+              // do the neighbours queue up (at a reduced width — see
               // [_neighborWidthFor]).
               _previewFor(visibleIndex, previewWidth);
-              _imageFor(visibleIndex, _sharpWidthFor(visibleIndex));
+              if (!flying) {
+                _imageFor(visibleIndex, _sharpWidthFor(visibleIndex, dpr));
+              }
               for (var i = lo; i <= hi; i++) {
                 if (i == visibleIndex) continue;
                 _previewFor(i, previewWidth);
-                _imageFor(i, _neighborWidthFor(i));
+                if (!flying && _zoom <= 2.01) {
+                  _imageFor(i, _neighborWidthFor(i, dpr));
+                }
               }
             }
 
@@ -712,36 +846,40 @@ class DjvuPageStackViewState extends State<DjvuPageStackView>
                       // far outside those bounds) are left unclipped —
                       // only the outer [ClipRect] needs to constrain what's
                       // visible.
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          for (var page = lo; page <= hi; page++)
-                            Positioned(
-                              key: ValueKey('page-$page'),
-                              left: _pageLeft,
-                              top: _cumulativeY[page],
-                              width: _contentWidth,
-                              height: _pageHeights[page],
-                              child: _DjvuStackPageImage(
-                                key: ValueKey('img-$page'),
-                                // The page being looked at is drawn from
-                                // its full-resolution render; its
-                                // neighbours from the reduced-width one
-                                // (which they upgrade to the moment they
-                                // become the page being looked at).
-                                future:
-                                    _imageFutures[page * _keyStride +
-                                        (page == visibleIndex
-                                            ? _sharpWidthFor(page)
-                                            : _neighborWidthFor(page))],
-                                previewFuture:
-                                    _previewFutures[page * _keyStride +
-                                        previewWidth],
-                                filter: widget.imageFilter,
-                                background: widget.background,
+                      child: ColorFiltered(
+                        // The reading theme recolours the finished pictures,
+                        // once for all of the pages: a filter on each was a
+                        // full-screen offscreen layer apiece, every frame.
+                        colorFilter: widget.imageFilter,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            for (var page = lo; page <= hi; page++)
+                              Positioned(
+                                key: ValueKey('page-$page'),
+                                left: _pageLeft,
+                                top: _cumulativeY[page],
+                                width: _contentWidth,
+                                height: _pageHeights[page],
+                                child: _DjvuStackPageImage(
+                                  key: ValueKey('img-$page'),
+                                  // The page being looked at is drawn from
+                                  // its full-resolution render; its
+                                  // neighbours from the reduced-width one
+                                  // (which they upgrade to the moment they
+                                  // become the page being looked at).
+                                  future:
+                                      _imageFutures[page * _keyStride +
+                                          (page == visibleIndex
+                                              ? _sharpWidthFor(page, dpr)
+                                              : _neighborWidthFor(page, dpr))],
+                                  previewFuture:
+                                      _previewFutures[page * _keyStride +
+                                          previewWidth],
+                                ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -772,8 +910,6 @@ class _DjvuStackPageImage extends StatefulWidget {
     super.key,
     required this.future,
     required this.previewFuture,
-    required this.filter,
-    required this.background,
   });
 
   /// The sharp render, and the quick low-resolution one that stands in
@@ -782,8 +918,6 @@ class _DjvuStackPageImage extends StatefulWidget {
   /// reading surface.
   final Future<Uint8List?>? future;
   final Future<Uint8List?>? previewFuture;
-  final ColorFilter filter;
-  final Color background;
 
   @override
   State<_DjvuStackPageImage> createState() => _DjvuStackPageImageState();
@@ -823,21 +957,21 @@ class _DjvuStackPageImageState extends State<_DjvuStackPageImage> {
   @override
   Widget build(BuildContext context) {
     final bytes = _sharp ?? _preview;
-    if (bytes == null) return ColoredBox(color: widget.background);
-    // The page arrives as opaque paper with the file's own colors on it;
-    // the reading theme is applied here, to the finished image.
-    return ColorFiltered(
-      colorFilter: widget.filter,
-      child: Image.memory(
-        bytes,
-        fit: BoxFit.fill,
-        gaplessPlayback: true,
-        // Pages now arrive at (or above) display resolution, so sampling
-        // is a downscale; linear filtering keeps downsampled type smooth
-        // instead of stair-stepped (and the low-res stand-in still looks
-        // better smoothed than blocky while it lasts).
-        filterQuality: FilterQuality.medium,
-      ),
+    // White, not the theme's paper: it goes through the same filter as the
+    // pictures, which turns white paper into exactly that.
+    if (bytes == null) return const ColoredBox(color: Colors.white);
+    // The page arrives as opaque paper with the file's own colors on it; the
+    // reading theme is applied over all the pages together, by the view that
+    // holds them.
+    return Image.memory(
+      bytes,
+      fit: BoxFit.fill,
+      gaplessPlayback: true,
+      // Pages now arrive at (or above) display resolution, so sampling
+      // is a downscale; linear filtering keeps downsampled type smooth
+      // instead of stair-stepped (and the low-res stand-in still looks
+      // better smoothed than blocky while it lasts).
+      filterQuality: FilterQuality.medium,
     );
   }
 }

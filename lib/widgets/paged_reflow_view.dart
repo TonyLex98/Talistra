@@ -1826,7 +1826,7 @@ class PagedReflowViewState extends State<PagedReflowView>
             elevation: 0,
           ),
           body: Center(
-            child: InteractiveViewer(minScale: 0.5, maxScale: 6, child: image),
+            child: InteractiveViewer(minScale: 0.25, maxScale: 16, child: image),
           ),
         ),
       ),

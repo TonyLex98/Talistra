@@ -16,5 +16,5 @@ png = "0.18.0"
 [profile.release]
 codegen-units = 1
 lto = "thin"
-opt-level = "s"
+opt-level = 3
 strip = true
