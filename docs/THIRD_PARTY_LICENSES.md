@@ -1,5 +1,47 @@
 # Third-party licenses
 
+Talistra's own code is under the MIT license (see [LICENSE](../LICENSE)). The app also uses the
+components below, each under its own license.
+
+## Syncfusion Flutter PDF — not open source
+
+[`syncfusion_flutter_pdf`](https://pub.dev/packages/syncfusion_flutter_pdf) extracts PDF text and
+outlines, reads page rotation, unlocks password-protected files and turns images into PDF pages. It is part of Syncfusion Essential Studio and is **not** under an open-source
+license: using it requires either the free
+[Syncfusion Community License](https://www.syncfusion.com/products/communitylicense) (individuals
+and companies with less than USD 1 million in annual revenue and fewer than five developers) or a
+commercial license. Anyone who builds or ships this app must hold one of these licenses. Terms:
+https://www.syncfusion.com/content/downloads/syncfusion_license.pdf
+
+## Google ML Kit
+
+Translation and text recognition run on the device through Google ML Kit
+([`google_mlkit_translation`](https://pub.dev/packages/google_mlkit_translation),
+[`google_mlkit_text_recognition`](https://pub.dev/packages/google_mlkit_text_recognition); the
+Flutter plugins are MIT). The ML Kit SDKs and the downloaded language models are subject to the
+[ML Kit Terms](https://developers.google.com/ml-kit/terms).
+
+## Fonts — SIL Open Font License 1.1
+
+EB Garamond, Inter, Literata, Lora, Noto Serif and Source Serif 4 in `assets/fonts`. Copyright
+lines and the license text: [assets/fonts/OFL.txt](../assets/fonts/OFL.txt).
+
+## Rust
+
+The DjVu decoder `native/litra_djvu` (MIT) is built on
+[`djvu-rs`](https://crates.io/crates/djvu-rs) (MIT), [`jni`](https://crates.io/crates/jni)
+(MIT / Apache-2.0) and [`png`](https://crates.io/crates/png) (MIT / Apache-2.0). The full
+djvu-rs license is at the end of this file.
+
+## Dart packages
+
+| Package | License |
+| --- | --- |
+| archive, cupertino_icons, excel2003, file_picker, flutter_tts, pdfx, provider, xml | MIT |
+| intl, path, path_provider, share_plus, shared_preferences, url_launcher | BSD-3-Clause |
+
+Flutter itself is under the BSD-3-Clause license.
+
 ## djvu-rs 0.27.0
 
 Talistra's DjVu bridge uses the pure-Rust `djvu-rs` codec, a clean-room

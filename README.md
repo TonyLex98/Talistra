@@ -1,5 +1,7 @@
 # Talistra
 
+[![CI](https://github.com/TonyLex98/Talistra/actions/workflows/ci.yml/badge.svg)](https://github.com/TonyLex98/Talistra/actions/workflows/ci.yml)
+
 An Android reader for books in a foreign language: open a book, tap a word
 or mark a passage, and read its translation over the page — offline, with
 Google ML Kit's on-device models. No account, no advertising.
@@ -61,3 +63,7 @@ set in the real reading fonts to keep it that way.
 
 Publishing to RuStore is described in `docs/PUBLISHING.md`, third-party
 licences in `docs/THIRD_PARTY_LICENSES.md`.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Third-party components, including the Syncfusion PDF package, which is not open source, are listed in [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md).
